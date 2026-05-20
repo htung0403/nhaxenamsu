@@ -1,8 +1,8 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Package, Plus, Trash2, CheckCircle2, FileText, UserCircle, ImagePlus, Loader2, Camera } from 'lucide-react';
+import { X, Package, Plus, Trash2, CheckCircle2, FileText, UserCircle } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useForm, Controller, useFieldArray } from 'react-hook-form';
+import { useForm, Controller, useFieldArray, type Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
@@ -10,8 +10,7 @@ import { useCreateImportOrder, useUpdateImportOrder } from '../../../hooks/queri
 import { useCustomers, useCreateCustomer } from '../../../hooks/queries/useCustomers';
 import { useCreateProduct, useProducts, productMatchesScope } from '../../../hooks/queries/useProducts';
 import { useEmployees } from '../../../hooks/queries/useHR';
-import type { ImportOrder, ImportOrderItem } from '../../../types';
-import { uploadApi } from '../../../api/uploadApi';
+import type { Customer, ImportOrder, ImportOrderCreatePayload, ImportOrderItem, Product, User } from '../../../types';
 import CurrencyInput from '../../../components/shared/CurrencyInput';
 import { SearchableSelect } from '../../../components/ui/SearchableSelect';
 import { CreatableSearchableSelect } from '../../../components/ui/CreatableSearchableSelect';
@@ -19,7 +18,6 @@ import { TimePicker24h } from '../../../components/shared/TimePicker24h';
 import { DatePicker } from '../../../components/shared/DatePicker';
 import { useAuth } from '../../../context/AuthContext';
 import toast from 'react-hot-toast';
-import { cloudinaryThumb } from '../../../lib/cloudinaryUrl';
 
 const importOrderItemSchema = z.object({
   product_id: z.string().min(1, 'Chọn hàng hóa'),
@@ -56,6 +54,52 @@ interface Props {
   defaultCategory?: 'standard' | 'vegetable';
 }
 
+type CustomerLike = Pick<Customer, 'id' | 'name' | 'phone' | 'aliases' | 'customer_type'>;
+type SelectOption = {
+  value: string;
+  label: string;
+  selectedLabel?: string;
+  matchKey?: string;
+  searchText?: string;
+};
+type ImportOrderItemFormValue = {
+  product_id: string;
+  package_type?: string | null;
+  weight_kg?: number | string | null;
+  quantity: number | string;
+  unit_price?: number | null;
+  image_url?: string | null;
+  image_urls?: string[];
+};
+type ImportOrderFormValues = Omit<
+  z.infer<typeof importOrderSchema>,
+  'items' | 'total_amount'
+> & {
+  items: ImportOrderItemFormValue[];
+  total_amount: number | string;
+};
+type ImportOrderSubmitPayload = Omit<Partial<ImportOrderCreatePayload>, 'items'> & {
+  sender_name?: string | null;
+  sender_id?: string | null;
+  receiver_name?: string | null;
+  selected_alias?: string | null;
+  payment_status?: 'paid' | 'unpaid';
+  total_amount?: number | string;
+  receipt_image_url?: string | null;
+  receipt_image_urls?: string[];
+  is_custom_amount?: boolean;
+  items?: Array<Omit<ImportOrderItemFormValue, 'unit_price'> & {
+    unit_price?: number | null;
+    payment_status: 'paid' | 'unpaid';
+  }>;
+};
+type MutationResponseWithData<T> = T | { data?: T };
+
+const unwrapMutationData = <T extends { id: string }>(response: MutationResponseWithData<T>): T | undefined => {
+  if ('id' in response) return response;
+  return response.data;
+};
+
 const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, editingOrder, onClose, defaultCategory = 'standard' }) => {
   const { user } = useAuth();
   const isEditMode = !!editingOrder;
@@ -88,11 +132,10 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         phone: newCustomerPhone.trim() || undefined,
         customer_type: customerType,
       });
-      const row = resp as any;
-      const newId = row?.id || row?.data?.id;
-      if (newId) {
-        setValue('customer_id', newId, { shouldValidate: true });
-        if (row?.name) setValue('receiver_name', row.name, { shouldValidate: true });
+      const row = unwrapMutationData(resp);
+      if (row?.id) {
+        setValue('customer_id', row.id, { shouldValidate: true });
+        setValue('receiver_name', row.name, { shouldValidate: true });
       }
       setNewCustomerName('');
       setNewCustomerPhone('');
@@ -114,11 +157,10 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         phone: newSenderPhone.trim() || undefined,
         customer_type: customerType,
       });
-      const row = resp as any;
-      const newId = row?.id || row?.data?.id;
-      if (newId) {
-        setValue('sender_id', newId, { shouldValidate: true });
-        setValue('sender_name', row?.name || newSenderName.trim(), { shouldValidate: true });
+      const row = unwrapMutationData(resp);
+      if (row?.id) {
+        setValue('sender_id', row.id, { shouldValidate: true });
+        setValue('sender_name', row.name || newSenderName.trim(), { shouldValidate: true });
       }
       setNewSenderName('');
       setNewSenderPhone('');
@@ -130,12 +172,12 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
 
   const filteredProducts = React.useMemo(() => {
     const cat = defaultCategory as 'standard' | 'vegetable';
-    const list = products?.filter((p: any) => productMatchesScope(p, cat)) || [];
+    const list = products?.filter((product) => productMatchesScope(product, cat)) || [];
     if (editingOrder?.import_order_items) {
-      const addedIds = new Set(list.map((p: any) => p.id));
-      editingOrder.import_order_items.forEach((item: any) => {
+      const addedIds = new Set(list.map((product) => product.id));
+      editingOrder.import_order_items.forEach((item) => {
         const prod = item.products;
-        if (!prod || addedIds.has(item.product_id)) return;
+        if (!prod || !item.product_id || addedIds.has(item.product_id)) return;
         if (!productMatchesScope(prod, cat)) return;
         list.push(prod);
         addedIds.add(item.product_id);
@@ -145,21 +187,21 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
   }, [products, defaultCategory, editingOrder]);
 
   const filteredCustomers = React.useMemo(() => {
-    const list: any[] = customers?.filter((c: any) =>
+    const list: CustomerLike[] = customers?.filter((customer) =>
       defaultCategory === 'vegetable'
-        ? c.customer_type === 'vegetable_receiver'
-        : c.customer_type === 'grocery_receiver'
+        ? customer.customer_type === 'vegetable_receiver'
+        : customer.customer_type === 'grocery_receiver'
     ) || [];
 
-    if (editingOrder?.customers && !list.find((c: any) => c.id === editingOrder.customer_id)) {
+    if (editingOrder?.customers && !list.find((customer) => customer.id === editingOrder.customer_id)) {
       list.push(editingOrder.customers);
     }
     return list;
   }, [customers, defaultCategory, editingOrder]);
 
   const customerOptions = React.useMemo(() => {
-    const options: any[] = [];
-    filteredCustomers.forEach((c: any) => {
+    const options: SelectOption[] = [];
+    filteredCustomers.forEach((c) => {
       // Main option
       options.push({
         value: c.id,
@@ -183,14 +225,32 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
   }, [filteredCustomers]);
 
   const filteredSenders = React.useMemo(() => {
-    const list: any[] = customers?.filter((c: any) =>
-      defaultCategory === 'vegetable' ? c.customer_type === 'vegetable_sender' : c.customer_type === 'grocery_sender'
+    const list: CustomerLike[] = customers?.filter((customer) =>
+      defaultCategory === 'vegetable' ? customer.customer_type === 'vegetable_sender' : customer.customer_type === 'grocery_sender'
     ) || [];
-    if (editingOrder?.sender_customers && !list.find((c: any) => c.id === editingOrder.sender_id)) {
+    if (editingOrder?.sender_customers && !list.find((customer) => customer.id === editingOrder.sender_id)) {
       list.push(editingOrder.sender_customers);
     }
     return list;
   }, [customers, defaultCategory, editingOrder]);
+
+  const senderOptions = React.useMemo<SelectOption[]>(
+    () => filteredSenders.map((customer) => ({
+      value: customer.id,
+      label: `${customer.name}${customer.phone ? ` (${customer.phone})` : ''}`,
+      matchKey: customer.name,
+      searchText: [customer.name, customer.phone, ...(customer.aliases || [])].filter(Boolean).join(' '),
+    })),
+    [filteredSenders],
+  );
+
+  const employeeOptions = React.useMemo<SelectOption[]>(
+    () => (employees || []).map((employee: User) => ({
+      value: employee.id,
+      label: employee.full_name || employee.phone || employee.id,
+    })),
+    [employees],
+  );
 
   const {
     register,
@@ -201,8 +261,8 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
     watch,
     getValues,
     formState: { errors },
-  } = useForm({
-    resolver: zodResolver(importOrderSchema),
+  } = useForm<ImportOrderFormValues>({
+    resolver: zodResolver(importOrderSchema) as Resolver<ImportOrderFormValues>,
     defaultValues: {
       order_date: format(new Date(), 'yyyy-MM-dd'),
       order_time: new Date().toTimeString().slice(0, 5),
@@ -218,13 +278,14 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       total_amount: 0,
       receipt_image_url: null,
       receipt_image_urls: [],
-    } as any,
+    },
   });
 
   const watchItems = watch('items');
+  const submitLockRef = React.useRef(false);
 
   const previousItemsRef = React.useRef<string>('');
-  const previousProductsRef = React.useRef<any>(null);
+  const previousProductsRef = React.useRef<number | undefined>(undefined);
 
   useEffect(() => {
     if (!watchItems) return;
@@ -242,7 +303,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
     if (defaultCategory === 'standard') {
       // For standard: sum unit_price * quantity across items
       let sum = 0;
-      watchItems.forEach((item: any) => {
+      watchItems.forEach((item) => {
         const qty = Number(item.quantity) || 0;
         const price = Number(item.unit_price) || 0;
         // unit_price is entered in shorthand (e.g. 50 = 50,000)
@@ -256,8 +317,8 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       // For vegetable: use product base_price
       if (!filteredProducts.length) return;
       let sum = 0;
-      watchItems.forEach((item: any) => {
-        const product = filteredProducts.find((p: any) => p.id === item.product_id);
+      watchItems.forEach((item) => {
+        const product = filteredProducts.find((p) => p.id === item.product_id);
         if (product && product.base_price) {
           const qty = Number(item.quantity) || 0;
           const amount = Math.round(qty * product.base_price);
@@ -339,84 +400,6 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
   }, [editingOrder, reset, isOpen, user?.id]);
 
   const watchTotalAmountInput = watch('total_amount');
-  const watchReceiptImageUrls = watch('receipt_image_urls') || [];
-  const [isUploading, setIsUploading] = React.useState(false);
-  const [uploadingItemIndex, setUploadingItemIndex] = React.useState<number | null>(null);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
-  const receiptCameraInputRef = React.useRef<HTMLInputElement>(null);
-
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    const validFiles = files.filter(file => file.type.startsWith('image/'));
-    if (validFiles.length !== files.length) {
-      toast.error('Chỉ hỗ trợ file ảnh');
-      if (validFiles.length === 0) return;
-    }
-
-    try {
-      setIsUploading(true);
-      const uploadPromises = validFiles.map(file => uploadApi.uploadFile(file, 'import-orders', 'orders'));
-      const results = await Promise.all(uploadPromises);
-      const newUrls = results.map(r => r.url);
-
-      const currentUrls = getValues('receipt_image_urls') || [];
-      const updatedUrls = [...currentUrls, ...newUrls];
-
-      setValue('receipt_image_urls', updatedUrls, { shouldValidate: true });
-      if (updatedUrls.length > 0) {
-        setValue('receipt_image_url', updatedUrls[0], { shouldValidate: true });
-      }
-
-      toast.success('Tải ảnh lên thành công!');
-    } catch (error) {
-      console.error('File upload error:', error);
-      toast.error('Lỗi khi tải ảnh lên');
-    } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      if (receiptCameraInputRef.current) {
-        receiptCameraInputRef.current.value = '';
-      }
-    }
-  };
-
-  const handleItemImageUpload = async (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
-
-    const validFiles = files.filter(file => file.type.startsWith('image/'));
-    if (validFiles.length !== files.length) {
-      toast.error('Chỉ hỗ trợ file ảnh');
-      if (validFiles.length === 0) return;
-    }
-
-    try {
-      setUploadingItemIndex(index);
-      const uploadPromises = validFiles.map(file => uploadApi.uploadFile(file, 'import-orders', 'items'));
-      const results = await Promise.all(uploadPromises);
-      const newUrls = results.map(r => r.url);
-
-      const currentUrls = getValues(`items.${index}.image_urls`) || [];
-      const updatedUrls = [...currentUrls, ...newUrls];
-
-      setValue(`items.${index}.image_urls`, updatedUrls, { shouldValidate: true });
-      if (updatedUrls.length > 0) {
-        setValue(`items.${index}.image_url`, updatedUrls[0], { shouldValidate: true });
-      }
-
-      toast.success('Tải ảnh thành công!');
-    } catch (error) {
-      console.error('File upload error:', error);
-      toast.error('Lỗi tải ảnh');
-    } finally {
-      setUploadingItemIndex(null);
-      e.target.value = '';
-    }
-  };
 
   const handleCreateProduct = async (index: number, name: string) => {
     setValue(`items.${index}.product_id`, name);
@@ -425,9 +408,9 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         name,
         category: defaultCategory,
       });
-      const newId = resp.data?.id || (resp as any).id;
-      if (newId) {
-        setValue(`items.${index}.product_id`, newId, { shouldValidate: true });
+      const product = unwrapMutationData<Product>(resp);
+      if (product?.id) {
+        setValue(`items.${index}.product_id`, product.id, { shouldValidate: true });
         toast.success(`Đã tạo nhanh mặt hàng: ${name}`);
       }
     } catch {
@@ -436,12 +419,17 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
     }
   };
 
-  const onSubmit = async (data: Record<string, any>) => {
+  const onSubmit = async (data: ImportOrderFormValues) => {
+    if (submitLockRef.current) return;
+
+    submitLockRef.current = true;
+
     try {
       console.log('--- FORM SUBMIT DATA BEGIN ---', data);
-      const payload = { ...data };
-      if (payload.items) {
-        payload.items = payload.items.map((item: any, index: number) => {
+      const { items, ...formPayload } = data;
+      const payload: ImportOrderSubmitPayload = { ...formPayload };
+      if (items) {
+        payload.items = items.map((item, index) => {
           const price = Number(item.unit_price) || 0;
           const realPrice = price > 0 && price < 100000 ? price * 1000 : price;
           return {
@@ -460,27 +448,32 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
 
       // Nếu khách tự gõ số thu gọn (nhỏ hơn 1000, vd: 90) thì tự động nhân 1000 thành 90000
       // Hành động x1000 chỉ diễn ra lúc xác nhận (submit). Các khoản đã tính đủ 0 (>= 1000) sẽ giữ nguyên.
-      if (payload.total_amount && payload.total_amount > 0 && payload.total_amount < 1000) {
-        payload.total_amount = payload.total_amount * 1000;
+      const totalAmount = Number(payload.total_amount) || 0;
+      if (totalAmount > 0 && totalAmount < 1000) {
+        payload.total_amount = totalAmount * 1000;
+      } else {
+        payload.total_amount = totalAmount;
       }
 
       payload.receipt_image_urls = getValues('receipt_image_urls') || [];
 
       payload.selected_alias = payload.selected_alias || null;
 
-      Object.keys(payload).forEach(key => {
-        if (payload[key] === '') delete payload[key];
+      Object.keys(payload).forEach((key) => {
+        const payloadKey = key as keyof typeof payload;
+        if (payload[payloadKey] === '') delete payload[payloadKey];
       });
 
       if (isEditMode && editingOrder) {
         console.log('--- DISPATCH UPDATE_MUTATION ---', payload);
-        await updateMutation.mutateAsync({ id: editingOrder.id, payload: payload as any });
+        await updateMutation.mutateAsync({ id: editingOrder.id, payload: payload as Partial<ImportOrderCreatePayload> });
       } else {
         console.log('--- DISPATCH CREATE_MUTATION ---', payload);
-        await createMutation.mutateAsync(payload as any);
+        await createMutation.mutateAsync(payload as ImportOrderCreatePayload);
       }
       onClose();
     } catch {
+      submitLockRef.current = false;
       // Error handled by mutation
     }
   };
@@ -571,22 +564,21 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                           </button>
                         </div>
                         <CreatableSearchableSelect
-                          options={filteredSenders.map((c: any) => ({ value: c.id, label: `${c.name}${c.phone ? ` (${c.phone})` : ''}`, matchKey: c.name, searchText: [c.name, c.phone, ...(c.aliases || [])].filter(Boolean).join(' ') }))}
+                          options={senderOptions}
                           value={watchSenderId || ''}
                           onValueChange={(val) => {
                             setValue('sender_id', val, { shouldValidate: true });
-                            const found = filteredSenders.find((c: any) => c.id === val);
+                            const found = filteredSenders.find((customer) => customer.id === val);
                             setValue('sender_name', found?.name || '', { shouldValidate: true });
                           }}
                           onCreate={async (name) => {
                             try {
-                              const customerType = (defaultCategory as string) === 'vegetable' ? 'vegetable_sender' : 'grocery_sender';
+                              const customerType = 'grocery_sender';
                               const resp = await createCustomerMutation.mutateAsync({ name, customer_type: customerType });
-                              const row = resp as any;
-                              const newId = row?.id || row?.data?.id;
-                              if (newId) {
-                                setValue('sender_id', newId, { shouldValidate: true });
-                                setValue('sender_name', row?.name || name, { shouldValidate: true });
+                              const row = unwrapMutationData(resp);
+                              if (row?.id) {
+                                setValue('sender_id', row.id, { shouldValidate: true });
+                                setValue('sender_name', row.name || name, { shouldValidate: true });
                               }
                             } catch { /* handled */ }
                           }}
@@ -734,17 +726,14 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                         </label>
                         {employees?.length ? (
                           <SearchableSelect
-                            options={(employees || []).map((e: any) => ({
-                              value: e.id,
-                              label: e.full_name || e.phone || e.id,
-                            }))}
+                            options={employeeOptions}
                             value={watchReceivedBy}
                             onValueChange={(val) => setValue('received_by', val, { shouldValidate: true })}
                             placeholder="Chọn nhân viên"
                           />
                         ) : (
                           <div className="w-full px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[13px] font-semibold text-amber-800">
-                            {employees?.find((e: any) => e.id === watchReceivedBy)?.full_name || user?.full_name || 'Tự động'}
+                            {employees?.find((employee) => employee.id === watchReceivedBy)?.full_name || user?.full_name || 'Tự động'}
                           </div>
                         )}
                         {errors.received_by && (
@@ -831,22 +820,21 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                           </button>
                         </div>
                         <CreatableSearchableSelect
-                          options={filteredSenders.map((c: any) => ({ value: c.id, label: `${c.name}${c.phone ? ` (${c.phone})` : ''}`, matchKey: c.name, searchText: [c.name, c.phone, ...(c.aliases || [])].filter(Boolean).join(' ') }))}
+                          options={senderOptions}
                           value={watchSenderId || ''}
                           onValueChange={(val) => {
                             setValue('sender_id', val, { shouldValidate: true });
-                            const found = filteredSenders.find((c: any) => c.id === val);
+                            const found = filteredSenders.find((customer) => customer.id === val);
                             setValue('sender_name', found?.name || '', { shouldValidate: true });
                           }}
                           onCreate={async (name) => {
                             try {
-                              const customerType = (defaultCategory as string) === 'vegetable' ? 'vegetable_sender' : 'grocery_sender';
+                              const customerType = defaultCategory === 'vegetable' ? 'vegetable_sender' : 'grocery_sender';
                               const resp = await createCustomerMutation.mutateAsync({ name, customer_type: customerType });
-                              const row = resp as any;
-                              const newId = row?.id || row?.data?.id;
-                              if (newId) {
-                                setValue('sender_id', newId, { shouldValidate: true });
-                                setValue('sender_name', row?.name || name, { shouldValidate: true });
+                              const row = unwrapMutationData(resp);
+                              if (row?.id) {
+                                setValue('sender_id', row.id, { shouldValidate: true });
+                                setValue('sender_name', row.name || name, { shouldValidate: true });
                               }
                             } catch { /* handled */ }
                           }}
@@ -995,17 +983,14 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                         </label>
                         {employees?.length ? (
                           <SearchableSelect
-                            options={(employees || []).map((e: any) => ({
-                              value: e.id,
-                              label: e.full_name || e.phone || e.id,
-                            }))}
+                            options={employeeOptions}
                             value={watchReceivedBy}
                             onValueChange={(val) => setValue('received_by', val, { shouldValidate: true })}
                             placeholder="Chọn nhân viên"
                           />
                         ) : (
                           <div className="w-full px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[13px] font-semibold text-amber-800">
-                            {employees?.find((e: any) => e.id === watchReceivedBy)?.full_name || user?.full_name || 'Tự động'}
+                            {employees?.find((employee) => employee.id === watchReceivedBy)?.full_name || user?.full_name || 'Tự động'}
                           </div>
                         )}
                         {errors.received_by && (
@@ -1063,76 +1048,6 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                     </>
                   )}
 
-                  {defaultCategory !== 'vegetable' && (
-                    <div className="space-y-1.5 pt-2">
-                      <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Ảnh biên nhận/Sản phẩm</label>
-                      <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-                        {watchReceiptImageUrls.map((url: string, idx: number) => (
-                          <div key={idx} className="relative aspect-square rounded-xl border border-border overflow-hidden bg-muted/20">
-                            <img src={cloudinaryThumb(url)} alt={`Receipt ${idx + 1}`} className="w-full h-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const newUrls = watchReceiptImageUrls.filter((_: any, i: number) => i !== idx);
-                                setValue('receipt_image_urls', newUrls, { shouldValidate: true });
-                                setValue('receipt_image_url', newUrls.length > 0 ? newUrls[0] : null, { shouldValidate: true });
-                              }}
-                              className="absolute top-1 right-1 z-10 w-6 h-6 rounded-full bg-red-600 text-white flex items-center justify-center shadow-sm hover:bg-red-700 active:scale-95 transition-all"
-                              aria-label="Xóa ảnh"
-                              title="Xóa ảnh"
-                            >
-                              <X size={14} />
-                            </button>
-                          </div>
-                        ))}
-                        <div className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted/5 overflow-hidden flex flex-col">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            multiple
-                            ref={fileInputRef}
-                            className="hidden"
-                            onChange={handleImageUpload}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            disabled={isUploading}
-                            className="flex-1 min-h-0 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-50 px-1 py-2 touch-manipulation active:scale-[0.99]"
-                          >
-                            {isUploading ? (
-                              <Loader2 size={20} className="animate-spin text-primary" />
-                            ) : (
-                              <>
-                                <ImagePlus size={22} className="text-primary" />
-                                <span className="text-[10px] font-bold text-center px-0.5 leading-tight">Chọn ảnh</span>
-                              </>
-                            )}
-                          </button>
-                        </div>
-                        <div className="aspect-square rounded-xl border-2 border-dashed border-border bg-muted/5 overflow-hidden flex flex-col">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            capture="environment"
-                            ref={receiptCameraInputRef}
-                            className="hidden"
-                            onChange={handleImageUpload}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => receiptCameraInputRef.current?.click()}
-                            disabled={isUploading}
-                            className="flex-1 min-h-0 flex flex-col items-center justify-center gap-1 text-muted-foreground hover:text-primary hover:bg-primary/5 transition-all disabled:opacity-50 px-1 py-2 touch-manipulation active:scale-[0.99]"
-                          >
-                            <Camera size={22} className="text-primary" />
-                            <span className="text-[10px] font-bold text-center px-0.5 leading-tight">Chụp ảnh</span>
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="space-y-1.5 pt-2">
                     <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Ghi chú thêm</label>
                     <textarea rows={3} {...register('notes')} className="w-full px-3 py-2.5 bg-muted/50 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none" placeholder="Thông tin chi tiết thêm về kiện hàng này..." />
@@ -1164,12 +1079,11 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                     {/* Desktop Header */}
                     {/* Desktop Header */}
                     {defaultCategory === 'standard' ? (
-                      <div className="hidden md:grid grid-cols-[1fr_60px_90px_100px_120px_36px] gap-3 px-4 py-3 bg-card border-b border-border sticky top-0 z-10 md:items-center">
+                      <div className="hidden md:grid grid-cols-[1fr_60px_90px_100px_36px] gap-3 px-4 py-3 bg-card border-b border-border sticky top-0 z-10 md:items-center">
                         <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Tên Mặt Hàng</div>
                         <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-center">SL</div>
                         <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-center">Đơn giá (k)</div>
                         <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-right">Thành tiền</div>
-                        <div className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider text-center">Ảnh</div>
                         <div></div>
                       </div>
                     ) : (
@@ -1188,7 +1102,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                           <div key={field.id} className={clsx(
                             "grid gap-2 md:gap-3 p-3 md:px-4 md:py-2 md:items-center bg-card rounded-xl md:rounded-none border border-border md:border-none shadow-sm md:shadow-none hover:bg-muted/50/50 transition-all group relative",
                             defaultCategory === 'standard'
-                              ? "grid-cols-1 md:grid-cols-[1fr_60px_90px_100px_120px_36px]"
+                              ? "grid-cols-1 md:grid-cols-[1fr_60px_90px_100px_36px]"
                               : "grid-cols-1 md:grid-cols-[60px_minmax(150px,3fr)_100px_36px]"
                           )}>
 
@@ -1216,10 +1130,10 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                 {/* Col 2: Tên hàng */}
                                 <div className="hidden md:flex flex-col justify-center relative">
                                   <CreatableSearchableSelect
-                                    options={filteredProducts.map((p: any) => ({
-                                      value: p.id,
-                                      label: p.name,
-                                      matchKey: p.name,
+                                    options={filteredProducts.map((product) => ({
+                                      value: product.id,
+                                      label: product.name,
+                                      matchKey: product.name,
                                     }))}
                                     value={watch(`items.${index}.product_id` as const)}
                                     onValueChange={(val) => setValue(`items.${index}.product_id`, val, { shouldValidate: true })}
@@ -1228,12 +1142,12 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                     className="h-9 border-border bg-card"
                                   />
                                   {(() => {
-                                    const prod = filteredProducts.find((p: any) => p.id === watch(`items.${index}.product_id`));
+                                    const prod = filteredProducts.find((product) => product.id === watch(`items.${index}.product_id`));
                                     const price = prod?.base_price || 0;
                                     if (price > 0) return <span className="text-[9px] text-muted-foreground mt-0.5 ml-1">{new Intl.NumberFormat('vi-VN').format(price)}đ</span>;
                                     return null;
                                   })()}
-                                  {(errors.items as any)?.[index]?.product_id && (
+                                  {errors.items?.[index]?.product_id && (
                                     <span className="absolute bottom-[-16px] left-2 text-[10px] text-red-500">Thiếu</span>
                                   )}
                                 </div>
@@ -1243,7 +1157,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                   {(() => {
                                     const productId = watch(`items.${index}.product_id`);
                                     const qty = Number(watch(`items.${index}.quantity`) || 0);
-                                    const prod = filteredProducts.find((p: any) => p.id === productId);
+                                    const prod = filteredProducts.find((product) => product.id === productId);
                                     const price = prod?.base_price || 0;
                                     const total = Math.round(qty * price);
                                     return (
@@ -1271,10 +1185,10 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                   <div className="flex-1 flex flex-col space-y-1 relative">
                                     <label className="text-[11px] font-bold text-muted-foreground uppercase">Tên hàng</label>
                                     <CreatableSearchableSelect
-                                      options={filteredProducts.map((p: any) => ({
-                                        value: p.id,
-                                        label: p.name,
-                                        matchKey: p.name,
+                                      options={filteredProducts.map((product) => ({
+                                        value: product.id,
+                                        label: product.name,
+                                        matchKey: product.name,
                                       }))}
                                       value={watch(`items.${index}.product_id` as const)}
                                       onValueChange={(val) => setValue(`items.${index}.product_id`, val, { shouldValidate: true })}
@@ -1282,11 +1196,11 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                       placeholder="Gõ tên hàng..."
                                       className="h-9 border-border bg-card"
                                     />
-                                    {(errors.items as any)?.[index]?.product_id && (
+                                    {errors.items?.[index]?.product_id && (
                                       <span className="text-[10px] text-red-500">Thiếu</span>
                                     )}
                                     {(() => {
-                                      const prod = filteredProducts.find((p: any) => p.id === watch(`items.${index}.product_id`));
+                                      const prod = filteredProducts.find((product) => product.id === watch(`items.${index}.product_id`));
                                       const price = prod?.base_price || 0;
                                       if (price > 0) return <span className="text-[9px] text-muted-foreground mt-0.5">{new Intl.NumberFormat('vi-VN').format(price)}đ</span>;
                                       return null;
@@ -1323,7 +1237,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                     {(() => {
                                       const productId = watch(`items.${index}.product_id`);
                                       const qty = Number(watch(`items.${index}.quantity`) || 0);
-                                      const prod = filteredProducts.find((p: any) => p.id === productId);
+                                      const prod = filteredProducts.find((product) => product.id === productId);
                                       const price = prod?.base_price || 0;
                                       const total = Math.round(qty * price);
                                       return (
@@ -1347,10 +1261,10 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                   <div className="flex-1 flex flex-col justify-center space-y-1 md:space-y-0 relative">
                                     <label className="text-[11px] font-bold text-muted-foreground md:hidden uppercase">Mặt hàng</label>
                                     <CreatableSearchableSelect
-                                      options={filteredProducts.map((p: any) => ({
-                                        value: p.id,
-                                        label: p.name,
-                                        matchKey: p.name,
+                                      options={filteredProducts.map((product) => ({
+                                        value: product.id,
+                                        label: product.name,
+                                        matchKey: product.name,
                                       }))}
                                       value={watch(`items.${index}.product_id` as const)}
                                       onValueChange={(val) => setValue(`items.${index}.product_id`, val, { shouldValidate: true })}
@@ -1358,7 +1272,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                       placeholder="Gõ tên hàng..."
                                       className="h-9 border-border bg-card"
                                     />
-                                    {(errors.items as any)?.[index]?.product_id && (
+                                    {errors.items?.[index]?.product_id && (
                                       <span className="md:absolute md:bottom-[-16px] md:left-2 text-[10px] text-red-500">Thiếu</span>
                                     )}
                                   </div>
@@ -1427,91 +1341,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                   </div>
                                 </div>
 
-                                {/* Mobile Image Grid */}
-                                <div className="md:hidden mt-2 col-span-full border-t border-dashed border-border pt-2 pb-1 w-full">
-                                  <label className="text-[11px] font-bold text-muted-foreground uppercase mb-1.5 block">Ảnh hàng hóa</label>
-                                  <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar w-full">
-                                    {(watch(`items.${index}.image_urls`) || []).map((url: string, imgIdx: number) => (
-                                      <div key={imgIdx} className="relative w-12 h-12 rounded-lg border border-border overflow-hidden shrink-0">
-                                        <img src={cloudinaryThumb(url)} alt="item" className="w-full h-full object-cover" />
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            const newUrls = watch(`items.${index}.image_urls`).filter((_: any, i: number) => i !== imgIdx);
-                                            setValue(`items.${index}.image_urls`, newUrls, { shouldValidate: true });
-                                            setValue(`items.${index}.image_url`, newUrls.length > 0 ? newUrls[0] : null, { shouldValidate: true });
-                                          }}
-                                          className="absolute top-0.5 right-0.5 z-10 w-[18px] h-[18px] rounded-full bg-red-600 text-white flex items-center justify-center shadow-sm hover:bg-red-700 active:scale-95 transition-all"
-                                          aria-label="Xóa ảnh"
-                                          title="Xóa ảnh"
-                                        >
-                                          <X size={10} />
-                                        </button>
-                                      </div>
-                                    ))}
-                                    <label className="border border-dashed border-border bg-muted/50 rounded-xl flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 cursor-pointer transition-all w-[3.25rem] h-[3.25rem] min-w-[3.25rem] shrink-0 touch-manipulation active:scale-[0.98]" title="Chọn ảnh">
-                                      <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleItemImageUpload(index, e)} />
-                                      {uploadingItemIndex === index ? <Loader2 size={18} className="animate-spin text-primary" /> : <Plus size={18} />}
-                                    </label>
-                                    <label className="border border-dashed border-border bg-muted/50 rounded-xl flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 cursor-pointer transition-all w-[3.25rem] h-[3.25rem] min-w-[3.25rem] shrink-0 touch-manipulation active:scale-[0.98]" title="Chụp ảnh">
-                                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleItemImageUpload(index, e)} />
-                                      {uploadingItemIndex === index ? <Loader2 size={18} className="animate-spin text-primary" /> : <Camera size={18} />}
-                                    </label>
-                                  </div>
-                                </div>
                               </>
-                            )}
-
-                            {/* Desktop Single Image - only for standard */}
-                            {defaultCategory === 'standard' && (
-                              <div className="hidden md:flex items-start justify-start w-full">
-                                <div className="flex justify-start w-full">
-                                  <div className="flex items-center gap-1 flex-wrap w-[110px]">
-                                    {(watch(`items.${index}.image_urls`) || []).map((url: string, imgIdx: number) => (
-                                      <div key={imgIdx} className="relative w-8 h-8 rounded-md border border-border overflow-hidden shrink-0">
-                                        <img src={cloudinaryThumb(url)} alt="item" className="w-full h-full object-cover" />
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            const newUrls = watch(`items.${index}.image_urls`).filter((_: any, i: number) => i !== imgIdx);
-                                            setValue(`items.${index}.image_urls`, newUrls, { shouldValidate: true });
-                                            setValue(`items.${index}.image_url`, newUrls.length > 0 ? newUrls[0] : null, { shouldValidate: true });
-                                          }}
-                                          className="absolute -top-1 -right-1 z-10 w-4 h-4 rounded-full bg-red-600 text-white flex items-center justify-center shadow-sm hover:bg-red-700 active:scale-95 transition-all"
-                                          aria-label="Xóa ảnh"
-                                          title="Xóa ảnh"
-                                        >
-                                          <X size={10} />
-                                        </button>
-                                      </div>
-                                    ))}
-                                    <label className="w-8 h-8 border border-dashed border-border bg-muted/50 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 cursor-pointer transition-all shrink-0" title="Thêm ảnh">
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        multiple
-                                        className="hidden"
-                                        onChange={(e) => handleItemImageUpload(index, e)}
-                                      />
-                                      {uploadingItemIndex === index ? <Loader2 size={12} className="animate-spin text-primary" /> : <Plus size={12} />}
-                                    </label>
-                                    <label className="w-8 h-8 border border-dashed border-border bg-muted/50 rounded-md flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary/50 cursor-pointer transition-all shrink-0" title="Chụp ảnh">
-                                      <input
-                                        type="file"
-                                        accept="image/*"
-                                        capture="environment"
-                                        className="hidden"
-                                        onChange={(e) => handleItemImageUpload(index, e)}
-                                      />
-                                      {uploadingItemIndex === index ? <Loader2 size={12} className="animate-spin text-primary" /> : <Camera size={12} />}
-                                    </label>
-                                  </div>
-                                </div>
-                              </div>
                             )}
 
                             {/* Desktop Delete Button - only for standard */}
@@ -1538,9 +1368,9 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
 
                 {/* Live Check Total */}
                 {(defaultCategory === 'vegetable' || (() => {
-                  // Show total for standard if any item has a price
+                  // Show total for standard when an item has a price
                   const items = watchItems || [];
-                  return defaultCategory === 'standard' && items.some((item: any) => Number(item.unit_price) > 0);
+                  return defaultCategory === 'standard' && items.some((item) => Number(item.unit_price) > 0);
                 })()) && (
                     <div className="p-4 md:p-5 bg-primary/5 flex flex-col md:flex-row items-center justify-between border-t border-primary/10 shrink-0 gap-1 md:gap-0">
                       <div className="flex flex-col items-center md:items-start text-center md:text-left">
@@ -1550,7 +1380,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                         </span>
                       </div>
                       <div className="text-3xl font-black text-primary tabular-nums drop-shadow-sm">
-                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((watchTotalAmountInput || 0) * (defaultCategory === 'standard' ? 1 : 1000))}
+                        {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format((Number(watchTotalAmountInput) || 0) * (defaultCategory === 'standard' ? 1 : 1000))}
                       </div>
                     </div>
                   )}
@@ -1598,3 +1428,6 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
 };
 
 export default AddEditStandardImportOrderDialog;
+
+
+

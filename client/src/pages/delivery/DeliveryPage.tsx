@@ -221,15 +221,15 @@ const getOrderPreviewImage = (order: DeliveryOrder | null | undefined) => {
 };
 
 const getOrderPaymentStatus = (order: DeliveryOrder): keyof typeof PAYMENT_STATUS_CONFIG => {
-  if (order.export_order_payment_status) {
-    return order.export_order_payment_status === 'paid' ? 'paid_driver' : order.export_order_payment_status as keyof typeof PAYMENT_STATUS_CONFIG;
-  }
-
   const sourceOrder = Array.isArray(order.import_orders) ? order.import_orders[0] : order.import_orders
     || (Array.isArray(order.vegetable_orders) ? order.vegetable_orders[0] : order.vegetable_orders);
 
   if (sourceOrder && sourceOrder.payment_status === 'paid') {
     return 'paid_sg';
+  }
+
+  if (order.export_order_payment_status) {
+    return order.export_order_payment_status === 'paid' ? 'paid_driver' : order.export_order_payment_status as keyof typeof PAYMENT_STATUS_CONFIG;
   }
 
   const assignedVehicleIds = (order.delivery_vehicles || [])

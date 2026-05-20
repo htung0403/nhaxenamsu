@@ -293,6 +293,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
   const watchItems = watch('items');
 
   const previousItemsRef = React.useRef<string>('');
+  const submitLockRef = React.useRef(false);
   const previousProductsRef = React.useRef<any>(null);
 
   useEffect(() => {
@@ -539,6 +540,10 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
   };
 
   const onSubmit = async (data: Record<string, any>) => {
+    if (submitLockRef.current) return;
+
+    submitLockRef.current = true;
+
     try {
       console.log('--- FORM SUBMIT DATA BEGIN ---', data);
       const payload = { ...data };
@@ -596,6 +601,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
       }
       onClose();
     } catch {
+      submitLockRef.current = false;
       // Error handled by mutation
     }
   };

@@ -35,6 +35,9 @@ type SourceOrderUpdatePayload = {
   sender_name?: string;
   customer_id?: string;
   receiver_name?: string;
+  payment_status?: 'paid' | 'unpaid';
+  total_amount?: number;
+  is_custom_amount?: boolean;
 };
 
 type EditableCustomer = {
@@ -97,6 +100,8 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
     sender_name: '',
     customer_id: null as string | null,
     receiver_name: '',
+    payment_status: 'unpaid' as 'paid' | 'unpaid',
+    total_amount: 0,
     image_url: '',
     image_urls: [] as string[]
   });
@@ -132,6 +137,8 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
         sender_name: order.import_orders?.sender_name || order.vegetable_orders?.sender_name || order.import_orders?.sender_customers?.name || order.vegetable_orders?.sender_customers?.name || '',
         customer_id: order.import_orders?.customer_id || order.vegetable_orders?.customer_id || null,
         receiver_name: order.import_orders?.receiver_name || order.vegetable_orders?.receiver_name || order.import_orders?.customers?.name || order.vegetable_orders?.customers?.name || '',
+        payment_status: order.import_orders?.payment_status === 'paid' || order.vegetable_orders?.payment_status === 'paid' ? 'paid' : 'unpaid',
+        total_amount: order.import_orders?.total_amount || order.vegetable_orders?.total_amount || 0,
         image_url: legacyImage,
         image_urls: initialImages
       });
@@ -296,7 +303,10 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
 
           const changedSender = formData.sender_id !== orderData.sender_id || formData.sender_name !== orderData.sender_name;
           const changedReceiver = formData.customer_id !== orderData.customer_id || formData.receiver_name !== orderData.receiver_name;
-          if (!changedSender && !changedReceiver) return;
+          const changedPaymentStatus = formData.payment_status !== (orderData.payment_status === 'paid' ? 'paid' : 'unpaid');
+          const normalizedTotalAmount = Number(formData.total_amount) || 0;
+          const changedTotalAmount = normalizedTotalAmount !== (Number(orderData.total_amount) || 0);
+          if (!changedSender && !changedReceiver && !changedPaymentStatus && !changedTotalAmount) return;
 
           if (!sourceOrderUpdates[sourceId]) {
             sourceOrderUpdates[sourceId] = {
@@ -310,6 +320,11 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
           if (changedReceiver) {
             sourceOrderUpdates[sourceId].customer_id = formData.customer_id || undefined;
             sourceOrderUpdates[sourceId].receiver_name = formData.receiver_name || '';
+          }
+          if (changedPaymentStatus || changedTotalAmount) {
+            sourceOrderUpdates[sourceId].payment_status = formData.payment_status;
+            sourceOrderUpdates[sourceId].total_amount = normalizedTotalAmount;
+            sourceOrderUpdates[sourceId].is_custom_amount = true;
           }
         })
       );
@@ -472,6 +487,45 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
                 <VnUnitPriceInput
                   value={formData.unit_price}
                   onChange={(vnd) => setFormData({ ...formData, unit_price: vnd })}
+                  disabled={isSubmitting}
+                  className="w-full h-11 px-3 border border-border rounded-xl text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-border bg-muted/20 p-3">
+              <label className="text-[13px] font-bold text-foreground">Thanh toán đơn hàng</label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, payment_status: 'unpaid' })}
+                  disabled={isSubmitting}
+                  className={`h-10 rounded-xl text-[13px] font-bold border transition-all ${
+                    formData.payment_status === 'unpaid'
+                      ? 'bg-red-50 text-red-700 border-red-200'
+                      : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                  } disabled:opacity-50`}
+                >
+                  Chưa trả cước SG
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData({ ...formData, payment_status: 'paid' })}
+                  disabled={isSubmitting}
+                  className={`h-10 rounded-xl text-[13px] font-bold border transition-all ${
+                    formData.payment_status === 'paid'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                  } disabled:opacity-50`}
+                >
+                  Đã trả cước SG
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-[12px] font-semibold text-muted-foreground">Tổng tiền</label>
+                <VnUnitPriceInput
+                  value={formData.total_amount}
+                  onChange={(vnd) => setFormData({ ...formData, total_amount: vnd })}
                   disabled={isSubmitting}
                   className="w-full h-11 px-3 border border-border rounded-xl text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50"
                 />
