@@ -6,13 +6,17 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCreateCustomer, useUpdateCustomer, useCustomers } from '../../../hooks/queries/useCustomers';
+import { customersApi } from '../../../api/customersApi';
 import type { Customer } from '../../../types';
 import toast from 'react-hot-toast';
+import CustomerLocationPicker from './CustomerLocationPicker';
 
 const customerSchema = z.object({
   name: z.string().min(1, 'Vui lòng nhập tên khách hàng'),
   phone: z.string().optional(),
   address: z.string().optional(),
+  latitude: z.coerce.number().min(-90, 'Vĩ độ không hợp lệ').max(90, 'Vĩ độ không hợp lệ').optional().or(z.literal('')),
+  longitude: z.coerce.number().min(-180, 'Kinh độ không hợp lệ').max(180, 'Kinh độ không hợp lệ').optional().or(z.literal('')),
   customer_type: z.enum(['wholesale', 'grocery', 'retail', 'vegetable', 'grocery_sender', 'grocery_receiver', 'vegetable_sender', 'vegetable_receiver']).default('grocery'),
   aliases: z.array(z.string()).optional(),
 });
@@ -50,12 +54,17 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
       name: '',
       phone: '',
       address: '',
+      latitude: '',
+      longitude: '',
       aliases: [],
     },
   });
 
   const selectedType = watch('customer_type');
   const aliases = watch('aliases') || [];
+  const address = watch('address') || '';
+  const latitude = watch('latitude');
+  const longitude = watch('longitude');
 
   const addAlias = () => {
     const currentAliases = watch('aliases') || [];
@@ -84,6 +93,8 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
         name: isEditMode ? (customer?.name || '') : '',
         phone: isEditMode ? (customer?.phone || '') : '',
         address: isEditMode ? (customer?.address || '') : '',
+        latitude: isEditMode ? (customer?.latitude ?? '') : '',
+        longitude: isEditMode ? (customer?.longitude ?? '') : '',
         customer_type: (isEditMode ? customer?.customer_type : defaultType) as any || 'grocery',
         aliases: isEditMode ? (customer?.aliases || []) : [],
       });
@@ -109,6 +120,8 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
         name: data.name,
         phone: data.phone || null,
         address: data.address || null,
+        latitude: data.latitude === '' || data.latitude === undefined ? null : Number(data.latitude),
+        longitude: data.longitude === '' || data.longitude === undefined ? null : Number(data.longitude),
         customer_type: data.customer_type,
         aliases: data.aliases?.filter(a => a.trim() !== '') || [],
       };
@@ -121,6 +134,34 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
     } catch {
       // Error handled by mutation
     }
+  };
+
+  const handleGeocodeAddress = async () => {
+    const trimmedAddress = address.trim();
+    if (trimmedAddress.length < 5) {
+      toast.error('Vui lòng nhập địa chỉ trước khi tìm tọa độ');
+      return;
+    }
+
+    try {
+      const result = await toast.promise(
+        customersApi.geocode(trimmedAddress),
+        {
+          loading: 'Đang tìm tọa độ từ OpenStreetMap...',
+          success: 'Đã tìm thấy tọa độ',
+          error: 'Không tìm được tọa độ phù hợp',
+        },
+      );
+      setValue('latitude', result.latitude, { shouldValidate: true, shouldDirty: true });
+      setValue('longitude', result.longitude, { shouldValidate: true, shouldDirty: true });
+    } catch {
+      // toast.promise already shows the error state
+    }
+  };
+
+  const handleMapPinChange = (nextLatitude: number, nextLongitude: number) => {
+    setValue('latitude', nextLatitude, { shouldValidate: true, shouldDirty: true });
+    setValue('longitude', nextLongitude, { shouldValidate: true, shouldDirty: true });
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending || isHookSubmitting;
@@ -211,6 +252,38 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
                   />
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-[13px] font-bold text-foreground">Vĩ độ</label>
+                  <input
+                    type="number"
+                    step="any"
+                    {...register('latitude')}
+                    placeholder="10.7769"
+                    className="w-full px-4 py-2 bg-muted/10 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all font-medium"
+                  />
+                  {errors.latitude && <p className="text-red-500 text-[11px] font-medium mt-1">{errors.latitude.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-[13px] font-bold text-foreground">Kinh độ</label>
+                  <input
+                    type="number"
+                    step="any"
+                    {...register('longitude')}
+                    placeholder="106.7009"
+                    className="w-full px-4 py-2 bg-muted/10 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all font-medium"
+                  />
+                  {errors.longitude && <p className="text-red-500 text-[11px] font-medium mt-1">{errors.longitude.message}</p>}
+                </div>
+              </div>
+              <CustomerLocationPicker
+                address={address}
+                latitude={latitude}
+                longitude={longitude}
+                onSearchAddress={handleGeocodeAddress}
+                onChange={handleMapPinChange}
+              />
             </div>
           </div>
 

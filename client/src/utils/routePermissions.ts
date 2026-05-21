@@ -16,6 +16,8 @@ const DRIVER_LIKE_LEGACY_PATHS: string[] = [
   '/chi-phi/lich-su',
   '/quan-ly-xe',
   '/quan-ly-xe/check-in',
+  '/quan-ly-xe/chuyen-giao-cua-toi',
+  '/quan-ly-xe/ban-do-tai-xe',
   '/quan-ly-xe/thu-tien',
   '/ke-toan',
   '/ke-toan/thu-tien-sg',

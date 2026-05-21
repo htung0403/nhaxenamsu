@@ -162,6 +162,8 @@ export interface Customer {
   name: string;
   phone?: string;
   address?: string;
+  latitude?: number | null;
+  longitude?: number | null;
   customer_type?:
     | 'retail'
     | 'wholesale'

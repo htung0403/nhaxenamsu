@@ -55,6 +55,12 @@ router.post(
 );
 
 router.post(
+	'/geocode',
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	CustomerController.geocode
+);
+
+router.post(
 	'/merge/undo/:mergeId',
 	requireRolesOnly('admin', 'manager'),
 	CustomerController.undoMerge

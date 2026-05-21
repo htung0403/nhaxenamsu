@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { CustomerService } from './customers.service';
+import { GeocodingService } from './geocoding.service';
 import { successResponse, errorResponse } from '../../utils/response';
 import { z } from 'zod';
 
@@ -7,6 +8,8 @@ const createCustomerSchema = z.object({
   name: z.string().min(1),
   phone: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
   customer_type: z.enum(['retail', 'wholesale', 'grocery', 'vegetable', 'grocery_sender', 'grocery_receiver', 'vegetable_sender', 'vegetable_receiver']).default('retail'),
   user_id: z.string().uuid().optional(),
   aliases: z.array(z.string()).optional(),
@@ -16,6 +19,8 @@ const updateCustomerSchema = z.object({
   name: z.string().min(1).optional(),
   phone: z.string().nullable().optional(),
   address: z.string().nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
   customer_type: z.enum(['retail', 'wholesale', 'grocery', 'vegetable', 'grocery_sender', 'grocery_receiver', 'vegetable_sender', 'vegetable_receiver']).optional(),
   is_loyal: z.boolean().optional(),
   aliases: z.array(z.string()).optional(),
@@ -56,6 +61,10 @@ const mergeCustomerSchema = z.object({
 
 const undoMergeSchema = z.object({
   mergeId: z.string().uuid(),
+});
+
+const geocodeSchema = z.object({
+  address: z.string().min(5),
 });
 
 const customerSelfOrderItemSchema = z.object({
@@ -112,6 +121,16 @@ export class CustomerController {
       const validated = bulkLoyalSchema.parse(req.body);
       const data = await CustomerService.bulkSetLoyal(validated.customer_ids, validated.is_loyal);
       return res.status(200).json(successResponse(data, 'Customers loyalty status updated'));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
+  static async geocode(req: Request, res: Response) {
+    try {
+      const validated = geocodeSchema.parse(req.body);
+      const data = await GeocodingService.geocodeAddress(validated.address);
+      return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
     }

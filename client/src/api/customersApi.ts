@@ -31,19 +31,32 @@ export interface CustomerSelfOrderPayload {
   }>;
 }
 
+export interface GeocodeResult {
+  latitude: number;
+  longitude: number;
+  displayName: string;
+  provider: 'nominatim';
+  cached: boolean;
+}
+
 export const customersApi = {
   getAll: async (type?: string) => {
     const { data } = await axiosClient.get<Customer[]>('/customers', { params: { type } });
     return data;
   },
 
-  create: async (payload: { name: string; phone?: string | null; address?: string | null; customer_type?: string; aliases?: string[] }) => {
+  create: async (payload: { name: string; phone?: string | null; address?: string | null; latitude?: number | null; longitude?: number | null; customer_type?: string; aliases?: string[] }) => {
     const { data } = await axiosClient.post<Customer>('/customers', payload);
     return data;
   },
 
-  update: async (id: string, payload: { name?: string; phone?: string | null; address?: string | null; customer_type?: string; aliases?: string[] }) => {
+  update: async (id: string, payload: { name?: string; phone?: string | null; address?: string | null; latitude?: number | null; longitude?: number | null; customer_type?: string; aliases?: string[] }) => {
     const { data } = await axiosClient.put<Customer>(`/customers/${id}`, payload);
+    return data;
+  },
+
+  geocode: async (address: string) => {
+    const { data } = await axiosClient.post<GeocodeResult>('/customers/geocode', { address });
     return data;
   },
 

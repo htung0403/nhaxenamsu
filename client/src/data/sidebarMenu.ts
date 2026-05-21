@@ -5,6 +5,7 @@ import {
   Users,
   Wallet,
   Car,
+  MapPinned,
   Copyright,
   Receipt,
   ClipboardList,
@@ -26,6 +27,7 @@ export const sidebarMenu: SidebarItem[] = [
   { icon: Users, label: 'Hành chính nhân sự', path: '/hanh-chinh-nhan-su' },
   { icon: Wallet, label: 'Kế toán', path: '/ke-toan' },
   { icon: Car, label: 'Quản lý xe', path: '/quan-ly-xe' },
+  { icon: MapPinned, label: 'Bản đồ tài xế', path: '/quan-ly-xe/ban-do-tai-xe' },
 ];
 
 // Additional items seen on the dashboard

@@ -45,6 +45,22 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> =
   da_giao: { bg: 'bg-green-500/10', text: 'text-green-600 dark:text-green-500', dot: 'bg-green-500' },
 };
 
+const ASSIGNMENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  assigned: { label: 'Chờ tài xế', className: 'bg-slate-500/10 text-slate-700 dark:text-slate-400' },
+  in_transit: { label: 'Đang giao', className: 'bg-orange-500/10 text-orange-700 dark:text-orange-500' },
+  completed: { label: 'Tài xế đã giao', className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-500' },
+};
+
+const getAssignmentStatusSummary = (order: DeliveryOrder) => {
+  const statuses = new Set((order.delivery_vehicles || [])
+    .filter((dv) => (dv.assigned_quantity || 0) > 0)
+    .map((dv) => dv.status));
+  if (statuses.has('in_transit')) return ASSIGNMENT_STATUS_CONFIG.in_transit;
+  if (statuses.size > 0 && Array.from(statuses).every((status) => status === 'completed')) return ASSIGNMENT_STATUS_CONFIG.completed;
+  if (statuses.has('assigned')) return ASSIGNMENT_STATUS_CONFIG.assigned;
+  return null;
+};
+
 const normalizeVegetableStatus = (status?: string) => (status === 'hang_o_sg' ? 'can_giao' : (status || 'can_giao'));
 
 const PAYMENT_STATUS_CONFIG = {
@@ -738,6 +754,7 @@ const VegetableDeliveryPage: React.FC = () => {
                         const remainingQty = o.total_quantity - totalAssigned;
                         const displayStatus = normalizeVegetableStatus(o.status);
                         const statusColor = STATUS_COLORS[displayStatus] || STATUS_COLORS.can_giao;
+                        const assignmentStatus = getAssignmentStatusSummary(o);
                         const paymentStatus = getOrderPaymentStatus(o);
                         const paymentConfig = PAYMENT_STATUS_CONFIG[paymentStatus];
 
@@ -838,6 +855,11 @@ const VegetableDeliveryPage: React.FC = () => {
                                 <div className={clsx("w-1.5 h-1.5 rounded-full", statusColor.dot)} />
                                 {STATUS_LABELS[displayStatus] || displayStatus}
                               </div>
+                              {assignmentStatus && (
+                                <div className={clsx("mt-1 mx-auto w-fit rounded-md px-1.5 py-0.5 text-[9px] font-black", assignmentStatus.className)}>
+                                  {assignmentStatus.label}
+                                </div>
+                              )}
                             </td>
                             <td className="px-2 py-3 border-r border-border text-center">
                               <span className={clsx("inline-flex items-center justify-center px-2 py-0.5 rounded-md text-[10px] font-bold border", paymentConfig.className)}>

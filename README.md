@@ -121,6 +121,23 @@ VITE_API_URL=http://localhost:3000/api
 
 Nếu không cấu hình, frontend mặc định gọi API tại `http://localhost:3000/api`.
 
+### Driver tracking map
+
+Backend hỗ trợ realtime map tài xế với các biến tùy chọn:
+
+```env
+DRIVER_LOCATION_MIN_INTERVAL_SECONDS=10
+DRIVER_LOCATION_MIN_DISTANCE_METERS=20
+DRIVER_OFFLINE_AFTER_SECONDS=60
+DRIVER_LOCATION_RETENTION_DAYS=7
+DRIVER_MAP_REALTIME_ENABLED=true
+DRIVER_MAP_EGRESS_PERCENT=0
+DRIVER_MAP_AVERAGE_SPEED_KMH=22
+SLACK_WEBHOOK_URL=
+```
+
+Cost guard: nếu egress vượt 80% quota tháng trước ngày 20, đặt `DRIVER_MAP_REALTIME_ENABLED=false` để trang bản đồ chuyển sang polling 20 giây.
+
 ## Chạy dự án ở local
 
 Mở 2 terminal riêng.

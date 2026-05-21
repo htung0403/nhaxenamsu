@@ -127,9 +127,11 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
   '/quan-ly-xe': [
     {
       section: 'Quản lý xe',
-      items: [
-        { icon: Car, title: 'Danh sách xe', description: 'Quản lý thông tin và lịch trình xe.', colorScheme: 'blue', path: '/quan-ly-xe/danh-sach' },
-        { icon: Banknote, title: 'Thu tiền hàng', description: 'Quản lý thu nộp tiền giao hàng.', colorScheme: 'green', path: '/quan-ly-xe/thu-tien' },
+        items: [
+          { icon: Car, title: 'Danh sách xe', description: 'Quản lý thông tin và lịch trình xe.', colorScheme: 'blue', path: '/quan-ly-xe/danh-sach' },
+          { icon: DeliveryIcon, title: 'Chuyến giao của tôi', description: 'Tài xế bắt đầu chuyến, xem map điểm giao và xác nhận giao hàng.', colorScheme: 'orange', path: '/quan-ly-xe/chuyen-giao-cua-toi' },
+          { icon: MapPin, title: 'Bản đồ tài xế', description: 'Theo dõi vị trí tài xế và điểm giao đang hoạt động.', colorScheme: 'teal', path: '/quan-ly-xe/ban-do-tai-xe' },
+          { icon: Banknote, title: 'Thu tiền hàng', description: 'Quản lý thu nộp tiền giao hàng.', colorScheme: 'green', path: '/quan-ly-xe/thu-tien' },
         // { icon: MapPin, title: 'Điểm danh tài xế', description: 'Tài xế điểm danh Geolocation.', colorScheme: 'orange', path: '/quan-ly-xe/check-in' },
       ]
     }

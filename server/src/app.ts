@@ -26,6 +26,9 @@ import rolesRoutes from './modules/roles/roles.routes';
 import zaloRoutes from './modules/notifications/zalo.routes';
 import notificationsRoutes from './modules/notifications/notifications.routes';
 import publicDeliveryRoutes from './modules/delivery/public.routes';
+import driverTrackingRoutes from './modules/driver-tracking/driver-tracking.routes';
+import driverDeliveriesRoutes from './modules/driver-deliveries/driver-deliveries.routes';
+import routingRoutes from './modules/routing/routing.routes';
 
 const app = express();
 
@@ -78,6 +81,9 @@ app.use('/api/upload', uploadRoutes);
 app.use('/api/roles', rolesRoutes);
 app.use('/api/notifications/zalo', zaloRoutes);
 app.use('/api/notifications', notificationsRoutes);
+app.use('/api/driver-tracking', driverTrackingRoutes);
+app.use('/api/driver-deliveries', driverDeliveriesRoutes);
+app.use('/api/routing', routingRoutes);
 
 
 
@@ -97,8 +103,10 @@ app.listen(PORT, () => {
 });
 
 import { initZaloScheduler } from './modules/notifications/zalo.scheduler';
+import { initDriverTrackingScheduler } from './modules/driver-tracking/driver-tracking.scheduler';
 
 // Initialize schedulers
 initZaloScheduler();
+initDriverTrackingScheduler();
 
 export default app;

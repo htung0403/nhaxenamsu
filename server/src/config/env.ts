@@ -27,6 +27,8 @@ const envSchema = z.object({
   DRIVER_MAP_REALTIME_ENABLED: z.string().optional().default('true'),
   DRIVER_MAP_EGRESS_PERCENT: z.string().optional().default('0').transform(Number),
   DRIVER_MAP_AVERAGE_SPEED_KMH: z.string().optional().default('22').transform(Number),
+  ROUTING_PROVIDER: z.enum(['osrm']).optional().default('osrm'),
+  OSRM_BASE_URL: z.string().url().optional().default('https://router.project-osrm.org'),
   SLACK_WEBHOOK_URL: z.string().url().optional(),
 });
 
