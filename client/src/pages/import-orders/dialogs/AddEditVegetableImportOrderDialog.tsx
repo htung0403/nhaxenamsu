@@ -297,6 +297,12 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
   const previousProductsRef = React.useRef<any>(null);
 
   useEffect(() => {
+    if (isOpen) {
+      submitLockRef.current = false;
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
     if (defaultCategory === 'standard') return;
     if (!watchItems || !filteredProducts.length) return;
 
@@ -599,6 +605,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
           }
         }
       }
+      submitLockRef.current = false;
       onClose();
     } catch {
       submitLockRef.current = false;
