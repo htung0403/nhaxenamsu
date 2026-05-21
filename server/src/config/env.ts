@@ -22,7 +22,7 @@ const envSchema = z.object({
   CLIENT_URL: z.string().url().optional().default('http://localhost:5173'),
   DRIVER_LOCATION_MIN_INTERVAL_SECONDS: z.string().optional().default('10').transform(Number),
   DRIVER_LOCATION_MIN_DISTANCE_METERS: z.string().optional().default('20').transform(Number),
-  DRIVER_OFFLINE_AFTER_SECONDS: z.string().optional().default('60').transform(Number),
+  DRIVER_OFFLINE_AFTER_SECONDS: z.string().optional().default('300').transform(Number),
   DRIVER_LOCATION_RETENTION_DAYS: z.string().optional().default('7').transform(Number),
   DRIVER_MAP_REALTIME_ENABLED: z.string().optional().default('true'),
   DRIVER_MAP_EGRESS_PERCENT: z.string().optional().default('0').transform(Number),

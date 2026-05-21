@@ -37,6 +37,7 @@ import VehiclesPage from './pages/vehicles/VehiclesPage';
 import DriverCheckinPage from './pages/vehicles/DriverCheckinPage';
 import DriverMapPage from './pages/vehicles/DriverMapPage';
 import DriverDeliveriesPage from './pages/vehicles/DriverDeliveriesPage';
+import DriverActiveTripPage from './pages/vehicles/DriverActiveTripPage';
 import PaymentCollectionsPage from './pages/vehicles/payment-collections/PaymentCollectionsPage';
 import GroceryCustomersPage from './pages/customers/GroceryCustomersPage';
 import VegetableCustomersPage from './pages/customers/VegetableCustomersPage';
@@ -219,6 +220,7 @@ function AppRoutes() {
           <Route path="danh-sach" element={<VehiclesPage />} />
           <Route path="ban-do-tai-xe" element={<DriverMapPage />} />
           <Route path="chuyen-giao-cua-toi" element={<DriverDeliveriesPage />} />
+          <Route path="dang-giao" element={<DriverActiveTripPage />} />
           <Route path="check-in" element={<DriverCheckinPage />} />
           <Route path="thu-tien" element={<PaymentCollectionsPage />} />
         </Route>

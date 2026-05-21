@@ -50,7 +50,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, mustCheckIn, isLoc
       {/* Overlay - visible whenever sidebar is open ON MOBILE */}
       {isOpen && (
         <div
-          className="fixed inset-0 bg-black/50 z-30 lg:hidden"
+          className="fixed inset-0 bg-black/50 z-[2000] lg:hidden"
           onClick={() => setIsOpen(false)}
         />
       )}
@@ -58,7 +58,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, mustCheckIn, isLoc
       {/* Sidebar container */}
       <aside
         className={clsx(
-          "fixed inset-y-0 left-0 z-40 bg-card border-r border-border transition-all duration-300 flex flex-col h-full",
+          "fixed inset-y-0 left-0 z-[2010] bg-card border-r border-border transition-all duration-300 flex flex-col h-full",
           // Mobile: hidden when closed, w-64 when open
           // Desktop: w-[72px] when closed, w-64 when open
           isOpen ? "w-64 translate-x-0" : "-translate-x-full lg:translate-x-0 lg:w-[72px]"

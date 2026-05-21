@@ -61,10 +61,33 @@ const compactCache = () => {
   }
 };
 
+const translateModifier = (modifier?: string) => {
+  switch (modifier) {
+    case 'left':
+      return 'trái';
+    case 'right':
+      return 'phải';
+    case 'slight left':
+      return 'hơi chếch trái';
+    case 'slight right':
+      return 'hơi chếch phải';
+    case 'sharp left':
+      return 'gắt trái';
+    case 'sharp right':
+      return 'gắt phải';
+    case 'straight':
+      return 'thẳng';
+    case 'uturn':
+      return 'quay đầu';
+    default:
+      return '';
+  }
+};
+
 const describeManeuver = (step: any) => {
   const maneuver = step?.maneuver || {};
   const roadName = step?.name ? ` vào ${step.name}` : '';
-  const modifier = maneuver.modifier ? ` ${maneuver.modifier}` : '';
+  const modifier = translateModifier(maneuver.modifier);
 
   switch (maneuver.type) {
     case 'depart':
@@ -72,7 +95,7 @@ const describeManeuver = (step: any) => {
     case 'arrive':
       return 'Đến điểm giao';
     case 'turn':
-      return `Rẽ${modifier}${roadName}`;
+      return `Rẽ${modifier ? ` ${modifier}` : ''}${roadName}`;
     case 'new name':
       return `Tiếp tục${roadName}`;
     case 'roundabout':
@@ -81,9 +104,9 @@ const describeManeuver = (step: any) => {
     case 'merge':
       return `Nhập làn${roadName}`;
     case 'fork':
-      return `Rẽ nhánh${modifier}${roadName}`;
+      return `Rẽ nhánh${modifier ? ` ${modifier}` : ''}${roadName}`;
     case 'end of road':
-      return `Cuối đường rẽ${modifier}${roadName}`;
+      return `Cuối đường rẽ${modifier ? ` ${modifier}` : ''}${roadName}`;
     case 'continue':
       return `Đi tiếp${roadName}`;
     default:

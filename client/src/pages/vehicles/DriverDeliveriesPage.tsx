@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MapContainer, Marker, Polyline, Popup, TileLayer, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
@@ -128,6 +129,7 @@ const AssignmentCard: React.FC<{
 };
 
 const DriverDeliveriesPage: React.FC = () => {
+  const navigate = useNavigate();
   const { data: assignments = [], isLoading, isError, refetch } = useMyDriverAssignments();
   const startTrip = useStartDriverTrip();
   const completeDelivery = useCompleteDriverDelivery();
@@ -174,6 +176,7 @@ const DriverDeliveriesPage: React.FC = () => {
     if (!ids.length) return;
     await startTrip.mutateAsync(ids);
     setSelectedIds(new Set());
+    navigate('/quan-ly-xe/dang-giao');
   };
 
   const handleUploadComplete = async (assignment: DriverDeliveryAssignment, files: FileList | null) => {
