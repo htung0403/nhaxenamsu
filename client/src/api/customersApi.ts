@@ -35,8 +35,22 @@ export interface GeocodeResult {
   latitude: number;
   longitude: number;
   displayName: string;
-  provider: 'nominatim';
+  provider: 'nominatim' | 'vietmap';
   cached: boolean;
+}
+
+export interface AddressSuggestion {
+  refId: string;
+  displayName: string;
+  name?: string;
+  address?: string;
+  provider: 'vietmap';
+}
+
+export interface DeliveryOrderPriceUpdate {
+  deliveryOrderId: string;
+  unitPrice: number;
+  priceConfirmed?: boolean;
 }
 
 export const customersApi = {
@@ -57,6 +71,16 @@ export const customersApi = {
 
   geocode: async (address: string) => {
     const { data } = await axiosClient.post<GeocodeResult>('/customers/geocode', { address });
+    return data;
+  },
+
+  autocompleteAddress: async (text: string) => {
+    const { data } = await axiosClient.post<AddressSuggestion[]>('/customers/address-suggestions', { text });
+    return data;
+  },
+
+  resolveAddressSuggestion: async (refId: string) => {
+    const { data } = await axiosClient.post<GeocodeResult>('/customers/address-suggestions/resolve', { refId });
     return data;
   },
 
@@ -146,7 +170,7 @@ export const customersApi = {
     return data;
   },
 
-  updateDeliveryOrderPrices: async ({ customerId, updates }: { customerId: string; updates: any[] }) => {
+  updateDeliveryOrderPrices: async ({ customerId, updates }: { customerId: string; updates: DeliveryOrderPriceUpdate[] }) => {
     const { data } = await axiosClient.put(`/customers/${customerId}/delivery-order-prices`, { updates });
     return data;
   },

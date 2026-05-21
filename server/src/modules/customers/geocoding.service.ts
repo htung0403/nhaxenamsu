@@ -11,15 +11,42 @@ type NominatimResult = {
   class?: string;
 };
 
+type VietMapSuggestion = {
+  ref_id?: string;
+  display?: string;
+  name?: string;
+  address?: string;
+};
+
+type VietMapPlaceResult = {
+  ref_id?: string;
+  display?: string;
+  name?: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  latitude?: number;
+  longitude?: number;
+};
+
 type GeocodeResult = {
   latitude: number;
   longitude: number;
   displayName: string;
-  provider: 'nominatim';
+  provider: 'nominatim' | 'vietmap';
   cached: boolean;
 };
 
+export type AddressSuggestion = {
+  refId: string;
+  displayName: string;
+  name?: string;
+  address?: string;
+  provider: 'vietmap';
+};
+
 let lastNominatimRequestAt = 0;
+const VIETMAP_DEFAULT_FOCUS = '10.7769,106.7009';
 
 const normalizeAddress = (address: string) =>
   address
@@ -38,7 +65,97 @@ const buildQueryAddress = (address: string) => {
   return hasVietnam ? normalized : `${normalized}, Việt Nam`;
 };
 
+const assertVietMapApiKey = () => {
+  if (!env.VIETMAP_API_KEY) {
+    throw new Error('Chưa cấu hình VIETMAP_API_KEY');
+  }
+  return env.VIETMAP_API_KEY;
+};
+
+const normalizeVietMapSuggestion = (item: VietMapSuggestion): AddressSuggestion | null => {
+  if (!item.ref_id || !item.display) return null;
+  return {
+    refId: item.ref_id,
+    displayName: item.display,
+    name: item.name,
+    address: item.address,
+    provider: 'vietmap',
+  };
+};
+
 export class GeocodingService {
+  static async autocompleteAddress(text: string): Promise<AddressSuggestion[]> {
+    const normalizedText = text.trim();
+    if (normalizedText.length < 2) return [];
+
+    const url = new URL('https://maps.vietmap.vn/api/autocomplete/v4');
+    url.searchParams.set('apikey', assertVietMapApiKey());
+    url.searchParams.set('text', normalizedText);
+    url.searchParams.set('focus', VIETMAP_DEFAULT_FOCUS);
+    url.searchParams.set('display_type', '6');
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Không thể lấy gợi ý địa chỉ từ VietMap (${response.status})`);
+    }
+
+    const results = (await response.json()) as VietMapSuggestion[];
+    return (Array.isArray(results) ? results : [])
+      .map(normalizeVietMapSuggestion)
+      .filter((item): item is AddressSuggestion => Boolean(item))
+      .slice(0, 8);
+  }
+
+  static async resolveVietMapPlace(refId: string): Promise<GeocodeResult> {
+    const normalizedRefId = refId.trim();
+    if (!normalizedRefId) {
+      throw new Error('Thiếu mã địa chỉ VietMap');
+    }
+
+    const url = new URL('https://maps.vietmap.vn/api/place/v4');
+    url.searchParams.set('apikey', assertVietMapApiKey());
+    url.searchParams.set('refid', normalizedRefId);
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`Không thể lấy tọa độ từ VietMap (${response.status})`);
+    }
+
+    const result = (await response.json()) as VietMapPlaceResult;
+    const latitude = Number(result.lat ?? result.latitude);
+    const longitude = Number(result.lng ?? result.longitude);
+
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      throw new Error('VietMap không trả về tọa độ hợp lệ');
+    }
+
+    const displayName = result.display || [result.name, result.address].filter(Boolean).join(' ') || normalizedRefId;
+    const addressKey = buildAddressKey(displayName);
+
+    await supabaseService.from('geocode_cache').upsert(
+      {
+        address_key: addressKey,
+        query_address: displayName,
+        display_name: displayName,
+        latitude,
+        longitude,
+        provider: 'vietmap',
+        raw_result: result,
+        last_used_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'address_key' },
+    );
+
+    return {
+      latitude,
+      longitude,
+      displayName,
+      provider: 'vietmap',
+      cached: false,
+    };
+  }
+
   static async geocodeAddress(address: string): Promise<GeocodeResult> {
     const normalizedAddress = normalizeAddress(address);
     if (normalizedAddress.length < 5) {

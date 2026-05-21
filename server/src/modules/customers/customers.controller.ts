@@ -67,6 +67,14 @@ const geocodeSchema = z.object({
   address: z.string().min(5),
 });
 
+const autocompleteAddressSchema = z.object({
+  text: z.string().min(2),
+});
+
+const resolveAddressSchema = z.object({
+  refId: z.string().min(1),
+});
+
 const customerSelfOrderItemSchema = z.object({
   product_id: z.string().uuid().optional().nullable(),
   package_type: z.string().optional().nullable(),
@@ -130,6 +138,26 @@ export class CustomerController {
     try {
       const validated = geocodeSchema.parse(req.body);
       const data = await GeocodingService.geocodeAddress(validated.address);
+      return res.status(200).json(successResponse(data));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
+  static async autocompleteAddress(req: Request, res: Response) {
+    try {
+      const validated = autocompleteAddressSchema.parse(req.body);
+      const data = await GeocodingService.autocompleteAddress(validated.text);
+      return res.status(200).json(successResponse(data));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
+  static async resolveAddress(req: Request, res: Response) {
+    try {
+      const validated = resolveAddressSchema.parse(req.body);
+      const data = await GeocodingService.resolveVietMapPlace(validated.refId);
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));

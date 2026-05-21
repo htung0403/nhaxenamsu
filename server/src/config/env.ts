@@ -29,6 +29,7 @@ const envSchema = z.object({
   DRIVER_MAP_AVERAGE_SPEED_KMH: z.string().optional().default('22').transform(Number),
   ROUTING_PROVIDER: z.enum(['osrm']).optional().default('osrm'),
   OSRM_BASE_URL: z.string().url().optional().default('https://router.project-osrm.org'),
+  VIETMAP_API_KEY: z.string().optional(),
   SLACK_WEBHOOK_URL: z.string().url().optional(),
 });
 

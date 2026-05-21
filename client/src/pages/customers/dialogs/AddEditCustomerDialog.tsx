@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Building2, Phone, MapPin, Plus, ChevronRight, Tag } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useCreateCustomer, useUpdateCustomer, useCustomers } from '../../../hooks/queries/useCustomers';
 import { customersApi } from '../../../api/customersApi';
+import type { AddressSuggestion } from '../../../api/customersApi';
 import type { Customer } from '../../../types';
 import toast from 'react-hot-toast';
 import CustomerLocationPicker from './CustomerLocationPicker';
@@ -36,6 +37,11 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
   const createMutation = useCreateCustomer();
   const updateMutation = useUpdateCustomer();
   const isEditMode = mode === 'edit' && !!customer?.id;
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [isAddressSearching, setIsAddressSearching] = useState(false);
+  const [isAddressSuggestionsOpen, setIsAddressSuggestionsOpen] = useState(false);
+  const selectedAddressRef = useRef('');
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch customers to check for duplicates
   const { data: allCustomers } = useCustomers(undefined, isOpen);
@@ -65,6 +71,7 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
   const address = watch('address') || '';
   const latitude = watch('latitude');
   const longitude = watch('longitude');
+  const addressField = register('address');
 
   const addAlias = () => {
     const currentAliases = watch('aliases') || [];
@@ -89,10 +96,12 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
 
   useEffect(() => {
     if (isOpen) {
+      const nextAddress = isEditMode ? (customer?.address || '') : '';
+      selectedAddressRef.current = nextAddress;
       reset({
         name: isEditMode ? (customer?.name || '') : '',
         phone: isEditMode ? (customer?.phone || '') : '',
-        address: isEditMode ? (customer?.address || '') : '',
+        address: nextAddress,
         latitude: isEditMode ? (customer?.latitude ?? '') : '',
         longitude: isEditMode ? (customer?.longitude ?? '') : '',
         customer_type: (isEditMode ? customer?.customer_type : defaultType) as any || 'grocery',
@@ -100,6 +109,49 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
       });
     }
   }, [isOpen, reset, defaultType, isEditMode, customer]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setAddressSuggestions([]);
+      setIsAddressSuggestionsOpen(false);
+      return;
+    }
+
+    const trimmedAddress = address.trim();
+    if (trimmedAddress.length < 2 || trimmedAddress === selectedAddressRef.current) {
+      setAddressSuggestions([]);
+      setIsAddressSearching(false);
+      return;
+    }
+
+    let isActive = true;
+    setIsAddressSearching(true);
+    const debounceId = setTimeout(async () => {
+      try {
+        const suggestions = await customersApi.autocompleteAddress(trimmedAddress);
+        if (!isActive) return;
+        setAddressSuggestions(suggestions);
+        setIsAddressSuggestionsOpen(suggestions.length > 0);
+      } catch {
+        if (!isActive) return;
+        setAddressSuggestions([]);
+        setIsAddressSuggestionsOpen(false);
+      } finally {
+        if (isActive) setIsAddressSearching(false);
+      }
+    }, 300);
+
+    return () => {
+      isActive = false;
+      clearTimeout(debounceId);
+    };
+  }, [address, isOpen]);
+
+  useEffect(() => {
+    return () => {
+      if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+    };
+  }, []);
 
   const onSubmit = async (data: CustomerFormData) => {
     // Duplicate check
@@ -162,6 +214,28 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
   const handleMapPinChange = (nextLatitude: number, nextLongitude: number) => {
     setValue('latitude', nextLatitude, { shouldValidate: true, shouldDirty: true });
     setValue('longitude', nextLongitude, { shouldValidate: true, shouldDirty: true });
+  };
+
+  const handleSelectAddressSuggestion = async (suggestion: AddressSuggestion) => {
+    selectedAddressRef.current = suggestion.displayName;
+    setValue('address', suggestion.displayName, { shouldValidate: true, shouldDirty: true });
+    setAddressSuggestions([]);
+    setIsAddressSuggestionsOpen(false);
+
+    try {
+      const result = await toast.promise(
+        customersApi.resolveAddressSuggestion(suggestion.refId),
+        {
+          loading: 'Đang lấy tọa độ từ VietMap...',
+          success: 'Đã chọn địa chỉ VietMap',
+          error: 'Không lấy được tọa độ từ VietMap',
+        },
+      );
+      setValue('latitude', result.latitude, { shouldValidate: true, shouldDirty: true });
+      setValue('longitude', result.longitude, { shouldValidate: true, shouldDirty: true });
+    } catch {
+      // toast.promise already shows the error state
+    }
   };
 
   const isSubmitting = createMutation.isPending || updateMutation.isPending || isHookSubmitting;
@@ -246,10 +320,41 @@ const AddEditCustomerDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, de
                   <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/40" size={16} />
                   <input
                     type="text"
-                    {...register('address')}
+                    {...addressField}
+                    onChange={(event) => {
+                      selectedAddressRef.current = '';
+                      void addressField.onChange(event);
+                    }}
+                    onFocus={() => {
+                      if (addressSuggestions.length > 0) setIsAddressSuggestionsOpen(true);
+                    }}
+                    onBlur={() => {
+                      blurTimeoutRef.current = setTimeout(() => setIsAddressSuggestionsOpen(false), 150);
+                    }}
                     placeholder="VD: 12 Đường Cổ Loa..."
                     className="w-full pl-10 pr-4 py-2 bg-muted/10 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all font-medium"
                   />
+                  {isAddressSearching && (
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-muted-foreground">
+                      Đang tìm...
+                    </span>
+                  )}
+                  {isAddressSuggestionsOpen && addressSuggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-60 overflow-y-auto rounded-xl border border-border bg-card shadow-xl">
+                      {addressSuggestions.map((suggestion) => (
+                        <button
+                          key={suggestion.refId}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => void handleSelectAddressSuggestion(suggestion)}
+                          className="w-full px-4 py-3 text-left transition-colors hover:bg-muted/60"
+                        >
+                          <p className="text-[13px] font-bold text-foreground">{suggestion.name || suggestion.displayName}</p>
+                          <p className="mt-0.5 line-clamp-2 text-[11px] text-muted-foreground">{suggestion.displayName}</p>
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
 

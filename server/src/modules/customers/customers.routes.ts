@@ -61,6 +61,18 @@ router.post(
 );
 
 router.post(
+	'/address-suggestions',
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	CustomerController.autocompleteAddress
+);
+
+router.post(
+	'/address-suggestions/resolve',
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	CustomerController.resolveAddress
+);
+
+router.post(
 	'/merge/undo/:mergeId',
 	requireRolesOnly('admin', 'manager'),
 	CustomerController.undoMerge
