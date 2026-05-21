@@ -286,6 +286,12 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
   const watchItems = watch('items');
   const submitLockRef = React.useRef(false);
 
+  useEffect(() => {
+    if (isOpen) {
+      submitLockRef.current = false;
+    }
+  }, [isOpen]);
+
   const previousItemsRef = React.useRef<string>('');
   const previousProductsRef = React.useRef<number | undefined>(undefined);
 
@@ -508,6 +514,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         console.log('--- DISPATCH CREATE_MUTATION ---', payload);
         await createMutation.mutateAsync(payload as ImportOrderCreatePayload);
       }
+      submitLockRef.current = false;
       onClose();
     } catch {
       submitLockRef.current = false;
