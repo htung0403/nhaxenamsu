@@ -110,6 +110,7 @@ const DriverActiveTripPage: React.FC = () => {
   const [routeResult, setRouteResult] = useState<DirectionsResult | null>(null);
   const [routeAssignmentId, setRouteAssignmentId] = useState<string | null>(null);
   const [uploadingId, setUploadingId] = useState<string | null>(null);
+  const [showRouteDetails, setShowRouteDetails] = useState(false);
 
   const focusedAssignment = useMemo(
     () => inTransitAssignments.find((assignment) => assignment.id === focusedId) || inTransitAssignments.find(hasCoordinates) || inTransitAssignments[0] || null,
@@ -192,8 +193,8 @@ const DriverActiveTripPage: React.FC = () => {
   }
 
   return (
-    <div className="-m-4 flex min-h-[calc(100dvh-55px)] flex-col bg-slate-950 lg:-m-6">
-      <div className="relative z-[2] border-b border-white/10 bg-slate-950 px-4 py-3 text-white">
+    <div className="flex h-full min-h-0 flex-col bg-slate-950">
+      <div className="relative z-[1200] border-b border-white/10 bg-slate-950 px-4 py-3 text-white">
         <div className="flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-[11px] font-black uppercase tracking-[0.2em] text-emerald-300">Đang giao</p>
@@ -227,37 +228,37 @@ const DriverActiveTripPage: React.FC = () => {
         </div>
       </div>
 
-      {showOrders && (
-        <div className="relative z-[2] max-h-72 overflow-y-auto border-b border-slate-200 bg-white p-3 shadow-xl">
-          <div className="space-y-2">
-            {inTransitAssignments.map((assignment) => (
-              <button
-                key={assignment.id}
-                type="button"
-                onClick={() => {
-                  setFocusedId(assignment.id);
-                  setShowOrders(false);
-                }}
-                className={`w-full rounded-2xl border p-3 text-left ${
-                  focusedAssignment?.id === assignment.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'
-                }`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-black text-slate-950">{assignment.order.productName}</p>
-                    <p className="text-xs font-semibold text-slate-500">#{assignment.order.orderCode} • SL {assignment.assignedQuantity}</p>
-                    <p className="mt-1 line-clamp-2 text-xs text-slate-600">{assignment.order.receiverAddress || 'Chưa có địa chỉ'}</p>
+      <div className="relative z-0 min-h-0 flex-1 overflow-hidden">
+        {showOrders && (
+          <div className="absolute inset-x-3 top-3 z-[2000] max-h-[34dvh] overflow-y-auto rounded-[24px] border border-slate-200 bg-white p-3 shadow-2xl">
+            <div className="space-y-2">
+              {inTransitAssignments.map((assignment) => (
+                <button
+                  key={assignment.id}
+                  type="button"
+                  onClick={() => {
+                    setFocusedId(assignment.id);
+                    setShowOrders(false);
+                  }}
+                  className={`w-full rounded-2xl border p-3 text-left ${
+                    focusedAssignment?.id === assignment.id ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-black text-slate-950">{assignment.order.productName}</p>
+                      <p className="text-xs font-semibold text-slate-500">#{assignment.order.orderCode} • SL {assignment.assignedQuantity}</p>
+                      <p className="mt-1 line-clamp-2 text-xs text-slate-600">{assignment.order.receiverAddress || 'Chưa có địa chỉ'}</p>
+                    </div>
+                    <span className="rounded-full bg-orange-100 px-2 py-1 text-[10px] font-black text-orange-700">Đang giao</span>
                   </div>
-                  <span className="rounded-full bg-orange-100 px-2 py-1 text-[10px] font-black text-orange-700">Đang giao</span>
-                </div>
-              </button>
-            ))}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      <div className="relative flex-1">
-        <MapContainer center={mapCenter} zoom={14} className="h-full min-h-[520px] w-full" scrollWheelZoom>
+        <MapContainer center={mapCenter} zoom={14} className="relative z-0 h-full w-full" scrollWheelZoom>
           <TileLayer
             attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
             url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
@@ -281,18 +282,18 @@ const DriverActiveTripPage: React.FC = () => {
           )}
         </MapContainer>
 
-        <div className="pointer-events-none absolute inset-x-3 bottom-4 z-[1000] space-y-3">
-          <div className="pointer-events-auto rounded-[28px] border border-slate-200 bg-white/95 p-4 shadow-2xl backdrop-blur">
+        <div className="pointer-events-none absolute inset-x-3 bottom-[76px] z-[1100] space-y-2 lg:bottom-3">
+          <div className="pointer-events-auto max-h-[34dvh] overflow-y-auto rounded-[20px] border border-slate-200 bg-white/95 p-2.5 shadow-2xl backdrop-blur">
             <div className="flex items-start gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white">
-                <Navigation2 className="h-6 w-6" />
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
+                <Navigation2 className="h-4 w-4" />
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[11px] font-black uppercase tracking-widest text-slate-400">Bước tiếp theo</p>
-                <p className="mt-1 text-lg font-black leading-snug text-slate-950">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Bước tiếp theo</p>
+                <p className="line-clamp-1 text-sm font-black leading-snug text-slate-950">
                   {primaryStep ? primaryStep.instruction : 'Bấm chỉ đường để bắt đầu dẫn tuyến'}
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-3 text-sm font-bold text-slate-600">
+                <div className="mt-1 flex flex-wrap items-center gap-3 text-xs font-bold text-slate-600">
                   {primaryStep && (
                     <span className="flex items-center gap-1">
                       <MapPinned className="h-4 w-4" />
@@ -310,29 +311,42 @@ const DriverActiveTripPage: React.FC = () => {
             </div>
 
             {activeRoute?.steps.length ? (
-              <div className="mt-4 max-h-32 overflow-y-auto rounded-2xl bg-slate-50 p-3">
-                <ol className="space-y-2 text-sm text-slate-700">
-                  {activeRoute.steps.slice(0, 8).map((step, index) => (
-                    <li key={`${step.instruction}-${index}`} className="flex gap-2">
-                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-black">
-                        {index + 1}
-                      </span>
-                      <span>
-                        <span className="font-bold text-slate-900">{step.instruction}</span>
-                        <span className="text-slate-500"> • {formatDistance(step.distanceMeters)}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
+              <>
+                <button
+                  type="button"
+                  onClick={() => setShowRouteDetails((value) => !value)}
+                  className="mt-2 flex w-full items-center justify-between rounded-xl bg-slate-50 px-3 py-1.5 text-xs font-black text-slate-800"
+                >
+                  <span>{showRouteDetails ? 'Ẩn các bước chỉ dẫn' : `Xem ${activeRoute.steps.length} bước chỉ dẫn`}</span>
+                  {showRouteDetails ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                </button>
+
+                {showRouteDetails && (
+                  <div className="mt-2 max-h-24 overflow-y-auto rounded-xl bg-slate-50 p-2">
+                    <ol className="space-y-1.5 text-xs text-slate-700">
+                      {activeRoute.steps.slice(0, 8).map((step, index) => (
+                        <li key={`${step.instruction}-${index}`} className="flex gap-2">
+                          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-slate-200 text-[11px] font-black">
+                            {index + 1}
+                          </span>
+                          <span>
+                            <span className="font-bold text-slate-900">{step.instruction}</span>
+                            <span className="text-slate-500"> • {formatDistance(step.distanceMeters)}</span>
+                          </span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+                )}
+              </>
             ) : null}
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
+            <div className="mt-2 grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => void calculateRoute()}
                 disabled={routeLoading || !focusedAssignment || !hasCoordinates(focusedAssignment)}
-                className="flex items-center justify-center gap-2 rounded-2xl bg-blue-600 px-4 py-3 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-xs font-black text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {routeLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Route className="h-4 w-4" />}
                 Chỉ đường
@@ -340,7 +354,7 @@ const DriverActiveTripPage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void refetch()}
-                className="flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-800"
+                className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-800"
               >
                 <RefreshCw className="h-4 w-4" />
                 Làm mới
@@ -348,7 +362,7 @@ const DriverActiveTripPage: React.FC = () => {
             </div>
 
             {focusedAssignment && (
-              <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-emerald-600 px-4 py-3 text-sm font-black text-white">
+              <label className="mt-2 flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-black text-white">
                 {uploadingId === focusedAssignment.id || completeDelivery.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (

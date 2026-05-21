@@ -110,6 +110,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       'ke-toan': 'Kế toán',
       'hang-hoa': 'Hàng hóa',
       'quan-ly-xe': 'Quản lý xe',
+      'dang-giao': 'Đang giao',
       'chi-phi': 'Chi phí',
       'khach-hang-than-thiet': 'KH thân thiết',
       'cai-dat-he-thong': 'Cài đặt hệ thống'
