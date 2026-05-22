@@ -59,6 +59,38 @@ const isMinuteInRange = (minute: number, start: number, end: number): boolean =>
   return minute >= start || minute <= end;
 };
 
+const normalizeRoleKey = (roleKey: string): string =>
+  (roleKey || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+const getScheduleRoleAliases = (roleKey: string): string[] => {
+  const normalized = normalizeRoleKey(roleKey);
+  const aliases = new Set([normalized]);
+
+  if (normalized.includes('tai_xe') && normalized.includes('lon')) {
+    aliases.add('tai_xe_xe_lon');
+    aliases.add('tai_xe_xe_tai_lon');
+    aliases.add('tai_xe_tai_lon');
+    aliases.add('tai_xe_xe_lon_chinh');
+    aliases.add('tai_xe_xe_lon_phu');
+  }
+
+  if (normalized.includes('tai_xe') && normalized.includes('nho')) {
+    aliases.add('tai_xe_xe_nho');
+    aliases.add('tai_xe_xe_tai_nho');
+    aliases.add('tai_xe_tai_nho');
+    aliases.add('tai_xe_xe_nho_cu');
+    aliases.add('tai_xe_xe_nho_moi');
+  }
+
+  return Array.from(aliases);
+};
+
 const getUserRoleKeys = async (userId: string, fallbackRole: Role): Promise<string[]> => {
   const { data, error } = await supabaseService
     .from('app_user_roles')
@@ -100,8 +132,9 @@ const shouldDenyByLockSchedule = async (userId: string, profileRole: Role): Prom
   if (!schedules.length) return false;
 
   const roleKeys = await getUserRoleKeys(userId, profileRole);
+  const scheduleRoleKeys = new Set(roleKeys.flatMap(getScheduleRoleAliases));
   const applicableSchedules: LockScheduleItem[] = schedules.filter((item: LockScheduleItem) =>
-    roleKeys.includes(item.role_key)
+    scheduleRoleKeys.has(normalizeRoleKey(item.role_key))
   );
 
   if (!applicableSchedules.length) return false;

@@ -88,6 +88,39 @@ function isWithinRoleSchedule(roleSchedule: LockSchedule['schedules'][number]): 
   return nowMinutes >= start && nowMinutes < end;
 }
 
+function normalizeRoleKey(roleKey?: string | null): string {
+  return (roleKey || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+}
+
+function getScheduleRoleAliases(roleKey?: string | null): string[] {
+  const normalized = normalizeRoleKey(roleKey);
+  const aliases = new Set([normalized]);
+
+  if (normalized.includes('tai_xe') && normalized.includes('lon')) {
+    aliases.add('tai_xe_xe_lon');
+    aliases.add('tai_xe_xe_tai_lon');
+    aliases.add('tai_xe_tai_lon');
+    aliases.add('tai_xe_xe_lon_chinh');
+    aliases.add('tai_xe_xe_lon_phu');
+  }
+
+  if (normalized.includes('tai_xe') && normalized.includes('nho')) {
+    aliases.add('tai_xe_xe_nho');
+    aliases.add('tai_xe_xe_tai_nho');
+    aliases.add('tai_xe_tai_nho');
+    aliases.add('tai_xe_xe_nho_cu');
+    aliases.add('tai_xe_xe_nho_moi');
+  }
+
+  return Array.from(aliases);
+}
+
 const ALLOWED_PATHS_BEFORE_CHECKIN = new Set([
   '/hanh-chinh-nhan-su',
   '/hanh-chinh-nhan-su/cham-cong',
@@ -113,15 +146,23 @@ export function useAttendanceGate() {
 
   const roleSchedule = useMemo(() => {
     if (!user || !lockSchedule?.schedules?.length) return null;
-    return lockSchedule.schedules.find((item) => item.role_key === user.role) || null;
+    const roleAliases = new Set(getScheduleRoleAliases(user.role));
+    return lockSchedule.schedules.find((item) => roleAliases.has(normalizeRoleKey(item.role_key))) || null;
   }, [user, lockSchedule]);
-
-  const forcedTimeLocked = typeof window !== 'undefined' && localStorage.getItem('time_locked') === '1';
 
   const lockedByRoleSchedule = useMemo(() => {
     if (!user || isAdmin || isCustomer || !roleSchedule) return false;
     return !isWithinRoleSchedule(roleSchedule);
   }, [user, isAdmin, isCustomer, roleSchedule]);
+
+  const forcedTimeLocked = useMemo(() => {
+    if (typeof window === 'undefined' || localStorage.getItem('time_locked') !== '1') return false;
+    if (roleSchedule && !lockedByRoleSchedule) {
+      localStorage.removeItem('time_locked');
+      return false;
+    }
+    return true;
+  }, [roleSchedule, lockedByRoleSchedule]);
 
   const isAfterHours = currentHour >= 19;
   const lockedByLegacyRule = !!user && !isAdmin && !isCustomer && !isNhanVienNhanHang && !roleSchedule && isAfterHours;
