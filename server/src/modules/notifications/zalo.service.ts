@@ -1740,6 +1740,7 @@ export class ZaloService {
             licensePlate: item.licensePlate || '-',
             quantity: Number(item.quantity || 0),
             productName: item.productName || 'Hàng hóa',
+            note: item.note || '',
             senderName: item.senderName || '-',
             price: Number(item.price || 0),
             total: Number(item.total || 0),
