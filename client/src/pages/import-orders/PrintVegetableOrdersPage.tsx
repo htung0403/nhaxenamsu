@@ -43,6 +43,18 @@ const getOrderDriverName = (order: ImportOrderWithRelations) => {
   return '';
 };
 
+const getOrderVehiclePlates = (order: ImportOrderWithRelations) => {
+  const plates = new Set<string>();
+  if (order.license_plate?.trim()) plates.add(order.license_plate.trim());
+  order.delivery_orders?.forEach((deliveryOrder) => {
+    deliveryOrder.delivery_vehicles?.forEach((deliveryVehicle) => {
+      const plate = deliveryVehicle.vehicles?.license_plate?.trim();
+      if (plate) plates.add(plate);
+    });
+  });
+  return Array.from(plates);
+};
+
 // ─── Constants ────────────────────────────────────────────
 const ROWS_PER_A4 = 35; // ~35 data rows fit on one A4 page
 const MAX_AMOUNT_PER_SHEET = 4_500_000; // 4.5 triệu
@@ -235,6 +247,24 @@ const PrintVegetableOrdersPage: React.FC = () => {
 
     return merged;
   }, [orders, dailyTaiRankMap]);
+
+  const taiVehiclePlateMap = useMemo(() => {
+    const map = new Map<number, string>();
+    orders.forEach((order) => {
+      if (order.deleted_at) return;
+      const taiRank = order.tai_rank ?? dailyTaiRankMap.get(order.id) ?? 1;
+      const plates = getOrderVehiclePlates(order);
+      if (plates.length > 0 && !map.has(taiRank)) {
+        map.set(taiRank, plates.join(', '));
+      }
+    });
+    return map;
+  }, [orders, dailyTaiRankMap]);
+
+  const taiCount = useMemo(() => {
+    const ranks = new Set(flatItems.map((item) => item.taiRank));
+    return ranks.size;
+  }, [flatItems]);
 
   // ─── Split into sheets ────────────────────────────────
   const sheets: FlatItem[][] = useMemo(() => {
@@ -528,6 +558,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
             const sheetTotal = sheetItems.reduce((s, i) => s + i.totalAmount, 0);
             const isLastSheet = sheetIndex === sheets.length - 1;
             const showGrandTotal = isLastSheet && sheets.length > 1;
+            const sheetVehiclePlate = taiVehiclePlateMap.get(sheetIndex + 1) || soXe;
 
             return (
               <div key={sheetIndex} className="print-sheet relative group" id={`print-sheet-${sheetIndex}`}>
@@ -557,7 +588,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
                   <div>
                     <span style={{ fontWeight: 700 }}>Số Xe: </span>
                     <span style={{ borderBottom: '1px solid #000', display: 'inline-block', minWidth: 60, textAlign: 'center' }}>
-                      {soXe}
+                      {sheetVehiclePlate}
                     </span>
                   </div>
                   <div style={{ fontStyle: 'italic' }}>
@@ -755,7 +786,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
                     {showGrandTotal && (
                       <tr style={{ borderTop: '2px solid #000' }}>
                         <td colSpan={hideSender ? 6 : 7} style={{ padding: '5px 6px', fontWeight: 900, textAlign: 'right', fontSize: 16, borderLeft: '1px solid #000', borderRight: '1px solid #000', borderBottom: '2px solid #000' }}>
-                          TỔNG TẤT CẢ CÁC TỜ ({sheets.length} tờ)
+                          TỔNG TẤT CẢ CÁC TỜ ({sheets.length} tờ) ({taiCount} tài)
                         </td>
                         <td style={{ padding: '5px 6px', textAlign: 'right', fontWeight: 900, fontSize: 16, borderRight: '1px solid #000', borderBottom: '2px solid #000' }}>
                           {printMode === 'amount' ? formatNumber(totalAmount * 1.08) : formatNumber(totalAmount)}
