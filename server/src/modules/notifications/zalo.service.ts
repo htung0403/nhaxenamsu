@@ -2230,15 +2230,35 @@ export class ZaloService {
   }
 
   private resolveVegetableOrderDriverKey(order: any): string {
+    const driverNames = new Set<string>();
+
+    if (Array.isArray(order.delivery_orders)) {
+      order.delivery_orders.forEach((deliveryOrder: any) => {
+        if (!Array.isArray(deliveryOrder?.delivery_vehicles)) return;
+        deliveryOrder.delivery_vehicles.forEach((deliveryVehicle: any) => {
+          const fullName = deliveryVehicle?.profiles?.full_name;
+          if (fullName) driverNames.add(normalizePersonName(fullName));
+        });
+      });
+    }
+
+    if (driverNames.size > 0) {
+      return `dn:${Array.from(driverNames).sort().join('|')}`;
+    }
+    if (order.driver_name) return `dn:${normalizePersonName(order.driver_name)}`;
+
     const dvDriverId = order.delivery_orders?.[0]?.delivery_vehicles?.[0]?.driver_id;
     if (dvDriverId) return `dvid:${dvDriverId}`;
-    if (order.driver_name) return `dn:${normalizePersonName(order.driver_name)}`;
     if (order.received_by) return `rb:${order.received_by}`;
     return 'unknown';
   }
 
+  private isUnconfirmedVegetableCustomerOrder(order: any): boolean {
+    return order.profiles?.role === 'customer' && !order.admin_confirmed_at;
+  }
+
   private buildDailyDriverRankMap(orders: any[]): Map<string, number> {
-    const sortedOrders = [...orders].sort((a, b) => {
+    const sortedOrders = orders.filter((order) => !this.isUnconfirmedVegetableCustomerOrder(order)).sort((a, b) => {
       const timeA = new Date(a.created_at || 0).getTime();
       const timeB = new Date(b.created_at || 0).getTime();
       if (timeA !== timeB) return timeA - timeB;
@@ -2261,7 +2281,7 @@ export class ZaloService {
   private buildTaiRankBySupplierOrderId(orders: any[]): Map<string, number> {
     const ordersBySupplier = new Map<string, any[]>();
 
-    orders.forEach((order) => {
+    orders.filter((order) => !this.isUnconfirmedVegetableCustomerOrder(order)).forEach((order) => {
       const supplierKey = String(order.customer_id || 'unknown');
       const current = ordersBySupplier.get(supplierKey) || [];
       current.push(order);
@@ -2614,9 +2634,11 @@ export class ZaloService {
       .select(`
         id,
         created_at,
+        admin_confirmed_at,
         driver_name,
         received_by,
-        delivery_orders(delivery_vehicles(driver_id))
+        profiles:profiles!received_by(full_name, role),
+        delivery_orders(delivery_vehicles(driver_id, profiles!driver_id(full_name)))
       `)
       .eq('order_date', date)
       .is('deleted_at', null);
@@ -2627,8 +2649,10 @@ export class ZaloService {
       .select(`
         id,
         created_at,
+        admin_confirmed_at,
         driver_name,
         received_by,
+        profiles:profiles!received_by(full_name, role),
         sender_name,
         notes,
         is_custom_amount,
@@ -2636,7 +2660,7 @@ export class ZaloService {
         sender_customers:customers!vegetable_orders_sender_id_fkey(id, name),
         customers:customers!vegetable_orders_customer_id_fkey(id, name, phone),
         vegetable_order_items(quantity, unit_price, total_amount, package_type, item_note, products(name, base_price)),
-        delivery_orders(delivery_vehicles(driver_id, vehicles(license_plate)))
+        delivery_orders(delivery_vehicles(driver_id, vehicles(license_plate), profiles!driver_id(full_name)))
       `)
       .eq('order_date', date)
       .eq('customer_id', supplierId)
@@ -2676,9 +2700,11 @@ export class ZaloService {
         id,
         customer_id,
         created_at,
+        admin_confirmed_at,
         driver_name,
         received_by,
-        delivery_orders(delivery_vehicles(driver_id))
+        profiles:profiles!received_by(full_name, role),
+        delivery_orders(delivery_vehicles(driver_id, profiles!driver_id(full_name)))
       `)
       .eq('order_date', date)
       .is('deleted_at', null);
@@ -2692,12 +2718,14 @@ export class ZaloService {
       .select(`
         id,
         created_at,
+        admin_confirmed_at,
         driver_name,
         received_by,
+        profiles:profiles!received_by(full_name, role),
         sender_customers:customers!vegetable_orders_sender_id_fkey(id, name, phone),
         customers:customers!vegetable_orders_customer_id_fkey(id, name),
         vegetable_order_items(quantity, package_type, products(name)),
-        delivery_orders(delivery_vehicles(driver_id, vehicles(license_plate)))
+        delivery_orders(delivery_vehicles(driver_id, vehicles(license_plate), profiles!driver_id(full_name)))
       `)
       .eq('order_date', date)
       .eq('sender_id', senderId)
