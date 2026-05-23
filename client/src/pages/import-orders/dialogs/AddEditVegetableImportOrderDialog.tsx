@@ -44,6 +44,30 @@ const isDriverRole = (role?: string | null) => {
   return normalized === 'driver' || normalized.includes('tai_xe') || normalized.includes('driver') || normalized.includes('lo_xe');
 };
 
+const isHeavyDriverRoleRecord = (roleKey?: string | null, roleName?: string | null) => {
+  const normalizedKey = normalizeRoleText(roleKey).replace(/\s+/g, '_');
+  const normalizedName = normalizeRoleText(roleName);
+
+  const heavyKeyCandidates = ['tai_xe_xe_tai_lon', 'tai_xe_tai_lon'];
+  const heavyNameCandidates = ['tai xe xe tai lon', 'tai xe tai lon', 'tai xe xe lon', 'xe lon'];
+
+  const byKey = heavyKeyCandidates.some((candidate) => normalizedKey.includes(candidate));
+  const byName = heavyNameCandidates.some((candidate) => normalizedName.includes(candidate));
+  return byKey || byName;
+};
+
+const isHeavyDriverEmployee = (employee: any) => {
+  const assignedRoles = (employee?.app_user_roles || [])
+    .map((record: any) => record?.app_roles)
+    .filter((role: any) => Boolean(role));
+
+  if (assignedRoles.length > 0) {
+    return assignedRoles.some((role: any) => isHeavyDriverRoleRecord(role?.role_key, role?.role_name));
+  }
+
+  return isHeavyDriverRoleRecord(employee?.role, employee?.role_name || employee?.role);
+};
+
 const normalizePersonName = (value?: string | null) =>
   (value || '')
     .toLowerCase()
@@ -336,6 +360,14 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
   const watchCustomerId = watch('customer_id');
   const watchSenderId = watch('sender_id');
   const watchReceivedBy = watch('received_by');
+  const canAdminEditReceivedByInEditMode = isEditMode && user?.role === 'admin';
+  const employeeOptions = React.useMemo(
+    () =>
+      (employees || [])
+        .filter((employee: any) => isHeavyDriverEmployee(employee))
+        .map((employee: any) => ({ value: employee.id, label: employee.full_name })),
+    [employees]
+  );
   const selectedCustomer = filteredCustomers.find((c: any) => c.id === watchCustomerId);
   const hasAliases = selectedCustomer?.aliases && selectedCustomer.aliases.length > 0;
 
@@ -864,9 +896,18 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
 
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Nhân viên nhận</label>
-                        <div className="w-full px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[13px] font-semibold text-amber-800">
-                          {employees?.find((e: any) => e.id === watchReceivedBy)?.full_name || user?.full_name || 'Tự động'}
-                        </div>
+                        {canAdminEditReceivedByInEditMode && employeeOptions.length > 0 ? (
+                          <SearchableSelect
+                            options={employeeOptions}
+                            value={watchReceivedBy}
+                            onValueChange={(val) => setValue('received_by', val, { shouldValidate: true })}
+                            placeholder="Chọn nhân viên"
+                          />
+                        ) : (
+                          <div className="w-full px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[13px] font-semibold text-amber-800">
+                            {employees?.find((e: any) => e.id === watchReceivedBy)?.full_name || user?.full_name || 'Tự động'}
+                          </div>
+                        )}
                       </div>
 
                     </>
@@ -1076,9 +1117,18 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
 
                       <div className="space-y-1.5">
                         <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Nhân viên nhận</label>
-                        <div className="w-full px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[13px] font-semibold text-amber-800">
-                          {employees?.find((e: any) => e.id === watchReceivedBy)?.full_name || user?.full_name || 'Tự động'}
-                        </div>
+                        {canAdminEditReceivedByInEditMode && employeeOptions.length > 0 ? (
+                          <SearchableSelect
+                            options={employeeOptions}
+                            value={watchReceivedBy}
+                            onValueChange={(val) => setValue('received_by', val, { shouldValidate: true })}
+                            placeholder="Chọn nhân viên"
+                          />
+                        ) : (
+                          <div className="w-full px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[13px] font-semibold text-amber-800">
+                            {employees?.find((e: any) => e.id === watchReceivedBy)?.full_name || user?.full_name || 'Tự động'}
+                          </div>
+                        )}
                       </div>
 
                       {canAutoAssignDriverVehicle && (
