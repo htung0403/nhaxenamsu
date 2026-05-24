@@ -22,6 +22,20 @@ router.get(
 	CustomerController.getMyOrderProducts
 );
 
+router.get(
+	'/me/delivery-orders',
+	requireRolesOnly('customer'),
+	requirePolicy('CUSTOMER_ORDERS_MANAGE'),
+	CustomerController.getMyDeliveryOrders
+);
+
+router.get(
+	'/me/delivery-vehicles',
+	requireRolesOnly('customer'),
+	requirePolicy('CUSTOMER_ORDERS_MANAGE'),
+	CustomerController.getMyDeliveryVehicles
+);
+
 router.post(
 	'/me/orders',
 	requireRolesOnly('customer'),

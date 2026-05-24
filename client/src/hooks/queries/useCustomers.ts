@@ -10,6 +10,8 @@ export const customerKeys = {
   detail: (id: string) => [...customerKeys.all, 'detail', id] as const,
   orders: (id: string) => [...customerKeys.all, 'orders', id] as const,
   myOrders: () => [...customerKeys.all, 'my-orders'] as const,
+  myDeliveryOrders: () => [...customerKeys.all, 'my-delivery-orders'] as const,
+  myDeliveryVehicles: () => [...customerKeys.all, 'my-delivery-vehicles'] as const,
   myOrderProducts: () => [...customerKeys.all, 'my-order-products'] as const,
   deliveryOrders: (id: string) => [...customerKeys.all, 'deliveryOrders', id] as const,
   exportOrders: (id: string) => [...customerKeys.all, 'export-orders', id] as const,
@@ -60,6 +62,22 @@ export function useMyOrderProducts(enabled = true) {
   return useQuery({
     queryKey: customerKeys.myOrderProducts(),
     queryFn: customersApi.getMyOrderProducts,
+    enabled,
+  });
+}
+
+export function useMyDeliveryOrders(enabled = true) {
+  return useQuery({
+    queryKey: customerKeys.myDeliveryOrders(),
+    queryFn: customersApi.getMyDeliveryOrders,
+    enabled,
+  });
+}
+
+export function useMyDeliveryVehicles(enabled = true) {
+  return useQuery({
+    queryKey: customerKeys.myDeliveryVehicles(),
+    queryFn: customersApi.getMyDeliveryVehicles,
     enabled,
   });
 }
@@ -117,9 +135,9 @@ export function useCreateMyOrder() {
     mutationFn: (payload: CustomerSelfOrderPayload) => customersApi.createMyOrder(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: customerKeys.myOrders() });
-      toast.success('Đã tạo đơn hàng');
+      toast.success('Đã tạo đơn trả hàng về SG');
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Không thể tạo đơn hàng'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Không thể tạo đơn trả hàng'),
   });
 }
 
@@ -130,9 +148,9 @@ export function useUpdateMyOrder() {
       customersApi.updateMyOrder(orderId, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: customerKeys.myOrders() });
-      toast.success('Đã cập nhật đơn hàng');
+      toast.success('Đã cập nhật đơn trả hàng');
     },
-    onError: (err: any) => toast.error(err.response?.data?.error || 'Không thể cập nhật đơn hàng'),
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Không thể cập nhật đơn trả hàng'),
   });
 }
 

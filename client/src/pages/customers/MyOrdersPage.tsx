@@ -1,22 +1,29 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, CheckCircle2, Clock3, ImagePlus, Loader2, Package, Pencil, Plus, ShieldCheck, Trash2, Wallet, X } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock3, Eye, Image as ImageIcon, ImagePlus, Loader2, Package, Plus, ShieldCheck, Trash2, Wallet, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/shared/PageHeader';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import ErrorState from '../../components/shared/ErrorState';
+import { SearchInput } from '../../components/ui/SearchInput';
 import { useAuth } from '../../context/AuthContext';
-import { useCustomerByUserId, useCreateMyOrder, useMyOrderProducts, useMyOrders, useUpdateMyOrder } from '../../hooks/queries/useCustomers';
+import { useCustomerByUserId, useCreateMyOrder, useMyDeliveryOrders, useMyDeliveryVehicles, useMyOrderProducts, useUpdateMyOrder } from '../../hooks/queries/useCustomers';
 import { useMyPermissions } from '../../hooks/queries/useRoles';
 import { uploadApi } from '../../api/uploadApi';
 import { SearchableSelect } from '../../components/ui/SearchableSelect';
-import type { Customer, ImportOrder, ImportOrderItem } from '../../types';
+import { VehicleCellTooltip } from '../delivery/components/VehicleCellTooltip';
+import OrderImagesDialog from '../delivery/dialogs/OrderImagesDialog';
+import { cloudinarySmall } from '../../lib/cloudinaryUrl';
+import type { Customer, DeliveryOrder, ImportOrder } from '../../types';
 
 const CUSTOMER_ORDER_CREATE_PATH = '/tai-khoan/don-hang/tao-don';
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getCurrentTime = () => new Date().toTimeString().slice(0, 5);
 const formatCurrency = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+const formatNumber = (value: number) => new Intl.NumberFormat('vi-VN').format(value);
+const FALLBACK_VEHICLE_COLUMNS = ['1', '2', '3', '4', '5', '6', '7', '8', 'ba', 'kho'];
+const isPaidCollectionStatus = (status?: string) => status === 'confirmed' || status === 'self_confirmed';
 
 type FormState = {
   order_date: string;
@@ -26,6 +33,7 @@ type FormState = {
   receiver_phone: string;
   receiver_address: string;
   total_amount: string;
+  payment_status: 'paid' | 'unpaid';
   notes: string;
   items: CustomerOrderItemForm[];
 };
@@ -60,6 +68,7 @@ const createInitialFormState = (): FormState => ({
   receiver_phone: '',
   receiver_address: '',
   total_amount: '',
+  payment_status: 'unpaid',
   notes: '',
   items: [createInitialItem()],
 });
@@ -80,39 +89,102 @@ const customerTypeLabel: Record<string, string> = {
 };
 
 const statusConfig: Record<string, { label: string; className: string }> = {
-  pending: {
-    label: 'Chờ xác nhận',
+  processing: {
+    label: 'Đang giao',
     className: 'bg-amber-50 text-amber-700 border-amber-200',
   },
-  admin_confirmed: {
-    label: 'Admin đã xác nhận',
+  delivered: {
+    label: 'Đã giao',
     className: 'bg-emerald-50 text-emerald-700 border-emerald-200',
   },
-  completed: {
-    label: 'Hoàn tất',
-    className: 'bg-blue-50 text-blue-700 border-blue-200',
-  },
-  cancelled: {
-    label: 'Đã hủy',
-    className: 'bg-red-50 text-red-700 border-red-200',
+  returned: {
+    label: 'Đang giao',
+    className: 'bg-amber-50 text-amber-700 border-amber-200',
   },
 };
 
-const toFormItem = (item?: ImportOrderItem): CustomerOrderItemForm => ({
-  product_id: item?.product_id || '',
-  package_type: item?.package_type || '',
-  item_note: item?.item_note || '',
-  weight_kg: item?.weight_kg != null ? String(item.weight_kg) : '',
-  quantity: item?.quantity != null ? String(item.quantity) : '1',
-  unit_price: item?.unit_price != null ? String(item.unit_price) : '',
-  image_url: item?.image_url || null,
-  image_urls: item?.image_urls || (item?.image_url ? [item.image_url] : []),
-});
+type OrderStatusFilter = 'all' | 'processing' | 'delivered';
+
+const statusFilterLabels: Record<OrderStatusFilter, string> = {
+  all: 'Tất cả',
+  processing: 'Đang giao',
+  delivered: 'Đã giao',
+};
+
+const statusFilterClasses: Record<OrderStatusFilter, { active: string; badge: string }> = {
+  all: { active: 'bg-primary/10 text-primary', badge: 'bg-primary/10 text-primary' },
+  processing: { active: 'bg-amber-50 text-amber-700', badge: 'bg-amber-100 text-amber-700' },
+  delivered: { active: 'bg-emerald-50 text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
+};
+
+type DeliverySourceOrder = NonNullable<DeliveryOrder['import_orders']> | NonNullable<DeliveryOrder['vegetable_orders']>;
+
+type DeliveryImageRef = {
+  image_url?: string | null;
+  image_urls?: string[] | null;
+  products?: { name?: string | null } | null;
+};
+
+const getOrderFilterStatus = (order: DeliveryOrder): OrderStatusFilter => {
+  return order.status === 'da_giao' ? 'delivered' : 'processing';
+};
+
+const getDeliverySourceOrder = (order: DeliveryOrder): DeliverySourceOrder | undefined => {
+  return order.vegetable_orders || order.import_orders;
+};
+
+const collectFirstImage = (refs: DeliveryImageRef[] | DeliveryImageRef | null | undefined, targetProductName?: string | null): string | null => {
+  const list: DeliveryImageRef[] = Array.isArray(refs) ? refs : refs ? [refs] : [];
+  const normalizedTarget = targetProductName?.trim().toLowerCase();
+
+  const pickImage = (ref: DeliveryImageRef) => {
+    if (ref.image_url) return ref.image_url.includes(',') ? ref.image_url.split(',')[0].trim() : ref.image_url;
+    if (ref.image_urls?.length) return ref.image_urls[0];
+    return null;
+  };
+
+  if (normalizedTarget) {
+    for (const ref of list) {
+      if (ref.products?.name?.trim().toLowerCase() === normalizedTarget) {
+        const image = pickImage(ref);
+        if (image) return image;
+      }
+    }
+  }
+
+  for (const ref of list) {
+    const image = pickImage(ref);
+    if (image) return image;
+  }
+
+  return null;
+};
+
+const getOrderPreviewImage = (order: DeliveryOrder | null | undefined) => {
+  if (!order) return null;
+  if (order.image_url) return order.image_url;
+  if (order.image_urls?.length) return order.image_urls[0];
+
+  const paymentImage = order.payment_collections?.find((paymentCollection) => paymentCollection.image_url)?.image_url;
+  if (paymentImage) return paymentImage;
+
+  const vehicleImage = (order.delivery_vehicles || []).find((deliveryVehicle) => (deliveryVehicle.image_urls?.length || 0) > 0)?.image_urls?.[0];
+  if (vehicleImage) return vehicleImage;
+
+  const sourceOrder = getDeliverySourceOrder(order);
+  if (sourceOrder?.receipt_image_url) return sourceOrder.receipt_image_url;
+  if (sourceOrder?.receipt_image_urls?.length) return sourceOrder.receipt_image_urls[0];
+
+  const targetProductName = order.product_name?.includes(' - ')
+    ? order.product_name.split(' - ').slice(1).join(' - ').trim()
+    : order.product_name?.trim();
+
+  return collectFirstImage(sourceOrder?.import_order_items || sourceOrder?.vegetable_order_items, targetProductName);
+};
 
 const MyOrdersPage: React.FC = () => {
   const { user } = useAuth();
   const { data: customer, isLoading: loadingCustomer } = useCustomerByUserId(user?.id || '');
-  const { data: orders, isLoading, isError, refetch } = useMyOrders(!!user?.id);
   const { data: myPermissions } = useMyPermissions(!!user?.id);
   const createOrderMutation = useCreateMyOrder();
   const updateOrderMutation = useUpdateMyOrder();
@@ -121,11 +193,17 @@ const MyOrdersPage: React.FC = () => {
   const [editingOrder, setEditingOrder] = useState<ImportOrder | null>(null);
   const [formState, setFormState] = useState<FormState>(createInitialFormState());
   const [uploadingItemIndex, setUploadingItemIndex] = useState<number | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
+  const [viewingImageOrder, setViewingImageOrder] = useState<DeliveryOrder | null>(null);
+  const [isViewingClosing, setIsViewingClosing] = useState(false);
 
   const orderPolicy = getCustomerOrderPolicy(customer?.customer_type);
   const isSenderCustomer = orderPolicy?.binding === 'sender';
   const orderCategory = orderPolicy?.orderCategory || 'standard';
   const isVegetableOrder = orderCategory === 'vegetable';
+  const { data: deliveryOrders, isLoading, isError, refetch } = useMyDeliveryOrders(!!user?.id);
+  const { data: deliveryVehicles } = useMyDeliveryVehicles(!!user?.id);
   const { data: products } = useMyOrderProducts(isCreateOpen);
   const canSelfCreate = (myPermissions?.page_paths || []).includes(CUSTOMER_ORDER_CREATE_PATH);
   const productOptions = useMemo(
@@ -144,50 +222,83 @@ const MyOrdersPage: React.FC = () => {
   }, [formState.items, isVegetableOrder, productsById]);
 
   const sortedOrders = useMemo(() => {
-    if (!orders) return [];
-    return [...orders].sort(
-      (a, b) =>
-        new Date(b.order_date).getTime() - new Date(a.order_date).getTime() ||
-        new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime(),
+    if (!deliveryOrders || !customer?.id) return [];
+    return deliveryOrders.filter((order) => {
+      const sourceOrder = getDeliverySourceOrder(order);
+      if (!sourceOrder) return false;
+      if (isSenderCustomer) return sourceOrder.sender_id === customer.id;
+      return sourceOrder.customer_id === customer.id;
+    }).sort(
+      (a, b) => {
+        return (
+          new Date(b.delivery_date || b.created_at).getTime() -
+            new Date(a.delivery_date || a.created_at).getTime() ||
+          new Date(b.created_at || '').getTime() - new Date(a.created_at || '').getTime()
+        );
+      },
     );
-  }, [orders]);
+  }, [customer?.id, deliveryOrders, isSenderCustomer]);
 
   const orderSummary = useMemo(() => {
     return sortedOrders.reduce(
       (summary, order) => {
         summary.total += 1;
-        summary.amount += order.total_amount || 0;
-        if (order.admin_confirmed_at) summary.confirmed += 1;
-        else if (order.status === 'pending') summary.pending += 1;
+        const sourceOrder = getDeliverySourceOrder(order);
+        summary.amount += sourceOrder?.total_amount || order.unit_price || 0;
+        if (order.status === 'da_giao') summary.delivered += 1;
+        else summary.processing += 1;
         return summary;
       },
-      { total: 0, pending: 0, confirmed: 0, amount: 0 },
+      { total: 0, processing: 0, delivered: 0, amount: 0 },
     );
   }, [sortedOrders]);
 
+  const statusCounts = useMemo(() => {
+    return sortedOrders.reduce(
+      (counts, order) => {
+        counts.all += 1;
+        const status = getOrderFilterStatus(order);
+        if (status !== 'all') counts[status] += 1;
+        return counts;
+      },
+      { all: 0, processing: 0, delivered: 0 } as Record<OrderStatusFilter, number>,
+    );
+  }, [sortedOrders]);
+
+  const displayedOrders = useMemo(() => {
+    const normalizedSearch = searchQuery.trim().toLowerCase();
+    return sortedOrders.filter((order) => {
+      const sourceOrder = getDeliverySourceOrder(order);
+      if (statusFilter !== 'all' && getOrderFilterStatus(order) !== statusFilter) return false;
+      if (!normalizedSearch) return true;
+      return [
+        sourceOrder?.order_code,
+        order.delivery_date,
+        sourceOrder?.sender_name,
+        sourceOrder?.receiver_name,
+        sourceOrder?.receiver_phone,
+        sourceOrder?.customers?.name,
+        sourceOrder?.sender_customers?.name,
+        order.product_name,
+      ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
+    });
+  }, [searchQuery, sortedOrders, statusFilter]);
+
   const latestOrder = sortedOrders[0];
+  const latestSourceOrder = latestOrder ? getDeliverySourceOrder(latestOrder) : undefined;
   const currentCustomerType = customer?.customer_type ? customerTypeLabel[customer.customer_type] || customer.customer_type : 'Chưa xác định';
+  const displayedVehicles = useMemo(
+    () => (deliveryVehicles || []).filter((vehicle) => {
+      if (isVegetableOrder) return true;
+      return vehicle.license_plate?.trim().toLowerCase() !== 'chuatimthay';
+    }),
+    [deliveryVehicles, isVegetableOrder],
+  );
 
   const openCreateModal = () => {
     setEditingOrder(null);
     setFormState(createInitialFormState());
     setIsCreateOpen(true);
-  };
-
-  const openEditModal = (order: ImportOrder) => {
-    setEditingOrder(order);
-    setIsCreateOpen(true);
-    setFormState({
-      order_date: order.order_date || getToday(),
-      order_time: order.order_time || getCurrentTime(),
-      sender_name: order.sender_name || '',
-      receiver_name: order.receiver_name || '',
-      receiver_phone: order.receiver_phone || '',
-      receiver_address: order.receiver_address || '',
-      total_amount: order.total_amount != null ? String(order.total_amount) : '',
-      notes: order.notes || '',
-      items: order.import_order_items?.length ? order.import_order_items.map(toFormItem) : [createInitialItem()],
-    });
   };
 
   const closeModal = () => {
@@ -286,10 +397,12 @@ const MyOrdersPage: React.FC = () => {
       receiver_name: formState.receiver_name || undefined,
       receiver_phone: formState.receiver_phone || undefined,
       receiver_address: formState.receiver_address || undefined,
+      status: 'processing' as const,
+      payment_status: formState.payment_status,
       total_amount: isVegetableOrder
         ? calculatedVegetableTotal
         : formState.total_amount ? Number(formState.total_amount) : undefined,
-      notes: formState.notes || undefined,
+      notes: formState.notes || 'Đơn trả hàng lỗi về lại SG',
       is_custom_amount: true,
       order_category: orderCategory,
       items: validItems.map((item) => ({
@@ -301,7 +414,7 @@ const MyOrdersPage: React.FC = () => {
         unit_price: item.unit_price,
         image_url: item.image_url,
         image_urls: item.image_urls,
-        payment_status: 'unpaid' as const,
+        payment_status: formState.payment_status,
       })),
     };
 
@@ -323,7 +436,7 @@ const MyOrdersPage: React.FC = () => {
   if (loadingCustomer || isLoading) {
     return (
       <div className="w-full flex-1">
-        <PageHeader title="Đơn hàng của tôi" description="Theo dõi và quản lý các đơn hàng của bạn" />
+        <PageHeader title="Đơn trả hàng về SG" description="Theo dõi hàng lỗi khách trả về lại SG" />
         <LoadingSkeleton rows={6} />
       </div>
     );
@@ -336,140 +449,290 @@ const MyOrdersPage: React.FC = () => {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <PageHeader
-        title="Đơn hàng của tôi"
-        description="Xem, tạo và chỉnh sửa đơn trước khi admin xác nhận"
+        title="Đơn trả hàng về SG"
+        description="Tạo phiếu trả hàng lỗi về SG và theo dõi trạng thái cước"
         backPath="/"
       />
 
-      <div className="space-y-4">
-        <div className="relative overflow-hidden rounded-3xl border border-border bg-gradient-to-br from-primary/10 via-white to-emerald-50 shadow-sm">
-          <div className="absolute -right-10 -top-10 h-36 w-36 rounded-full bg-primary/10 blur-2xl" />
-          <div className="absolute -bottom-16 left-1/3 h-40 w-40 rounded-full bg-emerald-200/30 blur-3xl" />
-          <div className="relative p-5 md:p-6 flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-3">
-              <div className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-white/80 px-3 py-1 text-[12px] font-bold text-primary shadow-sm">
-                <ShieldCheck size={14} />
-                {currentCustomerType}
-              </div>
-              <div>
-                <h2 className="text-xl md:text-2xl font-black tracking-tight text-foreground">Quản lý đơn hàng nhanh gọn</h2>
-                <p className="mt-1 max-w-2xl text-[13px] md:text-sm text-muted-foreground">
-                  Theo dõi trạng thái, tổng tiền và chỉnh sửa đơn khi còn chờ admin xác nhận.
-                </p>
-              </div>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-3">
-              {latestOrder && (
-                <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
-                  <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">Đơn mới nhất</div>
-                  <div className="mt-1 text-sm font-black text-foreground">{latestOrder.order_code || 'Chưa có mã'}</div>
-                  <div className="text-[12px] text-muted-foreground">{latestOrder.order_date || '-'}</div>
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={openCreateModal}
-                disabled={!canSelfCreate}
-                className="h-12 px-5 rounded-2xl bg-primary text-white text-[13px] font-black hover:bg-primary/90 disabled:opacity-60 inline-flex items-center justify-center gap-2 shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5"
-                title={canSelfCreate ? 'Tạo đơn hàng mới' : 'Admin chưa cấp quyền tạo đơn hàng'}
-              >
-                <Plus size={16} />
-                Tạo đơn hàng
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <SummaryCard icon={Package} label="Tổng đơn" value={orderSummary.total.toLocaleString('vi-VN')} tone="text-primary bg-primary/10" />
-          <SummaryCard icon={Clock3} label="Chờ xác nhận" value={orderSummary.pending.toLocaleString('vi-VN')} tone="text-amber-600 bg-amber-50" />
-          <SummaryCard icon={CheckCircle2} label="Đã xác nhận" value={orderSummary.confirmed.toLocaleString('vi-VN')} tone="text-emerald-600 bg-emerald-50" />
-          <SummaryCard icon={Wallet} label="Tổng tiền" value={formatCurrency(orderSummary.amount)} tone="text-blue-600 bg-blue-50" />
-        </div>
-
-        <div className="bg-white rounded-3xl border border-border shadow-sm overflow-hidden">
-          <div className="p-4 md:p-5 border-b border-border/70 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h3 className="text-base font-black text-foreground">Danh sách đơn hàng</h3>
-              <p className="text-[13px] text-muted-foreground">Ưu tiên đơn mới nhất để bạn thao tác nhanh hơn.</p>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-xl bg-muted/40 px-3 py-2 text-[12px] font-bold text-muted-foreground">
-              <CalendarDays size={14} />
-              {sortedOrders.length} đơn hàng
-            </div>
+      <div className="space-y-3 flex-1 min-h-0 flex flex-col">
+        <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2.5 overflow-x-auto custom-scrollbar">
+          <div className="flex-1 min-w-58 md:max-w-full">
+            <SearchInput
+              placeholder="Tìm mã trả hàng, người gửi, người nhận..."
+              onSearch={(raw) => setSearchQuery(raw)}
+              className="h-9.5"
+            />
           </div>
 
-          <div className="hidden md:block overflow-auto">
-            <table className="w-full text-[13px]">
-              <thead className="bg-muted/30 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-3 text-left font-bold">Mã đơn</th>
-                  <th className="px-4 py-3 text-left font-bold">Ngày</th>
-                  <th className="px-4 py-3 text-left font-bold">{isSenderCustomer ? 'Người nhận' : 'Người gửi'}</th>
-                  <th className="px-4 py-3 text-right font-bold">Tổng tiền</th>
-                  <th className="px-4 py-3 text-left font-bold">Trạng thái</th>
-                  <th className="px-4 py-3 text-right font-bold">Thao tác</th>
+          <div className="hidden md:flex items-center gap-2 shrink-0 rounded-xl border border-border/80 bg-muted/20 px-3 py-2 text-[12px] font-bold text-muted-foreground">
+            <ShieldCheck size={15} />
+            <span className="whitespace-nowrap">{currentCustomerType}</span>
+          </div>
+
+          {latestOrder && (
+            <div className="hidden lg:flex items-center gap-2 shrink-0 rounded-xl border border-border/80 bg-muted/20 px-3 py-2 text-[12px] font-bold text-muted-foreground">
+              <CalendarDays size={15} />
+              <span className="whitespace-nowrap">Mới nhất: {latestSourceOrder?.order_code || latestOrder.delivery_date || '-'}</span>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={openCreateModal}
+            disabled={!canSelfCreate}
+            className="flex items-center gap-2 justify-center h-9.5 px-3 shrink-0 border border-primary/20 rounded-xl transition-all bg-primary text-white hover:bg-primary/90 font-bold text-[13px] disabled:opacity-60"
+            title={canSelfCreate ? 'Tạo đơn trả hàng về SG' : 'Bạn chưa có quyền tạo đơn trả hàng'}
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Tạo trả hàng</span>
+          </button>
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+          <SummaryCard icon={Package} label="Tổng phiếu" value={orderSummary.total.toLocaleString('vi-VN')} tone="text-primary bg-primary/10" />
+          <SummaryCard icon={Clock3} label="Đang giao" value={orderSummary.processing.toLocaleString('vi-VN')} tone="text-amber-600 bg-amber-50" />
+          <SummaryCard icon={CheckCircle2} label="Đã giao" value={orderSummary.delivered.toLocaleString('vi-VN')} tone="text-emerald-600 bg-emerald-50" />
+          <SummaryCard icon={Wallet} label="Tổng cước SG" value={formatCurrency(orderSummary.amount)} tone="text-blue-600 bg-blue-50" />
+        </div>
+
+        <div className="bg-card rounded-2xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className="flex flex-col shrink-0 border-b border-border bg-muted/50">
+            <div className="grid grid-cols-5 gap-1 px-3 py-2 md:flex md:items-center md:gap-1 md:overflow-x-auto custom-scrollbar">
+              {(['all', 'processing', 'delivered'] as OrderStatusFilter[]).map((status) => {
+                const isActive = statusFilter === status;
+                const colors = statusFilterClasses[status];
+                const count = statusCounts[status];
+                return (
+                  <button
+                    key={status}
+                    type="button"
+                    onClick={() => setStatusFilter(status)}
+                    className={`w-full flex items-center justify-center md:justify-start gap-1 px-1.5 md:px-3 py-1.5 rounded-lg text-[10px] md:text-[12px] font-bold transition-all whitespace-nowrap ${
+                      isActive ? `${colors.active} shadow-sm ring-1 ring-black/5` : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                    }`}
+                  >
+                    {statusFilterLabels[status]}
+                    {count > 0 && (
+                      <span className={`text-[9px] md:text-[10px] font-black px-1 md:px-1.5 py-0.5 rounded-full min-w-4 md:min-w-5 text-center ${isActive ? colors.badge : 'bg-muted/60 text-muted-foreground'}`}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-auto custom-scrollbar bg-muted/30 md:bg-transparent relative">
+            <div className="hidden md:block">
+              <table className="w-full border-collapse bg-card text-[13px]">
+                <thead className="sticky top-0 z-20">
+                  <tr className="bg-card border-b border-border text-muted-foreground">
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Mã đơn</th>
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Ngày</th>
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">{isSenderCustomer ? 'Người nhận' : 'Người gửi'}</th>
+                  {!isVegetableOrder && <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-14 border-r border-border">Ảnh</th>}
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-right border-r border-border">Cước SG</th>
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center border-r border-border">Trạng thái</th>
+                  {displayedVehicles.map((vehicle) => (
+                    <th key={vehicle.id} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-28 border-r border-border last:border-r-0">
+                      {vehicle.license_plate}
+                    </th>
+                  ))}
+                  {displayedVehicles.length === 0 && FALLBACK_VEHICLE_COLUMNS.map((column) => (
+                    <th key={column} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-12 border-r border-border last:border-r-0">
+                      {column}
+                    </th>
+                  ))}
                 </tr>
               </thead>
-              <tbody>
-                {sortedOrders.length === 0 ? (
+              <tbody className="divide-y divide-border">
+                {displayedOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="px-4 py-12 text-center">
+                    <td colSpan={5 + (isVegetableOrder ? 0 : 1) + (displayedVehicles.length || FALLBACK_VEHICLE_COLUMNS.length)} className="px-4 py-12 text-center">
                       <EmptyOrdersState canSelfCreate={canSelfCreate} onCreate={openCreateModal} />
                     </td>
                   </tr>
                 ) : (
-                  sortedOrders.map((order) => {
-                    const editable = order.status === 'pending' && !order.admin_confirmed_at;
-                    const statusLabel = order.admin_confirmed_at ? 'admin_confirmed' : order.status;
+                  displayedOrders.map((order) => {
+                    const sourceOrder = getDeliverySourceOrder(order);
+                    const statusLabel = order.status === 'da_giao' ? 'delivered' : 'processing';
+                    const counterpartName = isSenderCustomer
+                      ? (sourceOrder?.receiver_name || sourceOrder?.customers?.name || '-')
+                      : (sourceOrder?.sender_name || sourceOrder?.sender_customers?.name || '-');
+                    const displayAmount = sourceOrder?.total_amount || order.unit_price || 0;
+                    const previewImage = getOrderPreviewImage(order);
                     return (
-                      <tr key={order.id} className="border-t border-border/70 transition-colors hover:bg-muted/20">
-                        <td className="px-4 py-3 font-black text-foreground">{order.order_code || '-'}</td>
-                        <td className="px-4 py-3 text-muted-foreground">{order.order_date || '-'}</td>
-                        <td className="px-4 py-3">{isSenderCustomer ? (order.receiver_name || '-') : (order.sender_name || '-')}</td>
-                        <td className="px-4 py-3 text-right font-bold">{formatCurrency(order.total_amount || 0)}</td>
-                        <td className="px-4 py-3">
+                      <tr key={order.id} className="transition-colors hover:bg-muted/30">
+                        <td className="px-4 py-3 font-black text-foreground border-r border-border/70">{sourceOrder?.order_code || '-'}</td>
+                        <td className="px-4 py-3 text-muted-foreground border-r border-border/70">{order.delivery_date || '-'}</td>
+                        <td className="px-4 py-3 border-r border-border/70">{counterpartName}</td>
+                        {!isVegetableOrder && (
+                          <td
+                            className={`px-2 py-3 text-center border-r border-border/70 ${previewImage ? 'cursor-pointer' : ''}`}
+                            onClick={(event) => {
+                              if (!previewImage) return;
+                              event.stopPropagation();
+                              setViewingImageOrder(order);
+                            }}
+                          >
+                            {previewImage ? (
+                              <div className="w-8 h-8 rounded-md bg-muted/30 overflow-hidden mx-auto border border-border group relative flex items-center justify-center">
+                                <img src={cloudinarySmall(previewImage)} alt="Ảnh đơn" className="w-full h-full object-cover" />
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Eye size={12} className="text-white" />
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="w-8 h-8 rounded-md bg-muted/20 flex items-center justify-center text-muted-foreground mx-auto">
+                                <ImageIcon size={14} className="opacity-30" />
+                              </div>
+                            )}
+                          </td>
+                        )}
+                        <td className="px-4 py-3 text-right font-bold border-r border-border/70">{formatCurrency(displayAmount)}</td>
+                        <td className="px-4 py-3 text-center border-r border-border/70">
                           <StatusBadge status={statusLabel} />
                         </td>
-                        <td className="px-4 py-3 text-right">
-                          <EditOrderButton editable={editable} onClick={() => openEditModal(order)} />
-                        </td>
+                        {displayedVehicles.map((vehicle) => {
+                          const deliveryVehicleRows = (order.delivery_vehicles || []).filter(
+                            (deliveryVehicle) => deliveryVehicle.vehicle_id === vehicle.id && (deliveryVehicle.assigned_quantity || 0) > 0,
+                          );
+                          const isCollectionPaid = (order.payment_collections || []).some(
+                            (paymentCollection) => paymentCollection.vehicle_id === vehicle.id && isPaidCollectionStatus(paymentCollection.status),
+                          );
+                          return (
+                            <td
+                              key={vehicle.id}
+                              className={`px-1 py-1 text-[13px] text-center tabular-nums border-r border-border/70 last:border-r-0 transition-all relative ${
+                                deliveryVehicleRows.length > 0 ? 'font-bold bg-blue-500/10' : 'text-muted-foreground/30'
+                              }`}
+                            >
+                              {deliveryVehicleRows.length > 0 ? (
+                                <div className="flex flex-col items-center justify-center">
+                                  <div>
+                                    {deliveryVehicleRows.map((deliveryVehicle, index) => {
+                                      const exportPaid = deliveryVehicle.export_payment_status === 'paid';
+                                      return (
+                                        <React.Fragment key={deliveryVehicle.id || `${vehicle.id}-${index}`}>
+                                          {index > 0 && <span className="text-[10px] text-muted-foreground/50 mx-0.5">+</span>}
+                                          <VehicleCellTooltip
+                                            dv={deliveryVehicle}
+                                            vehicle={vehicle}
+                                            qty={Number(deliveryVehicle.assigned_quantity || 0)}
+                                            isPaid={isCollectionPaid}
+                                            exportPaid={exportPaid}
+                                          >
+                                            <span className={`cursor-help underline decoration-dotted underline-offset-2 ${
+                                              exportPaid
+                                                ? 'text-emerald-600 decoration-emerald-500/30'
+                                                : 'text-red-600 decoration-red-500/30'
+                                            }`}>
+                                              {formatNumber(Number(deliveryVehicle.assigned_quantity || 0))}
+                                            </span>
+                                          </VehicleCellTooltip>
+                                        </React.Fragment>
+                                      );
+                                    })}
+                                  </div>
+                                  {isCollectionPaid && (
+                                    <div className="mt-0.5 flex items-center justify-center gap-0.5 text-green-600 bg-green-500/10 rounded-sm px-1" title="Đã xác nhận thu tiền">
+                                      <span className="text-[9px] font-black leading-none pb-px">Thu</span>
+                                    </div>
+                                  )}
+                                </div>
+                              ) : '-'}
+                            </td>
+                          );
+                        })}
+                        {displayedVehicles.length === 0 && FALLBACK_VEHICLE_COLUMNS.map((column) => {
+                          const quantity = (order.delivery_vehicles || [])
+                            .filter((deliveryVehicle) => {
+                              const plate = (deliveryVehicle.vehicles?.license_plate || '').toLowerCase();
+                              if (column === 'ba') return plate.includes('ba');
+                              if (column === 'kho') return plate.includes('kho');
+                              return plate.includes(column);
+                            })
+                            .reduce((total, deliveryVehicle) => total + Number(deliveryVehicle.assigned_quantity || 0), 0);
+                          return (
+                            <td
+                              key={column}
+                              className={`px-2 py-3 text-[13px] text-center tabular-nums border-r border-border/70 last:border-r-0 ${
+                                quantity > 0 ? 'font-bold text-orange-600 bg-orange-500/10' : 'text-muted-foreground/30'
+                              }`}
+                            >
+                              {quantity > 0 ? formatNumber(quantity) : '-'}
+                            </td>
+                          );
+                        })}
                       </tr>
                     );
                   })
                 )}
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
 
-          <div className="md:hidden p-3 space-y-3">
-            {sortedOrders.length === 0 ? (
+            <div className="md:hidden p-3 space-y-3">
+            {displayedOrders.length === 0 ? (
               <EmptyOrdersState canSelfCreate={canSelfCreate} onCreate={openCreateModal} />
             ) : (
-              sortedOrders.map((order) => {
-                const editable = order.status === 'pending' && !order.admin_confirmed_at;
-                const statusLabel = order.admin_confirmed_at ? 'admin_confirmed' : order.status;
+              displayedOrders.map((order) => {
+                const sourceOrder = getDeliverySourceOrder(order);
+                const statusLabel = order.status === 'da_giao' ? 'delivered' : 'processing';
+                const counterpartName = isSenderCustomer
+                  ? (sourceOrder?.receiver_name || sourceOrder?.customers?.name || '-')
+                  : (sourceOrder?.sender_name || sourceOrder?.sender_customers?.name || '-');
+                const displayAmount = sourceOrder?.total_amount || order.unit_price || 0;
+                const previewImage = getOrderPreviewImage(order);
                 return (
-                  <div key={order.id} className="rounded-2xl border border-border bg-gradient-to-br from-white to-muted/20 p-4 shadow-sm">
+                  <div key={order.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-[12px] text-muted-foreground">Mã đơn</div>
-                        <div className="font-black text-foreground">{order.order_code || '-'}</div>
+                        <div className="font-black text-foreground">{sourceOrder?.order_code || '-'}</div>
                       </div>
                       <StatusBadge status={statusLabel} />
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3 text-[13px]">
-                      <InfoBlock label="Ngày" value={order.order_date || '-'} />
-                      <InfoBlock label={isSenderCustomer ? 'Người nhận' : 'Người gửi'} value={isSenderCustomer ? (order.receiver_name || '-') : (order.sender_name || '-')} />
-                      <InfoBlock label="Tổng tiền" value={formatCurrency(order.total_amount || 0)} strong />
+                      <InfoBlock label="Ngày" value={order.delivery_date || '-'} />
+                      <InfoBlock label={isSenderCustomer ? 'Người nhận' : 'Người gửi'} value={counterpartName} />
+                      <InfoBlock label="Cước SG" value={formatCurrency(displayAmount)} strong />
                     </div>
-                    <div className="mt-4 flex justify-end">
-                      <EditOrderButton editable={editable} onClick={() => openEditModal(order)} />
-                    </div>
+                    {!isVegetableOrder && (
+                      <button
+                        type="button"
+                        disabled={!previewImage}
+                        onClick={() => previewImage && setViewingImageOrder(order)}
+                        className="mt-4 inline-flex items-center gap-2 rounded-xl border border-border bg-muted/20 px-3 py-2 text-[12px] font-bold text-foreground disabled:opacity-50"
+                      >
+                        {previewImage ? <Eye size={14} /> : <ImageIcon size={14} />}
+                        {previewImage ? 'Xem ảnh' : 'Chưa có ảnh'}
+                      </button>
+                    )}
+                    {(order.delivery_vehicles || []).some((deliveryVehicle) => (deliveryVehicle.assigned_quantity || 0) > 0) && (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        {(order.delivery_vehicles || [])
+                          .filter((deliveryVehicle) => (deliveryVehicle.assigned_quantity || 0) > 0)
+                          .map((deliveryVehicle) => (
+                            <span
+                              key={deliveryVehicle.id}
+                              className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-bold ${
+                                deliveryVehicle.export_payment_status === 'paid'
+                                  ? 'bg-emerald-50 text-emerald-700'
+                                  : 'bg-red-50 text-red-700'
+                              }`}
+                            >
+                              {deliveryVehicle.vehicles?.license_plate || 'Xe'}: {formatNumber(Number(deliveryVehicle.assigned_quantity || 0))}
+                            </span>
+                          ))}
+                      </div>
+                    )}
                   </div>
                 );
               })
             )}
+            </div>
           </div>
         </div>
       </div>
@@ -480,10 +743,10 @@ const MyOrdersPage: React.FC = () => {
             <form onSubmit={handleSubmit}>
               <div className="px-5 py-4 border-b border-border bg-muted/20">
                 <h3 className="text-[15px] font-bold text-foreground">
-                  {editingOrder ? 'Sửa đơn hàng' : 'Tạo đơn hàng'}
+                  {editingOrder ? 'Sửa đơn trả hàng' : 'Tạo đơn trả hàng về SG'}
                 </h3>
                 <p className="text-[12px] text-muted-foreground mt-1">
-                  {isVegetableOrder ? 'Đơn rau' : 'Đơn tạp hóa'} · {isSenderCustomer ? 'Bạn là người gửi' : 'Bạn là người nhận'}
+                  Hàng lỗi trả về SG · {isVegetableOrder ? 'Rau củ' : 'Tạp hóa'} · {isSenderCustomer ? 'Bạn là người gửi' : 'Bạn là người nhận'}
                 </p>
               </div>
 
@@ -535,12 +798,12 @@ const MyOrdersPage: React.FC = () => {
 
                 {isVegetableOrder ? (
                   <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
-                    <div className="text-[12px] font-semibold text-emerald-700">Tổng tiền tự tính theo giá rau đã cài đặt</div>
+                    <div className="text-[12px] font-semibold text-emerald-700">Cước SG tự tính theo giá rau đã cài đặt</div>
                     <div className="text-xl font-black text-emerald-800 mt-1">{formatCurrency(calculatedVegetableTotal)}</div>
                   </div>
                 ) : (
                   <Input
-                    label="Tổng tiền"
+                    label="Cước SG"
                     type="number"
                     min={0}
                     value={formState.total_amount}
@@ -548,11 +811,36 @@ const MyOrdersPage: React.FC = () => {
                   />
                 )}
 
+                <div className="space-y-2">
+                  <label className="text-[12px] font-semibold text-muted-foreground">Trạng thái cước SG</label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {(['unpaid', 'paid'] as const).map((paymentStatus) => {
+                      const isActive = formState.payment_status === paymentStatus;
+                      return (
+                        <button
+                          key={paymentStatus}
+                          type="button"
+                          onClick={() => setFormState((prev) => ({ ...prev, payment_status: paymentStatus }))}
+                          className={`rounded-xl border px-3 py-2 text-[13px] font-bold transition-all ${
+                            isActive
+                              ? paymentStatus === 'paid'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-amber-200 bg-amber-50 text-amber-700'
+                              : 'border-border bg-background text-muted-foreground hover:bg-muted/40'
+                          }`}
+                        >
+                          {paymentStatus === 'paid' ? 'Đã trả cước SG' : 'Chưa trả cước SG'}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <h4 className="text-[13px] font-bold text-foreground">Danh sách hàng</h4>
-                      <p className="text-[12px] text-muted-foreground">Bắt buộc chọn mặt hàng và số lượng cho mỗi dòng.</p>
+                      <h4 className="text-[13px] font-bold text-foreground">Danh sách hàng lỗi trả về</h4>
+                      <p className="text-[12px] text-muted-foreground">Bắt buộc chọn mặt hàng lỗi và số lượng cần trả về SG.</p>
                     </div>
                     <button
                       type="button"
@@ -657,7 +945,7 @@ const MyOrdersPage: React.FC = () => {
                         )}
 
                         <ImagePicker
-                          label="Ảnh hàng"
+                          label="Ảnh hàng lỗi"
                           urls={item.image_urls}
                           isUploading={uploadingItemIndex === index}
                           onUpload={(event) => handleItemUpload(index, event)}
@@ -670,7 +958,7 @@ const MyOrdersPage: React.FC = () => {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[12px] font-semibold text-muted-foreground">Ghi chú</label>
+                  <label className="text-[12px] font-semibold text-muted-foreground">Lý do trả hàng / ghi chú</label>
                   <textarea
                     rows={3}
                     value={formState.notes}
@@ -694,7 +982,7 @@ const MyOrdersPage: React.FC = () => {
                   className="px-4 py-2 rounded-xl bg-primary text-white text-[13px] font-bold hover:bg-primary/90 disabled:opacity-60 inline-flex items-center gap-2"
                 >
                   {isSubmitting ? <Loader2 size={14} className="animate-spin" /> : null}
-                  {editingOrder ? 'Lưu cập nhật' : 'Tạo đơn'}
+                  {editingOrder ? 'Lưu cập nhật' : 'Tạo đơn trả hàng'}
                 </button>
               </div>
             </form>
@@ -702,6 +990,19 @@ const MyOrdersPage: React.FC = () => {
         </div>,
         document.body,
       )}
+
+      <OrderImagesDialog
+        isOpen={!!viewingImageOrder}
+        isClosing={isViewingClosing}
+        order={viewingImageOrder}
+        onClose={() => {
+          setIsViewingClosing(true);
+          setTimeout(() => {
+            setViewingImageOrder(null);
+            setIsViewingClosing(false);
+          }, 300);
+        }}
+      />
     </div>
   );
 };
@@ -755,19 +1056,6 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
   );
 };
 
-const EditOrderButton: React.FC<{ editable: boolean; onClick: () => void }> = ({ editable, onClick }) => (
-  <button
-    type="button"
-    disabled={!editable}
-    onClick={onClick}
-    className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-white px-3 py-2 text-[12px] font-bold text-foreground shadow-sm transition-colors hover:bg-muted disabled:opacity-40"
-    title={editable ? 'Sửa đơn hàng' : 'Chỉ sửa khi đơn đang pending'}
-  >
-    <Pencil size={13} />
-    Sửa
-  </button>
-);
-
 const InfoBlock: React.FC<{ label: string; value: string; strong?: boolean }> = ({ label, value, strong = false }) => (
   <div>
     <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">{label}</div>
@@ -780,8 +1068,8 @@ const EmptyOrdersState: React.FC<{ canSelfCreate: boolean; onCreate: () => void 
     <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
       <Package size={22} />
     </div>
-    <div className="font-black text-foreground">Chưa có đơn hàng nào</div>
-    <p className="mt-1 text-[13px] text-muted-foreground">Tạo đơn đầu tiên để theo dõi trạng thái xử lý tại đây.</p>
+    <div className="font-black text-foreground">Chưa có đơn trả hàng nào</div>
+    <p className="mt-1 text-[13px] text-muted-foreground">Tạo phiếu đầu tiên khi hàng của khách bị lỗi cần trả về SG.</p>
     <button
       type="button"
       onClick={onCreate}
@@ -789,7 +1077,7 @@ const EmptyOrdersState: React.FC<{ canSelfCreate: boolean; onCreate: () => void 
       className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-50"
     >
       <Plus size={14} />
-      Tạo đơn hàng
+      Tạo trả hàng
     </button>
   </div>
 );

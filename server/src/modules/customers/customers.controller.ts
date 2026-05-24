@@ -219,6 +219,24 @@ export class CustomerController {
     }
   }
 
+  static async getMyDeliveryOrders(req: Request, res: Response) {
+    try {
+      const data = await CustomerService.getMyDeliveryOrders(req.user!.id);
+      return res.status(200).json(successResponse(data));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
+  static async getMyDeliveryVehicles(req: Request, res: Response) {
+    try {
+      const data = await CustomerService.getMyDeliveryVehicles(req.user!.id);
+      return res.status(200).json(successResponse(data));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
   static async createMyOrder(req: Request, res: Response) {
     try {
       const validated = createMyOrderSchema.parse(req.body);

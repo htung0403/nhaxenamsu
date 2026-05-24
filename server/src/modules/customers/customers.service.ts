@@ -4,6 +4,7 @@ import { hashPassword } from '../../utils/password';
 import { normalizeEntityNameKey } from '../../utils/normalizeEntityName';
 import { ImportOrderService } from '../import-orders/import-orders.service';
 import { ProductService } from '../products/products.service';
+import { DeliveryService } from '../delivery/delivery.service';
 import {
   applyCustomerBinding,
   isCustomerOrderEditable,
@@ -151,6 +152,39 @@ export class CustomerService {
     }
     
     return allDeliveryOrders;
+  }
+
+  static async getMyDeliveryOrders(userId: string) {
+    const { customer, policy } = await this.getCustomerByUserIdOrThrow(userId);
+    const customerId = customer.id;
+    const orderCategory = policy.orderCategory;
+    const binding = policy.binding;
+
+    const deliveryOrders = await DeliveryService.getAllToday(undefined, undefined, orderCategory);
+    return (deliveryOrders || []).filter((order: any) => {
+      const sourceOrder = orderCategory === 'vegetable' ? order.vegetable_orders : order.import_orders;
+      if (!sourceOrder) return false;
+      if (binding === 'sender') return sourceOrder.sender_id === customerId;
+      return sourceOrder.customer_id === customerId;
+    });
+  }
+
+  static async getMyDeliveryVehicles(userId: string) {
+    const { policy } = await this.getCustomerByUserIdOrThrow(userId);
+    const goodsCategory = policy.orderCategory === 'vegetable' ? 'vegetable' : 'grocery';
+
+    const { data, error } = await supabaseService
+      .from('vehicles')
+      .select('id, license_plate, goods_categories')
+      .is('deleted_at', null)
+      .order('license_plate', { ascending: true });
+
+    if (error) throw error;
+
+    return (data || []).filter((vehicle: any) => {
+      if (!Array.isArray(vehicle.goods_categories) || vehicle.goods_categories.length === 0) return true;
+      return vehicle.goods_categories.includes(goodsCategory);
+    });
   }
 
   static async updateDeliveryOrderPrices(customerId: string, updates: { deliveryOrderId: string, unitPrice: number }[]) {

@@ -1,5 +1,5 @@
 import axiosClient from './axiosClient';
-import type { Customer, DeliveryOrder, ImportOrder, Product } from '../types';
+import type { Customer, DeliveryOrder, ImportOrder, Product, Vehicle } from '../types';
 
 export interface CustomerSelfOrderPayload {
   order_date?: string;
@@ -12,8 +12,10 @@ export interface CustomerSelfOrderPayload {
   warehouse_id?: string | null;
   customer_id?: string | null;
   order_category?: 'standard' | 'vegetable';
+  status?: 'pending' | 'processing' | 'delivered' | 'returned';
   total_amount?: number | null;
   is_custom_amount?: boolean;
+  payment_status?: 'paid' | 'unpaid' | 'partial';
   notes?: string | null;
   receipt_image_url?: string | null;
   receipt_image_urls?: string[] | null;
@@ -111,6 +113,16 @@ export const customersApi = {
 
   getMyOrderProducts: async () => {
     const { data } = await axiosClient.get<Product[]>('/customers/me/order-products');
+    return data;
+  },
+
+  getMyDeliveryOrders: async () => {
+    const { data } = await axiosClient.get<DeliveryOrder[]>('/customers/me/delivery-orders');
+    return data;
+  },
+
+  getMyDeliveryVehicles: async () => {
+    const { data } = await axiosClient.get<Vehicle[]>('/customers/me/delivery-vehicles');
     return data;
   },
 
