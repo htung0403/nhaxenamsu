@@ -85,6 +85,7 @@ const importOrderItemSchema = z.object({
   package_type: z.string().optional().nullable().catch(null),
   weight_kg: z.coerce.number().optional().nullable().catch(null),
   quantity: z.coerce.number().min(1, 'SL > 0').catch(1),
+  unit_price: z.coerce.number().min(0).optional().nullable().catch(0),
   image_url: z.string().optional().nullable().catch(null),
   image_urls: z.array(z.string()).optional().catch([]),
   item_note: z.string().optional().nullable().catch(''),
@@ -101,10 +102,16 @@ const importOrderSchema = z.object({
   selected_alias: z.string().optional(),
   items: z.array(importOrderItemSchema).min(1, 'Vui lòng thêm ít nhất 1 mặt hàng'),
   total_amount: z.coerce.number().min(0, 'Tổng tiền không hợp lệ').catch(0),
+  payment_status: z.enum(['unpaid', 'paid']).catch('unpaid'),
   notes: z.string().optional().nullable().catch(''),
   receipt_image_url: z.string().optional().nullable().catch(null),
   receipt_image_urls: z.array(z.string()).optional().catch([]),
 });
+
+const getVegetableProductPrice = (product: any, paymentStatus?: string | null) => {
+  if (paymentStatus === 'paid') return 0;
+  return Number(product?.base_price) || 0;
+};
 
 interface Props {
   isOpen: boolean;
@@ -300,7 +307,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
     defaultValues: {
       order_date: format(new Date(), 'yyyy-MM-dd'),
       order_time: new Date().toTimeString().slice(0, 5),
-      items: [{ quantity: 1, weight_kg: '', product_id: '', image_url: null, image_urls: [], item_note: '' }],
+      items: [{ quantity: 1, weight_kg: '', product_id: '', unit_price: 0, image_url: null, image_urls: [], item_note: '' }],
       customer_id: '',
       sender_name: '',
       sender_id: '',
@@ -308,6 +315,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
       selected_alias: '',
       received_by: '',
       total_amount: 0,
+      payment_status: 'unpaid',
       notes: '',
       receipt_image_url: null,
       receipt_image_urls: [],
@@ -315,6 +323,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
   });
 
   const watchItems = watch('items');
+  const watchPaymentStatus = watch('payment_status');
 
   const previousItemsRef = React.useRef<string>('');
   const submitLockRef = React.useRef(false);
@@ -330,7 +339,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
     if (defaultCategory === 'standard') return;
     if (!watchItems || !filteredProducts.length) return;
 
-    const currentItemsString = JSON.stringify(watchItems);
+    const currentItemsString = `${watchPaymentStatus}:${JSON.stringify(watchItems)}`;
     if (currentItemsString === previousItemsRef.current && previousProductsRef.current === filteredProducts?.length) {
       return;
     }
@@ -340,17 +349,18 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
     let sum = 0;
     watchItems.forEach((item: any) => {
       const product = filteredProducts.find((p: any) => p.id === item.product_id);
-      if (product && product.base_price) {
+      const price = getVegetableProductPrice(product, watchPaymentStatus);
+      if (product && price > 0) {
         const qty = Number(item.quantity) || 0;
-        const amount = Math.round(qty * product.base_price);
+        const amount = Math.round(qty * price);
         sum += amount;
       }
     });
 
-    if (sum > 0) {
+    if (sum > 0 || watchPaymentStatus === 'paid') {
       setValue('total_amount', sum, { shouldValidate: true });
     }
-  }, [JSON.stringify(watchItems), filteredProducts, defaultCategory, setValue]);
+  }, [JSON.stringify(watchItems), filteredProducts, defaultCategory, setValue, watchPaymentStatus]);
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -444,11 +454,13 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
           package_type: item.package_type,
           weight_kg: item.weight_kg,
           quantity: item.quantity,
+          unit_price: item.unit_price || 0,
           image_url: item.image_url || null,
           image_urls: item.image_urls || (item.image_url ? [item.image_url] : []),
           item_note: item.item_note || item.package_type || '',
         })) || [],
         total_amount: editingOrder.total_amount || 0,
+        payment_status: editingOrder.payment_status === 'paid' ? 'paid' : 'unpaid',
         notes: editingOrder.notes || '',
         receipt_image_url: editingOrder.receipt_image_url || null,
         receipt_image_urls: editingOrder.receipt_image_urls || (editingOrder.receipt_image_url ? [editingOrder.receipt_image_url] : []),
@@ -457,7 +469,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
       reset({
         order_date: format(new Date(), 'yyyy-MM-dd'),
         order_time: new Date().toTimeString().slice(0, 5),
-        items: [{ quantity: 1, weight_kg: '', product_id: '', image_url: null, image_urls: [], item_note: '' }],
+        items: [{ quantity: 1, weight_kg: '', product_id: '', unit_price: 0, image_url: null, image_urls: [], item_note: '' }],
         customer_id: '',
         sender_name: '',
         sender_id: '',
@@ -465,6 +477,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
         selected_alias: '',
         received_by: user?.id || employees?.[0]?.id || '',
         total_amount: 0,
+        payment_status: 'unpaid',
         notes: '',
         receipt_image_url: null,
         receipt_image_urls: [],
@@ -586,15 +599,24 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
       console.log('--- FORM SUBMIT DATA BEGIN ---', data);
       const payload = { ...data };
       if (payload.items) {
+        let calculatedTotalAmount = 0;
         payload.items = payload.items.map((item: any, index: number) => {
           const trimmedNote = item.item_note?.trim() || null;
+          const product = filteredProducts.find((p: any) => p.id === item.product_id);
+          const unitPrice = getVegetableProductPrice(product, payload.payment_status);
+          calculatedTotalAmount += Math.round((Number(item.quantity) || 0) * unitPrice);
           return {
             ...item,
             item_note: trimmedNote,
+            unit_price: unitPrice,
+            payment_status: payload.payment_status === 'paid' ? 'paid' : 'unpaid',
             image_urls: getValues(`items.${index}.image_urls`) || [],
             image_url: getValues(`items.${index}.image_url`) || null,
           };
         });
+        if (defaultCategory === 'vegetable') {
+          payload.total_amount = calculatedTotalAmount;
+        }
       }
       payload.order_category = defaultCategory;
 
@@ -1051,6 +1073,46 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                           />
                         </div>
 
+                        <div className="mt-2 space-y-1.5">
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Trạng thái thanh toán</label>
+                          <Controller
+                            name="payment_status"
+                            control={control}
+                            render={({ field }) => (
+                              <div className="grid grid-cols-2 gap-2">
+                                {[
+                                  { value: 'unpaid', label: 'Chưa trả phí SG' },
+                                  { value: 'paid', label: 'Đã thanh toán' },
+                                ].map((option) => {
+                                  const isSelected = field.value === option.value;
+                                  return (
+                                    <button
+                                      key={option.value}
+                                      type="button"
+                                      onClick={() => field.onChange(option.value)}
+                                      className={clsx(
+                                        'px-3 py-2 rounded-xl border text-[12px] font-bold transition-all active:scale-[0.98]',
+                                        isSelected
+                                          ? option.value === 'unpaid'
+                                            ? 'border-red-500 bg-red-500 text-white shadow-sm shadow-red-500/20'
+                                            : 'border-primary bg-primary text-white shadow-sm shadow-primary/20'
+                                          : 'border-border bg-card text-muted-foreground hover:bg-muted/50'
+                                      )}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
+                          />
+                          {watchPaymentStatus === 'paid' && (
+                            <p className="text-[11px] font-medium text-emerald-700">
+                              Đơn đã thanh toán: đơn giá và tổng tiền các mặt hàng sẽ được lưu là 0.
+                            </p>
+                          )}
+                        </div>
+
                         {hasAliases && (
                           <div className="mt-2">
                             <label className="text-[12px] font-bold text-muted-foreground">Tên khác (tùy chọn)</label>
@@ -1251,7 +1313,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                   </div>
                   <button
                     type="button"
-                    onClick={() => append({ quantity: 1, weight_kg: '', product_id: '', image_url: null, item_note: '' })}
+                    onClick={() => append({ quantity: 1, weight_kg: '', product_id: '', unit_price: 0, image_url: null, image_urls: [], item_note: '' })}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-white text-[12px] font-bold hover:bg-primary/90 transition-all shadow-sm shadow-primary/30 active:scale-95"
                   >
                     <Plus size={14} />
@@ -1331,8 +1393,9 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                                     )}
                                     {(() => {
                                       const prod = filteredProducts.find((p: any) => p.id === watch(`items.${index}.product_id`));
-                                      const price = prod?.base_price || 0;
+                                      const price = getVegetableProductPrice(prod, watchPaymentStatus);
                                       if (price > 0) return <span className="text-[9px] text-muted-foreground mt-0.5 ml-1">{new Intl.NumberFormat('vi-VN').format(price)}đ</span>;
+                                      if (prod && watchPaymentStatus === 'paid') return <span className="text-[9px] text-emerald-600 mt-0.5 ml-1">Đơn giá 0đ</span>;
                                       return null;
                                     })()}
                                   </div>
@@ -1359,7 +1422,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                                     const productId = watch(`items.${index}.product_id`);
                                     const qty = Number(watch(`items.${index}.quantity`) || 0);
                                     const prod = filteredProducts.find((p: any) => p.id === productId);
-                                    const price = prod?.base_price || 0;
+                                    const price = getVegetableProductPrice(prod, watchPaymentStatus);
                                     const total = Math.round(qty * price);
                                     return (
                                       <span className="text-[13px] font-bold text-primary tabular-nums flex items-center justify-end">
@@ -1402,8 +1465,9 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                                     )}
                                     {(() => {
                                       const prod = filteredProducts.find((p: any) => p.id === watch(`items.${index}.product_id`));
-                                      const price = prod?.base_price || 0;
+                                      const price = getVegetableProductPrice(prod, watchPaymentStatus);
                                       if (price > 0) return <span className="text-[9px] text-muted-foreground mt-0.5">{new Intl.NumberFormat('vi-VN').format(price)}đ</span>;
+                                      if (prod && watchPaymentStatus === 'paid') return <span className="text-[9px] text-emerald-600 mt-0.5">Đơn giá 0đ</span>;
                                       return null;
                                     })()}
                                   </div>
@@ -1439,7 +1503,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                                       const productId = watch(`items.${index}.product_id`);
                                       const qty = Number(watch(`items.${index}.quantity`) || 0);
                                       const prod = filteredProducts.find((p: any) => p.id === productId);
-                                      const price = prod?.base_price || 0;
+                                      const price = getVegetableProductPrice(prod, watchPaymentStatus);
                                       const total = Math.round(qty * price);
                                       return (
                                         <>
@@ -1656,7 +1720,9 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                   <div className="p-4 md:p-5 bg-primary/5 flex flex-col md:flex-row items-center justify-between border-t border-primary/10 shrink-0 gap-1 md:gap-0">
                     <div className="flex flex-col items-center md:items-start text-center md:text-left">
                       <span className="text-[12px] font-bold text-primary uppercase tracking-widest">Tổng tiền phiếu nhập</span>
-                      <span className="text-[12px] text-primary/70 font-medium">Được cộng vào Công Nợ của Khách</span>
+                      <span className="text-[12px] text-primary/70 font-medium">
+                        {watchPaymentStatus === 'paid' ? 'Đã thanh toán, không cộng phí SG' : 'Được cộng vào Công Nợ của Khách'}
+                      </span>
                     </div>
                     <div className="text-3xl font-black text-primary tabular-nums drop-shadow-sm">
                       {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(watchTotalAmountInput || 0)}

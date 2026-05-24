@@ -1744,6 +1744,7 @@ export class ZaloService {
             senderName: item.senderName || '-',
             price: Number(item.price || 0),
             total: Number(item.total || 0),
+            payment_status: item.payment_status || item.paymentStatus || 'unpaid',
           })),
         });
 
@@ -2337,12 +2338,14 @@ export class ZaloService {
 
       (order.vegetable_order_items || []).forEach((item: any) => {
         const quantity = Number(item.quantity || 0);
+        const paymentStatus = order.payment_status === 'paid' || item.payment_status === 'paid' ? 'paid' : (order.payment_status || item.payment_status || 'unpaid');
+        const isPaid = paymentStatus === 'paid';
         const fallbackBasePrice = Number(item.products?.base_price || 0);
-        let unitPrice = Number(item.unit_price || fallbackBasePrice || 0);
-        let total = Number(item.total_amount || (quantity * unitPrice));
+        let unitPrice = isPaid ? 0 : Number(item.unit_price || fallbackBasePrice || 0);
+        let total = isPaid ? 0 : Number(item.total_amount || (quantity * unitPrice));
         const note = normalizeNote(item.item_note) || normalizeNote(order.notes);
 
-        if (!total && order.is_custom_amount && order.vegetable_order_items?.length === 1) {
+        if (!isPaid && !total && order.is_custom_amount && order.vegetable_order_items?.length === 1) {
           total = Number(order.total_amount || 0);
           unitPrice = quantity > 0 ? total / quantity : 0;
         }
@@ -2364,6 +2367,7 @@ export class ZaloService {
           note,
           price: Math.round(unitPrice || 0),
           total: Math.round(total || 0),
+          payment_status: paymentStatus,
         };
 
         if (summaryItem.price > 0) {
@@ -2382,7 +2386,16 @@ export class ZaloService {
 
     const normalizedItems = rawItems.map((item) => {
       const quantity = Number(item.quantity || 0);
+      const isPaid = item.payment_status === 'paid';
       let price = Number(item.price || 0);
+      if (isPaid) {
+        return {
+          ...item,
+          quantity,
+          price: 0,
+          total: 0,
+        };
+      }
       if (!(price > 0)) {
         price = Number(seedPriceByProduct.get(buildPriceSeedKey(item)) || 0);
       }
@@ -2657,6 +2670,7 @@ export class ZaloService {
         notes,
         is_custom_amount,
         total_amount,
+        payment_status,
         sender_customers:customers!vegetable_orders_sender_id_fkey(id, name),
         customers:customers!vegetable_orders_customer_id_fkey(id, name, phone),
         vegetable_order_items(quantity, unit_price, total_amount, package_type, item_note, products(name, base_price)),

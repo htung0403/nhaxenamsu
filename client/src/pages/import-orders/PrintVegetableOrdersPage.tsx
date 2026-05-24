@@ -55,6 +55,8 @@ const getOrderVehiclePlates = (order: ImportOrderWithRelations) => {
   return Array.from(plates);
 };
 
+const isPaidOrder = (order: ImportOrderWithRelations) => order.payment_status === 'paid';
+
 // ─── Constants ────────────────────────────────────────────
 const ROWS_PER_A4 = 35; // ~35 data rows fit on one A4 page
 const MAX_AMOUNT_PER_SHEET = 4_500_000; // 4.5 triệu
@@ -178,13 +180,13 @@ const PrintVegetableOrdersPage: React.FC = () => {
 
       if (order.import_order_items && order.import_order_items.length > 0) {
         order.import_order_items.forEach((item) => {
-          const priceK = item.products?.base_price
-            ? item.products.base_price / 1000
+          const unitPrice = isPaidOrder(order)
+            ? 0
+            : Number(item.unit_price || item.products?.base_price || 0);
+          const priceK = unitPrice > 0 ? unitPrice / 1000 : 0;
+          const totalAmount = typeof item.quantity === 'number' && unitPrice > 0
+            ? item.quantity * unitPrice
             : 0;
-          const totalAmount =
-            typeof item.quantity === 'number' && item.products?.base_price
-              ? item.quantity * item.products.base_price
-              : 0;
 
           items.push({
             supplierName,
@@ -207,7 +209,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
           quantity: 0,
           productName: '',
           priceK: 0,
-          totalAmount: Number(order.total_amount) || 0,
+          totalAmount: isPaidOrder(order) ? 0 : Number(order.total_amount) || 0,
           orderId: order.id,
           supplierNote,
         });
@@ -710,7 +712,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
                                     borderRight: '1px solid #000',
                                     borderBottom: rowBorderBottom,
                                   }}>
-                                    {item.priceK > 0 ? item.priceK : ''}
+                                    {formatNumber(item.priceK)}
                                   </td>
                                   <td style={{
                                     padding: '4px 6px',
@@ -720,7 +722,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
                                     borderRight: '1px solid #000',
                                     borderBottom: rowBorderBottom,
                                   }}>
-                                    {item.totalAmount > 0 ? formatNumber(item.totalAmount) : ''}
+                                    {formatNumber(item.totalAmount)}
                                   </td>
                                   <td style={{
                                     padding: '4px 6px',

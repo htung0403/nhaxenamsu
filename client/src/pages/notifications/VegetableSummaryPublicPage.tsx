@@ -22,6 +22,7 @@ interface SupplierSummaryItem {
   note?: string;
   price?: number;
   total?: number;
+  payment_status?: 'paid' | 'unpaid' | 'partial' | string;
 }
 
 interface SenderSummaryItem {
@@ -59,8 +60,18 @@ const buildSupplierPriceKey = (item: SupplierSummaryItem): string => {
 const normalizeSupplierSummaryItems = (items: SupplierSummaryItem[]): SupplierSummaryItem[] => {
   const normalized = items.map((item) => {
     const quantity = Number(item.quantity || 0);
+    const isPaid = item.payment_status === 'paid';
     let price = Number(item.price || 0);
     let total = Number(item.total || 0);
+
+    if (isPaid) {
+      return {
+        ...item,
+        quantity,
+        price: 0,
+        total: 0,
+      };
+    }
 
     if (price > 0 && price < 1000) {
       price *= 1000;
@@ -97,8 +108,18 @@ const normalizeSupplierSummaryItems = (items: SupplierSummaryItem[]): SupplierSu
 
   return normalized.map((item) => {
     const quantity = Number(item.quantity || 0);
+    const isPaid = item.payment_status === 'paid';
     const key = buildSupplierPriceKey(item);
     let price = Number(item.price || 0);
+
+    if (isPaid) {
+      return {
+        ...item,
+        quantity,
+        price: 0,
+        total: 0,
+      };
+    }
 
     if (!(price > 0)) {
       price = Number(inferredPriceByProduct.get(key) || 0);
