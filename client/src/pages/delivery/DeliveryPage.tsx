@@ -159,7 +159,11 @@ const getCustomerPhone = (order: DeliveryOrder) => {
   return src?.customers?.phone || src?.receiver_phone || '';
 };
 
-const isRevertAllowed = (order: DeliveryOrder) => {
+const isRevertAllowed = (order: DeliveryOrder, isAdmin: boolean) => {
+  if (isAdmin) {
+    return (order.delivery_vehicles || []).some((dv) => (dv.assigned_quantity || 0) > 0);
+  }
+
   const now = Date.now();
   return (order.delivery_vehicles || []).some((dv) => {
     if ((dv.assigned_quantity || 0) <= 0) return false;
@@ -1225,7 +1229,7 @@ const DeliveryPage: React.FC = () => {
                                     </button>
                                   </>
                                 )}
-                                {statusFilter === 'da_giao' && (isAdmin || (isDriver && myVehicleIds.length > 0) || isLoader) && totalAssigned > 0 && isRevertAllowed(o) && (
+                                {statusFilter === 'da_giao' && (isAdmin || (isDriver && myVehicleIds.length > 0) || isLoader) && totalAssigned > 0 && isRevertAllowed(o, isAdmin) && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -1703,7 +1707,7 @@ const DeliveryPage: React.FC = () => {
                                   </button>
                                 </>
                               )}
-                              {statusFilter === 'da_giao' && (isAdmin || (isDriver && myVehicleIds.length > 0) || isLoader) && totalAssigned > 0 && isRevertAllowed(o) && (
+                              {statusFilter === 'da_giao' && (isAdmin || (isDriver && myVehicleIds.length > 0) || isLoader) && totalAssigned > 0 && isRevertAllowed(o, isAdmin) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
