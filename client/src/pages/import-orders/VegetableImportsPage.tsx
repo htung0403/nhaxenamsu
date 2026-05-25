@@ -1215,10 +1215,9 @@ const VegetableImportsPage: React.FC = () => {
               </span>
             )}
             <span className="block rounded-xl bg-emerald-500/10 px-3 py-2 text-[12px] font-medium text-emerald-700">
-              Nội dung: Tài {pendingArrivalNotice?.rank}{pendingArrivalNotice?.vehiclePlates ? ` - xe ${pendingArrivalNotice.vehiclePlates}` : ''} đã tới khu vực.
-              {pendingArrivalNotice?.driverContacts ? ` Tài xế: ${pendingArrivalNotice.driverContacts}.` : ''}
+              Nội dung: Tài {pendingArrivalNotice?.rank}{pendingArrivalNotice?.vehiclePlates ? ` xe ${pendingArrivalNotice.vehiclePlates}` : ''} Đã tới chợ.
+              {pendingArrivalNotice?.driverContacts ? ` Quý khách cần hàng gấp liên hệ số: Tài xế: ${pendingArrivalNotice.driverContacts}.` : ''}
               {pendingArrivalNotice?.inChargeContacts ? ` Người phụ trách xe: ${pendingArrivalNotice.inChargeContacts}.` : ''}
-              {' '}Vui lòng ra lấy hàng rau.
             </span>
           </span>
         }

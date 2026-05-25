@@ -2180,10 +2180,12 @@ export class ZaloService {
     orderCount: number,
   ): string {
     const orderText = orderCount > 1 ? ` (${orderCount} đơn)` : '';
-    const vehicleText = vehiclePlates ? ` - xe ${vehiclePlates}` : '';
-    const driverText = driverContacts ? ` Tài xế: ${driverContacts}.` : '';
+    const vehicleText = vehiclePlates ? ` xe ${vehiclePlates}` : '';
+    const contactText = driverContacts
+      ? ` Quý khách cần hàng gấp liên hệ số: Tài xế: ${driverContacts}.`
+      : '';
     const inChargeText = inChargeContacts ? ` Người phụ trách xe: ${inChargeContacts}.` : '';
-    return `Thông báo: Tài ${taiRank}${vehicleText} đã tới khu vực.${driverText}${inChargeText} Vựa ${receiverName} vui lòng ra lấy hàng rau${orderText}. Cảm ơn!`;
+    return `Tài ${taiRank}${vehicleText} Đã tới chợ.${contactText}${inChargeText} Vựa ${receiverName}${orderText}.`;
   }
 
   private async buildGrocerySummaryTargets(supabaseService: any, date: string) {
