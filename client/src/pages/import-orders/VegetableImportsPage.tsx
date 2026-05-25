@@ -1,9 +1,9 @@
 import React, { useState, useMemo, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, CheckCircle2 } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, CheckCircle2, Send } from 'lucide-react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { useImportOrders, useDeleteImportOrder, useConfirmImportOrderByAdmin } from '../../hooks/queries/useImportOrders';
+import { useImportOrders, useDeleteImportOrder, useConfirmImportOrderByAdmin, useSendVegetableArrivalNotice } from '../../hooks/queries/useImportOrders';
 import type { ImportOrder, ImportOrderFilters, OrderStatus } from '../../types';
 import StatusBadge from '../../components/shared/StatusBadge';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
@@ -44,10 +44,20 @@ const formatCurrency = (value?: number | null) => {
 };
 
 const getSupplierName = (order: ImportOrder) => order.customers?.name || order.sender_name || 'Chưa rõ chủ vựa';
+const getVegetableReceiverName = (order: ImportOrder) =>
+  order.customers?.name || order.selected_alias || order.receiver_name || 'Chưa rõ vựa';
+const getVegetableReceiverPhone = (order: ImportOrder) => order.customers?.phone || order.receiver_phone || null;
 
 type ImportOrderWithRelations = ImportOrder & {
   delivery_orders?: DeliveryOrder[];
   profiles?: { full_name?: string; role?: string };
+};
+
+type ArrivalNoticeTarget = {
+  key: string;
+  name: string;
+  phone: string | null;
+  orderCount: number;
 };
 
 const formatDateDMY = (dateStr?: string) => {
@@ -195,9 +205,11 @@ const VegetableImportsPage: React.FC = () => {
   }, [rankSourceOrders, user, vehicles]);
   const deleteMutation = useDeleteImportOrder();
   const confirmMutation = useConfirmImportOrderByAdmin();
+  const sendVegetableArrivalMutation = useSendVegetableArrivalNotice();
   const assignVehicleMutation = useAssignVehicle();
   const [confirmingOrder, setConfirmingOrder] = useState<ImportOrder | null>(null);
   const [selectedConfirmVehicleId, setSelectedConfirmVehicleId] = useState('');
+  const [pendingArrivalNotice, setPendingArrivalNotice] = useState<{ taiRank: number; orderCount: number } | null>(null);
 
   const vegetableDeliveryVehicles = useMemo(() => {
     const supportedVehicles = (vehicles || []).filter((vehicle) => vehicleSupportsVegetable(vehicle) && vehicle.driver_id);
@@ -292,6 +304,46 @@ const VegetableImportsPage: React.FC = () => {
     },
     [dailyTaiRankMap]
   );
+
+  const taiArrivalOptions = useMemo(() => {
+    const counts = new Map<number, number>();
+    allOrders.forEach((order) => {
+      const rank = getTaiRank(order);
+      if (rank == null) return;
+      counts.set(rank, (counts.get(rank) || 0) + 1);
+    });
+
+    return Array.from(counts.entries())
+      .sort(([rankA], [rankB]) => rankA - rankB)
+      .map(([rank, orderCount]) => ({ rank, orderCount }));
+  }, [allOrders, getTaiRank]);
+
+  const arrivalNoticeTargets = useMemo<ArrivalNoticeTarget[]>(() => {
+    if (!pendingArrivalNotice) return [];
+
+    const targets = new Map<string, ArrivalNoticeTarget>();
+    allOrders.forEach((order) => {
+      if (getTaiRank(order) !== pendingArrivalNotice.taiRank) return;
+
+      const phone = getVegetableReceiverPhone(order);
+      const key = phone || order.customer_id || order.id;
+      const existing = targets.get(key);
+      if (existing) {
+        existing.orderCount += 1;
+        if (!existing.phone && phone) existing.phone = phone;
+        return;
+      }
+
+      targets.set(key, {
+        key,
+        name: getVegetableReceiverName(order),
+        phone,
+        orderCount: 1,
+      });
+    });
+
+    return Array.from(targets.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [allOrders, getTaiRank, pendingArrivalNotice]);
 
   const { vuaOptions, taiOptions, nguoiNhapOptions } = useMemo(() => {
     if (!allOrders) return { vuaOptions: [], taiOptions: [], nguoiNhapOptions: [] };
@@ -445,6 +497,22 @@ const VegetableImportsPage: React.FC = () => {
     setSelectedConfirmVehicleId('');
   };
 
+  const handleSendVegetableArrivalNotice = async (taiRank: number, orderCount: number) => {
+    if (!filterDate) {
+      toast.error('Vui lòng chọn ngày trước khi gửi Zalo');
+      return;
+    }
+
+    setPendingArrivalNotice({ taiRank, orderCount });
+  };
+
+  const confirmSendVegetableArrivalNotice = async () => {
+    if (!filterDate || !pendingArrivalNotice) return;
+
+    await sendVegetableArrivalMutation.mutateAsync({ date: filterDate, taiRank: pendingArrivalNotice.taiRank });
+    setPendingArrivalNotice(null);
+  };
+
   const renderConfirmButton = (order: ImportOrder, size: number) => {
     if (!isCustomerSubmittedOrder(order)) return null;
 
@@ -493,7 +561,23 @@ const VegetableImportsPage: React.FC = () => {
           description="Quản lý danh sách đơn nhập hàng rau"
           backPath="/hang-hoa"
           actions={
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {user?.role === 'admin' && taiArrivalOptions.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  {taiArrivalOptions.map(({ rank, orderCount }) => (
+                    <button
+                      key={rank}
+                      onClick={() => handleSendVegetableArrivalNotice(rank, orderCount)}
+                      disabled={sendVegetableArrivalMutation.isPending}
+                      className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 text-[12px] font-bold hover:bg-emerald-500/15 transition-all disabled:opacity-50"
+                      title={`Gửi Zalo báo Tài ${rank} đã tới khu vực`}
+                    >
+                      <Send size={15} />
+                      <span>Tài {rank}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 onClick={() => navigate('/hang-hoa/in-phieu-rau')}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 text-primary text-[13px] font-bold hover:bg-primary/10 transition-all"
@@ -548,6 +632,22 @@ const VegetableImportsPage: React.FC = () => {
                <Printer size={18} />
             </button>
           </div>
+
+          {user?.role === 'admin' && taiArrivalOptions.length > 0 && (
+            <div className="md:hidden flex gap-2 overflow-x-auto pb-1">
+              {taiArrivalOptions.map(({ rank, orderCount }) => (
+                <button
+                  key={rank}
+                  onClick={() => handleSendVegetableArrivalNotice(rank, orderCount)}
+                  disabled={sendVegetableArrivalMutation.isPending}
+                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 text-[12px] font-bold whitespace-nowrap disabled:opacity-50"
+                >
+                  <Send size={15} />
+                  Gửi Zalo Tài {rank}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="hidden xl:flex gap-2 items-center shrink-0">
             <div className="w-[180px]">
@@ -989,6 +1089,49 @@ const VegetableImportsPage: React.FC = () => {
           setConfirmingOrder(null);
           setSelectedConfirmVehicleId('');
         }}
+      />
+
+      <ConfirmDialog
+        isOpen={!!pendingArrivalNotice}
+        title={`Gửi Zalo Tài ${pendingArrivalNotice?.taiRank || ''}`}
+        message={
+          <span className="block space-y-3">
+            <span className="block">
+              Tin nhắn sẽ gửi cho {arrivalNoticeTargets.length} vựa nhận rau ngày {formatDateDMY(filterDate)}.
+            </span>
+            <span className="block rounded-xl border border-border bg-muted/20 overflow-hidden">
+              <span className="block max-h-64 overflow-y-auto divide-y divide-border">
+                {arrivalNoticeTargets.map((target) => (
+                  <span key={target.key} className="flex items-start justify-between gap-3 px-3 py-2 text-left">
+                    <span className="min-w-0">
+                      <span className="block text-[13px] font-bold text-foreground truncate">{target.name}</span>
+                      <span className={clsx('block text-[11px] font-medium', target.phone ? 'text-muted-foreground' : 'text-red-500')}>
+                        {target.phone || 'Thiếu số điện thoại'}
+                      </span>
+                    </span>
+                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
+                      {target.orderCount} đơn
+                    </span>
+                  </span>
+                ))}
+              </span>
+            </span>
+            {arrivalNoticeTargets.some((target) => !target.phone) && (
+              <span className="block text-[12px] font-semibold text-amber-600">
+                Các vựa thiếu số điện thoại sẽ được bỏ qua khi gửi.
+              </span>
+            )}
+            <span className="block rounded-xl bg-emerald-500/10 px-3 py-2 text-[12px] font-medium text-emerald-700">
+              Nội dung: Tài {pendingArrivalNotice?.taiRank} đã tới khu vực, vui lòng ra lấy hàng rau.
+            </span>
+          </span>
+        }
+        confirmLabel="Gửi Zalo"
+        cancelLabel="Để sau"
+        variant="primary"
+        isLoading={sendVegetableArrivalMutation.isPending}
+        onConfirm={confirmSendVegetableArrivalNotice}
+        onCancel={() => setPendingArrivalNotice(null)}
       />
 
       {viewingImages.length > 0 && createPortal(

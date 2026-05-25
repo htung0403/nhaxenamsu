@@ -4,6 +4,7 @@ import type { SummaryDispatchType } from './zalo.service';
 import { supabaseService } from '../../config/supabase';
 import { logger } from '../../utils/logger';
 import { authMiddleware } from '../../middlewares/auth';
+import { requireRolesOnly } from '../../middlewares/role';
 import { successResponse, errorResponse } from '../../utils/response';
 
 const router = Router();
@@ -148,6 +149,33 @@ router.post('/send-summary', async (req, res) => {
   } catch (err: any) {
     logger.error('[ZaloRoutes] Failed to send summary:', err);
     return res.status(500).json(errorResponse(err?.message || 'Lỗi gửi tổng kết'));
+  }
+});
+
+router.post('/send-vegetable-arrival', requireRolesOnly('admin'), async (req, res) => {
+  try {
+    const date = normalizeSummaryDate(String(req.body?.date || ''));
+    const taiRank = Number(req.body?.taiRank);
+
+    if (!date) {
+      return res.status(400).json(errorResponse('Ngày không hợp lệ, định dạng đúng: YYYY-MM-DD'));
+    }
+
+    if (!Number.isInteger(taiRank) || taiRank < 1) {
+      return res.status(400).json(errorResponse('Tài không hợp lệ'));
+    }
+
+    const result = await zaloService.sendVegetableArrivalNoticeForTai(
+      supabaseService,
+      logger,
+      normalizePhoneForAuth,
+      { date, taiRank },
+    );
+
+    return res.json(successResponse(result));
+  } catch (err: any) {
+    logger.error('[ZaloRoutes] Failed to send vegetable arrival notices:', err);
+    return res.status(500).json(errorResponse(err?.message || 'Lỗi gửi thông báo Zalo cho vựa rau'));
   }
 });
 

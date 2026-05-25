@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { importOrdersApi } from '../../api/importOrdersApi';
+import { zaloSummaryApi } from '../../api/zaloSummaryApi';
 import type { ImportOrderFilters, ImportOrderCreatePayload } from '../../types';
 import toast from 'react-hot-toast';
 
@@ -80,6 +81,21 @@ export function useConfirmImportOrderByAdmin() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.error || 'Không thể xác nhận đơn hàng');
+    },
+  });
+}
+
+export function useSendVegetableArrivalNotice() {
+  return useMutation({
+    mutationFn: ({ date, taiRank }: { date: string; taiRank: number }) =>
+      zaloSummaryApi.sendVegetableArrivalNotice({ date, taiRank }),
+    onSuccess: (result) => {
+      toast.success(
+        `Đã gửi Zalo Tài ${result.taiRank}: ${result.sent} thành công, ${result.failed} lỗi, ${result.skipped} bỏ qua`,
+      );
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Không thể gửi thông báo Zalo cho vựa rau');
     },
   });
 }

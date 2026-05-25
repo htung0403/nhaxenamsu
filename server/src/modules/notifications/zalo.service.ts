@@ -84,6 +84,28 @@ type SummaryStatusListItem = {
   triggeredBy: SummaryDispatchTrigger | null;
 };
 
+type VegetableArrivalNoticeStatus = 'success' | 'failed' | 'skipped';
+
+type VegetableArrivalNoticeItem = {
+  targetId: string;
+  targetName: string;
+  targetPhone: string | null;
+  orderCount: number;
+  status: VegetableArrivalNoticeStatus;
+  error?: string | null;
+  messageId?: string | null;
+};
+
+type VegetableArrivalNoticeResult = {
+  date: string;
+  taiRank: number;
+  totalTargets: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+  items: VegetableArrivalNoticeItem[];
+};
+
 export class ZaloService {
   private zaloClient: any;
   private api: ZcaApi | null = null;
@@ -1909,6 +1931,173 @@ export class ZaloService {
     });
     logger.error(`[ZaloService] Failed manual summary send (${type}) to ${normalizedPhone}: ${result.error}`);
     return { success: false, status: 'failed' as const, error: result.error || 'Gửi thất bại', publicLink };
+  }
+
+  async sendVegetableArrivalNoticeForTai(
+    supabaseService: any,
+    logger: any,
+    normalizePhoneForAuth: (phone: string) => string | null,
+    params: { date: string; taiRank: number },
+  ): Promise<VegetableArrivalNoticeResult> {
+    const { date, taiRank } = params;
+    const { data: orders, error } = await supabaseService
+      .from('vegetable_orders')
+      .select(`
+        id,
+        order_date,
+        created_at,
+        tai_rank,
+        driver_name,
+        received_by,
+        customer_id,
+        receiver_name,
+        receiver_phone,
+        selected_alias,
+        customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, customer_type),
+        delivery_orders(id, delivery_vehicles(id, driver_id, profiles!driver_id(full_name)))
+      `)
+      .eq('order_date', date)
+      .is('deleted_at', null);
+
+    if (error) throw error;
+
+    const rankedOrders = this.assignVegetableTaiRanks(orders || []);
+    const targetOrders = rankedOrders.filter((order: any) => Number(order.tai_rank) === taiRank);
+    const targets = new Map<string, { id: string; name: string; phone: string | null; orders: any[] }>();
+
+    targetOrders.forEach((order: any) => {
+      const receiver = Array.isArray(order.customers) ? order.customers[0] : order.customers;
+      const receiverId = receiver?.id || order.customer_id || `order:${order.id}`;
+      const receiverName = receiver?.name || order.selected_alias || order.receiver_name || 'Vựa rau';
+      const receiverPhone = receiver?.phone || order.receiver_phone || null;
+      const key = receiverPhone || receiverId;
+      const existing = targets.get(key);
+
+      if (existing) {
+        existing.orders.push(order);
+        if (!existing.phone && receiverPhone) existing.phone = receiverPhone;
+        return;
+      }
+
+      targets.set(key, {
+        id: receiverId,
+        name: receiverName,
+        phone: receiverPhone,
+        orders: [order],
+      });
+    });
+
+    const items: VegetableArrivalNoticeItem[] = [];
+    for (const target of targets.values()) {
+      if (!target.phone) {
+        items.push({
+          targetId: target.id,
+          targetName: target.name,
+          targetPhone: null,
+          orderCount: target.orders.length,
+          status: 'skipped',
+          error: 'Thiếu số điện thoại',
+        });
+        continue;
+      }
+
+      const normalizedPhone = this.normalizePhoneSafe(normalizePhoneForAuth, target.phone);
+      if (!normalizedPhone) {
+        items.push({
+          targetId: target.id,
+          targetName: target.name,
+          targetPhone: target.phone,
+          orderCount: target.orders.length,
+          status: 'failed',
+          error: 'Số điện thoại không hợp lệ',
+        });
+        continue;
+      }
+
+      const caption = this.buildVegetableArrivalCaption(taiRank, target.name, target.orders.length);
+      const result = await this.sendImageMessage({
+        recipientPhone: normalizedPhone,
+        imageUrls: [],
+        caption,
+      });
+
+      items.push({
+        targetId: target.id,
+        targetName: target.name,
+        targetPhone: normalizedPhone,
+        orderCount: target.orders.length,
+        status: result.success ? 'success' : 'failed',
+        error: result.success ? null : result.error || 'Gửi thất bại',
+        messageId: result.messageId || null,
+      });
+    }
+
+    const summary = {
+      date,
+      taiRank,
+      totalTargets: items.length,
+      sent: items.filter((item) => item.status === 'success').length,
+      failed: items.filter((item) => item.status === 'failed').length,
+      skipped: items.filter((item) => item.status === 'skipped').length,
+      items,
+    };
+
+    logger.info(
+      `[ZaloService] Vegetable arrival notices sent for ${date} tài ${taiRank}: ${summary.sent}/${summary.totalTargets}`,
+    );
+
+    return summary;
+  }
+
+  private assignVegetableTaiRanks(orders: any[]): any[] {
+    const rankedOrders = orders.map((order) => ({ ...order }));
+    const sorted = [...rankedOrders].sort((a, b) => {
+      const timeA = new Date(a.created_at || 0).getTime();
+      const timeB = new Date(b.created_at || 0).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      return String(a.id).localeCompare(String(b.id));
+    });
+
+    const driverRankMap = new Map<string, number>();
+    let nextRank = 1;
+
+    sorted.forEach((order) => {
+      const driverKey = this.resolveVegetableArrivalDriverKey(order);
+      if (!driverRankMap.has(driverKey)) {
+        driverRankMap.set(driverKey, nextRank);
+        nextRank += 1;
+      }
+      order.tai_rank = driverRankMap.get(driverKey);
+    });
+
+    return rankedOrders;
+  }
+
+  private resolveVegetableArrivalDriverKey(order: any): string {
+    const driverNames = new Set<string>();
+
+    if (Array.isArray(order.delivery_orders)) {
+      order.delivery_orders.forEach((deliveryOrder: any) => {
+        if (!Array.isArray(deliveryOrder?.delivery_vehicles)) return;
+        deliveryOrder.delivery_vehicles.forEach((deliveryVehicle: any) => {
+          const fullName = deliveryVehicle?.profiles?.full_name;
+          if (fullName) driverNames.add(normalizePersonName(fullName));
+        });
+      });
+    }
+
+    if (driverNames.size > 0) return `dn:${Array.from(driverNames).sort().join('|')}`;
+    if (order.driver_name) return `dn:${normalizePersonName(order.driver_name)}`;
+
+    const driverId = order.delivery_orders?.[0]?.delivery_vehicles?.[0]?.driver_id;
+    if (driverId) return `dvid:${driverId}`;
+    if (order.received_by) return `rb:${order.received_by}`;
+    return 'unknown';
+  }
+
+  private buildVegetableArrivalCaption(taiRank: number, receiverName: string, orderCount: number): string {
+    const orderText = orderCount > 1 ? ` (${orderCount} đơn)` : '';
+    return `Thông báo: Tài ${taiRank} đã tới khu vực. Vựa ${receiverName} vui lòng ra lấy hàng rau${orderText}. Cảm ơn!`;
   }
 
   private async buildGrocerySummaryTargets(supabaseService: any, date: string) {
