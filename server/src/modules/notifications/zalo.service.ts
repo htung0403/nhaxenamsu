@@ -1954,7 +1954,16 @@ export class ZaloService {
         receiver_phone,
         selected_alias,
         customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, customer_type),
-        delivery_orders(id, delivery_vehicles(id, driver_id, vehicles(license_plate), profiles!driver_id(full_name)))
+        delivery_orders(id, delivery_vehicles(
+          id,
+          driver_id,
+          vehicles(
+            license_plate,
+            profiles:profiles!vehicles_driver_id_fkey(full_name, phone),
+            responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)
+          ),
+          profiles!driver_id(full_name, phone)
+        ))
       `)
       .eq('order_date', date)
       .is('deleted_at', null);
@@ -2015,7 +2024,16 @@ export class ZaloService {
       }
 
       const vehiclePlates = this.getVegetableArrivalVehiclePlates(target.orders);
-      const caption = this.buildVegetableArrivalCaption(taiRank, vehiclePlates, target.name, target.orders.length);
+      const driverContacts = this.getVegetableArrivalDriverContacts(target.orders);
+      const inChargeContacts = this.getVegetableArrivalInChargeContacts(target.orders);
+      const caption = this.buildVegetableArrivalCaption(
+        taiRank,
+        vehiclePlates,
+        driverContacts,
+        inChargeContacts,
+        target.name,
+        target.orders.length,
+      );
       const result = await this.sendImageMessage({
         recipientPhone: normalizedPhone,
         imageUrls: [],
@@ -2115,15 +2133,57 @@ export class ZaloService {
     return Array.from(plates).join(', ');
   }
 
+  private getVegetableArrivalDriverContacts(orders: any[]): string {
+    const contacts = new Set<string>();
+
+    orders.forEach((order) => {
+      if (!Array.isArray(order.delivery_orders)) return;
+      order.delivery_orders.forEach((deliveryOrder: any) => {
+        if (!Array.isArray(deliveryOrder?.delivery_vehicles)) return;
+        deliveryOrder.delivery_vehicles.forEach((deliveryVehicle: any) => {
+          const profile = deliveryVehicle?.profiles || deliveryVehicle?.vehicles?.profiles;
+          const name = profile?.full_name;
+          if (!name) return;
+          contacts.add(profile?.phone ? `${name} (${profile.phone})` : String(name));
+        });
+      });
+    });
+
+    return Array.from(contacts).join('; ');
+  }
+
+  private getVegetableArrivalInChargeContacts(orders: any[]): string {
+    const contacts = new Set<string>();
+
+    orders.forEach((order) => {
+      if (!Array.isArray(order.delivery_orders)) return;
+      order.delivery_orders.forEach((deliveryOrder: any) => {
+        if (!Array.isArray(deliveryOrder?.delivery_vehicles)) return;
+        deliveryOrder.delivery_vehicles.forEach((deliveryVehicle: any) => {
+          const profile = deliveryVehicle?.vehicles?.responsible_profile;
+          const name = profile?.full_name;
+          if (!name) return;
+          contacts.add(profile?.phone ? `${name} (${profile.phone})` : String(name));
+        });
+      });
+    });
+
+    return Array.from(contacts).join('; ');
+  }
+
   private buildVegetableArrivalCaption(
     taiRank: number,
     vehiclePlates: string,
+    driverContacts: string,
+    inChargeContacts: string,
     receiverName: string,
     orderCount: number,
   ): string {
     const orderText = orderCount > 1 ? ` (${orderCount} đơn)` : '';
     const vehicleText = vehiclePlates ? ` - xe ${vehiclePlates}` : '';
-    return `Thông báo: Tài ${taiRank}${vehicleText} đã tới khu vực. Vựa ${receiverName} vui lòng ra lấy hàng rau${orderText}. Cảm ơn!`;
+    const driverText = driverContacts ? ` Tài xế: ${driverContacts}.` : '';
+    const inChargeText = inChargeContacts ? ` Người phụ trách xe: ${inChargeContacts}.` : '';
+    return `Thông báo: Tài ${taiRank}${vehicleText} đã tới khu vực.${driverText}${inChargeText} Vựa ${receiverName} vui lòng ra lấy hàng rau${orderText}. Cảm ơn!`;
   }
 
   private async buildGrocerySummaryTargets(supabaseService: any, date: string) {

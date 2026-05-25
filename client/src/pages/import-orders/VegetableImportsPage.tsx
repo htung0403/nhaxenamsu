@@ -64,6 +64,13 @@ type ArrivalNoticeOption = {
   rank: number;
   orderCount: number;
   vehiclePlates: string;
+  driverContacts: string;
+  inChargeContacts: string;
+};
+
+const formatContact = (name?: string | null, phone?: string | null) => {
+  if (!name) return '';
+  return phone ? `${name} (${phone})` : name;
 };
 
 const formatDateDMY = (dateStr?: string) => {
@@ -103,6 +110,41 @@ const getOrderDriverName = (order: ImportOrderWithRelations) => {
   if (order.driver_name) return order.driver_name;
   if (order.profiles?.role === 'driver') return order.profiles.full_name || '';
   return '';
+};
+
+const getOrderDriverContacts = (order: ImportOrderWithRelations) => {
+  const contacts = new Set<string>();
+
+  order.delivery_orders?.forEach((deliveryOrder: DeliveryOrder) => {
+    deliveryOrder.delivery_vehicles?.forEach((deliveryVehicle: DeliveryVehicle) => {
+      const directDriver = formatContact(deliveryVehicle.profiles?.full_name, deliveryVehicle.profiles?.phone);
+      if (directDriver) contacts.add(directDriver);
+
+      const vehicleDriver = formatContact(
+        deliveryVehicle.vehicles?.profiles?.full_name,
+        deliveryVehicle.vehicles?.profiles?.phone,
+      );
+      if (vehicleDriver) contacts.add(vehicleDriver);
+    });
+  });
+
+  return Array.from(contacts).join('; ');
+};
+
+const getOrderInChargeContacts = (order: ImportOrderWithRelations) => {
+  const contacts = new Set<string>();
+
+  order.delivery_orders?.forEach((deliveryOrder: DeliveryOrder) => {
+    deliveryOrder.delivery_vehicles?.forEach((deliveryVehicle: DeliveryVehicle) => {
+      const contact = formatContact(
+        deliveryVehicle.vehicles?.responsible_profile?.full_name,
+        deliveryVehicle.vehicles?.responsible_profile?.phone,
+      );
+      if (contact) contacts.add(contact);
+    });
+  });
+
+  return Array.from(contacts).join('; ');
 };
 
 const getOrderReceiverName = (order: ImportOrderWithRelations) => {
@@ -314,6 +356,8 @@ const VegetableImportsPage: React.FC = () => {
   const taiArrivalOptions = useMemo<ArrivalNoticeOption[]>(() => {
     const counts = new Map<number, number>();
     const platesByRank = new Map<number, Set<string>>();
+    const driversByRank = new Map<number, Set<string>>();
+    const inChargesByRank = new Map<number, Set<string>>();
     allOrders.forEach((order) => {
       const rank = getTaiRank(order);
       if (rank == null) return;
@@ -325,6 +369,20 @@ const VegetableImportsPage: React.FC = () => {
         vehiclePlates.split(', ').forEach((plate) => current.add(plate));
         platesByRank.set(rank, current);
       }
+
+      const driverContacts = getOrderDriverContacts(order);
+      if (driverContacts) {
+        const current = driversByRank.get(rank) || new Set<string>();
+        driverContacts.split('; ').forEach((contact) => current.add(contact));
+        driversByRank.set(rank, current);
+      }
+
+      const inChargeContacts = getOrderInChargeContacts(order);
+      if (inChargeContacts) {
+        const current = inChargesByRank.get(rank) || new Set<string>();
+        inChargeContacts.split('; ').forEach((contact) => current.add(contact));
+        inChargesByRank.set(rank, current);
+      }
     });
 
     return Array.from(counts.entries())
@@ -333,6 +391,8 @@ const VegetableImportsPage: React.FC = () => {
         rank,
         orderCount,
         vehiclePlates: Array.from(platesByRank.get(rank) || []).join(', '),
+        driverContacts: Array.from(driversByRank.get(rank) || []).join('; '),
+        inChargeContacts: Array.from(inChargesByRank.get(rank) || []).join('; '),
       }));
   }, [allOrders, getTaiRank]);
 
@@ -1122,6 +1182,16 @@ const VegetableImportsPage: React.FC = () => {
                 Biển số xe: {pendingArrivalNotice.vehiclePlates}
               </span>
             )}
+            {(pendingArrivalNotice?.driverContacts || pendingArrivalNotice?.inChargeContacts) && (
+              <span className="block rounded-xl bg-muted/30 px-3 py-2 text-[12px] text-foreground space-y-1">
+                {pendingArrivalNotice?.driverContacts && (
+                  <span className="block"><strong>Tài xế:</strong> {pendingArrivalNotice.driverContacts}</span>
+                )}
+                {pendingArrivalNotice?.inChargeContacts && (
+                  <span className="block"><strong>Phụ trách xe:</strong> {pendingArrivalNotice.inChargeContacts}</span>
+                )}
+              </span>
+            )}
             <span className="block rounded-xl border border-border bg-muted/20 overflow-hidden">
               <span className="block max-h-64 overflow-y-auto divide-y divide-border">
                 {arrivalNoticeTargets.map((target) => (
@@ -1145,7 +1215,10 @@ const VegetableImportsPage: React.FC = () => {
               </span>
             )}
             <span className="block rounded-xl bg-emerald-500/10 px-3 py-2 text-[12px] font-medium text-emerald-700">
-              Nội dung: Tài {pendingArrivalNotice?.rank}{pendingArrivalNotice?.vehiclePlates ? ` - xe ${pendingArrivalNotice.vehiclePlates}` : ''} đã tới khu vực, vui lòng ra lấy hàng rau.
+              Nội dung: Tài {pendingArrivalNotice?.rank}{pendingArrivalNotice?.vehiclePlates ? ` - xe ${pendingArrivalNotice.vehiclePlates}` : ''} đã tới khu vực.
+              {pendingArrivalNotice?.driverContacts ? ` Tài xế: ${pendingArrivalNotice.driverContacts}.` : ''}
+              {pendingArrivalNotice?.inChargeContacts ? ` Người phụ trách xe: ${pendingArrivalNotice.inChargeContacts}.` : ''}
+              {' '}Vui lòng ra lấy hàng rau.
             </span>
           </span>
         }

@@ -414,8 +414,8 @@ export interface Vehicle {
   status: VehicleStatus;
   created_at: string;
   // Nested
-  profiles?: { full_name: string };
-  responsible_profile?: { full_name: string };
+  profiles?: { full_name: string; phone?: string | null };
+  responsible_profile?: { full_name: string; phone?: string | null };
 }
 
 // --- Delivery Vehicles ---
@@ -436,7 +436,7 @@ export interface DeliveryVehicle {
   status: DeliveryVehicleStatus;
   assigned_at: string;
   vehicles?: Vehicle;
-  profiles?: { full_name: string };
+  profiles?: { full_name: string; phone?: string | null };
   delivery_orders?: DeliveryOrder & {
     import_orders?: {
       order_code: string;

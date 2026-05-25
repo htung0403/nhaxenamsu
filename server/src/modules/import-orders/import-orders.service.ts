@@ -68,7 +68,7 @@ export class ImportOrderService {
         ? supabaseService.from(tName).select('*', { count: 'exact', head: true })
         : supabaseService
             .from(tName)
-            .select(`*, ${receivedByProfile}, warehouses(name), ${customerJoin}, ${senderCustomerJoin}, ${iName}(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate), profiles!driver_id(full_name)))`);
+            .select(`*, ${receivedByProfile}, warehouses(name), ${customerJoin}, ${senderCustomerJoin}, ${iName}(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate, profiles:profiles!vehicles_driver_id_fkey(full_name, phone), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)), profiles!driver_id(full_name, phone)))`);
 
       q = q.is('deleted_at', null);
       
@@ -254,7 +254,7 @@ export class ImportOrderService {
   static async getById(id: string, actor?: UserPayload) {
     let { data, error } = await supabaseService
       .from('import_orders')
-      .select('*, profiles:profiles!received_by(full_name, role), warehouses(name), customers:customers!import_orders_customer_id_fkey(id, name, phone, address, aliases), sender_customers:customers!import_orders_sender_id_fkey(id, name, phone), import_order_items(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate), profiles!driver_id(full_name)))')
+      .select('*, profiles:profiles!received_by(full_name, role), warehouses(name), customers:customers!import_orders_customer_id_fkey(id, name, phone, address, aliases), sender_customers:customers!import_orders_sender_id_fkey(id, name, phone), import_order_items(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate, profiles:profiles!vehicles_driver_id_fkey(full_name, phone), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)), profiles!driver_id(full_name, phone)))')
       .eq('id', id)
       .is('deleted_at', null)
       .maybeSingle();
@@ -264,7 +264,7 @@ export class ImportOrderService {
       // Try vegetable_orders fallback
       const { data: vegData, error: vegError } = await supabaseService
         .from('vegetable_orders')
-        .select('*, profiles:profiles!received_by(full_name, role), warehouses(name), customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, address, aliases), sender_customers:customers!vegetable_orders_sender_id_fkey(id, name, phone), vegetable_order_items(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate), profiles!driver_id(full_name)))')
+        .select('*, profiles:profiles!received_by(full_name, role), warehouses(name), customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, address, aliases), sender_customers:customers!vegetable_orders_sender_id_fkey(id, name, phone), vegetable_order_items(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate, profiles:profiles!vehicles_driver_id_fkey(full_name, phone), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)), profiles!driver_id(full_name, phone)))')
         .eq('id', id)
         .is('deleted_at', null)
         .maybeSingle();
