@@ -1954,7 +1954,7 @@ export class ZaloService {
         receiver_phone,
         selected_alias,
         customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, customer_type),
-        delivery_orders(id, delivery_vehicles(id, driver_id, profiles!driver_id(full_name)))
+        delivery_orders(id, delivery_vehicles(id, driver_id, vehicles(license_plate), profiles!driver_id(full_name)))
       `)
       .eq('order_date', date)
       .is('deleted_at', null);
@@ -2014,7 +2014,8 @@ export class ZaloService {
         continue;
       }
 
-      const caption = this.buildVegetableArrivalCaption(taiRank, target.name, target.orders.length);
+      const vehiclePlates = this.getVegetableArrivalVehiclePlates(target.orders);
+      const caption = this.buildVegetableArrivalCaption(taiRank, vehiclePlates, target.name, target.orders.length);
       const result = await this.sendImageMessage({
         recipientPhone: normalizedPhone,
         imageUrls: [],
@@ -2095,9 +2096,34 @@ export class ZaloService {
     return 'unknown';
   }
 
-  private buildVegetableArrivalCaption(taiRank: number, receiverName: string, orderCount: number): string {
+  private getVegetableArrivalVehiclePlates(orders: any[]): string {
+    const plates = new Set<string>();
+
+    orders.forEach((order) => {
+      if (order.license_plate) plates.add(order.license_plate);
+      if (!Array.isArray(order.delivery_orders)) return;
+
+      order.delivery_orders.forEach((deliveryOrder: any) => {
+        if (!Array.isArray(deliveryOrder?.delivery_vehicles)) return;
+        deliveryOrder.delivery_vehicles.forEach((deliveryVehicle: any) => {
+          const plate = deliveryVehicle?.vehicles?.license_plate;
+          if (plate) plates.add(String(plate));
+        });
+      });
+    });
+
+    return Array.from(plates).join(', ');
+  }
+
+  private buildVegetableArrivalCaption(
+    taiRank: number,
+    vehiclePlates: string,
+    receiverName: string,
+    orderCount: number,
+  ): string {
     const orderText = orderCount > 1 ? ` (${orderCount} đơn)` : '';
-    return `Thông báo: Tài ${taiRank} đã tới khu vực. Vựa ${receiverName} vui lòng ra lấy hàng rau${orderText}. Cảm ơn!`;
+    const vehicleText = vehiclePlates ? ` - xe ${vehiclePlates}` : '';
+    return `Thông báo: Tài ${taiRank}${vehicleText} đã tới khu vực. Vựa ${receiverName} vui lòng ra lấy hàng rau${orderText}. Cảm ơn!`;
   }
 
   private async buildGrocerySummaryTargets(supabaseService: any, date: string) {
