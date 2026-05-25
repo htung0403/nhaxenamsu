@@ -1946,7 +1946,6 @@ export class ZaloService {
         id,
         order_date,
         created_at,
-        tai_rank,
         driver_name,
         received_by,
         customer_id,
