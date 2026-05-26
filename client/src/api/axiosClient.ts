@@ -1,7 +1,19 @@
 import axios from 'axios';
+import type { AxiosResponse } from 'axios';
+
+interface ApiResponse<T = unknown> {
+  success: boolean;
+  data: T;
+  meta?: unknown;
+}
+
+type AxiosResponseWithMeta<T = unknown> = AxiosResponse<T> & { meta?: unknown };
+
+const isApiResponse = (value: unknown): value is ApiResponse =>
+  typeof value === 'object' && value !== null && 'success' in value && 'data' in value;
 
 const axiosClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
+  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3009/api',
   headers: {
     'Content-Type': 'application/json',
   },
@@ -28,13 +40,13 @@ axiosClient.interceptors.request.use(
 axiosClient.interceptors.response.use(
   (response) => {
     localStorage.removeItem('time_locked');
-    if (response.data && typeof response.data === 'object' && 'success' in response.data) {
+    if (isApiResponse(response.data)) {
       const apiResponse = response.data;
       return {
         ...response,
         data: apiResponse.data,
         meta: apiResponse.meta,
-      } as any;
+      } satisfies AxiosResponseWithMeta;
     }
     return response;
   },

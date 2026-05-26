@@ -31,7 +31,7 @@ import MobileFilterSheet from '../../components/shared/MobileFilterSheet';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { matchesSearch } from '../../lib/str-utils';
 import { getDeliveryAnchorDateString } from '../../lib/deliveryDayAnchor';
-import { isOldOrderForAgeRule, getDeliveryRemainingQty } from '../../lib/deliveryAgeRule';
+import { isOldOrderForAgeRule, getDeliveryRemainingQty, getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
 import type { DeliveryOrder, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
@@ -59,9 +59,33 @@ const getDisplayProductName = (order: DeliveryOrder) =>
     : order.product_name;
 
 const getReceiverDisplayName = (order: DeliveryOrder) => {
-  const orderObj = order.import_orders;
-  return orderObj?.customers?.name || orderObj?.receiver_name?.trim() || orderObj?.profiles?.full_name || '-';
+  const orderObj = order.import_orders || order.vegetable_orders;
+  if (!orderObj) return '-';
+
+  if (order.status === 'hang_o_sg' && orderObj.selected_alias) {
+    return orderObj.selected_alias;
+  }
+
+  return orderObj.customers?.name || orderObj.receiver_name?.trim() || orderObj.profiles?.full_name || '-';
 };
+
+const getSourcePaymentStatus = (order: DeliveryOrder) => {
+  const sourceOrder = Array.isArray(order.import_orders) ? order.import_orders[0] : order.import_orders
+    || (Array.isArray(order.vegetable_orders) ? order.vegetable_orders[0] : order.vegetable_orders);
+  return sourceOrder?.payment_status || 'unpaid';
+};
+
+const getDeliveryGroupKey = (order: DeliveryOrder) => {
+  const deliveryDate = order.delivery_date || 'N/A';
+  const category = order.order_category || 'standard';
+  const receiver = getReceiverDisplayName(order);
+  const product = (order.product_name || '').trim();
+  const paymentStatus = getSourcePaymentStatus(order);
+  return `${deliveryDate}|${category}|${receiver}|${product}|${paymentStatus}`;
+};
+
+const getDeliveryViewGroupKey = (order: DeliveryOrder) =>
+  order.status === 'hang_o_sg' ? `single:${order.id}` : getDeliveryGroupKey(order);
 
 const pickRelation = <T,>(relation: any): T | undefined => {
   if (Array.isArray(relation)) return relation[0];
@@ -171,19 +195,71 @@ const WarehousesPage: React.FC = () => {
   // Base orders (visibility filtered)
   // ---------------------------------------------------------------------------
 
+  const baseOrders = React.useMemo(
+    () => (ordersRaw || []).filter((o) => !isSoftDeletedSourceOrder(o)),
+    [ordersRaw]
+  );
+
   const orders = React.useMemo(() => {
-    let base = (ordersRaw || []).filter((o) => !isSoftDeletedSourceOrder(o));
-    if (user && !hasFullGoodsModuleAccess(user)) {
-      base = base.filter((o) =>
-        deliveryOrderVisibleToUser(
-          o,
-          { id: user.id, role: user.role, full_name: user.full_name },
-          vehicles || []
-        )
-      );
-    }
-    return base;
-  }, [ordersRaw, user, vehicles]);
+    const map = new Map<string, DeliveryOrder[]>();
+
+    baseOrders.forEach((order) => {
+      const key = getDeliveryViewGroupKey(order);
+      const list = map.get(key) || [];
+      list.push(order);
+      map.set(key, list);
+    });
+
+    const grouped = Array.from(map.values()).map((group) => {
+      const ordered = [...group].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+      const first = ordered[0];
+      const totalQuantity = ordered.reduce((sum, order) => sum + (Number(order.total_quantity) || 0), 0);
+      const mergedDeliveryVehicles = ordered.flatMap((order) => order.delivery_vehicles || []);
+      const mergedPaymentCollections = ordered.flatMap((order) => order.payment_collections || []);
+      const sourceIds = ordered.map((order) => order.id);
+      const allHangOsg = ordered.every((order) => order.status === 'hang_o_sg');
+      const hasDaGiao = ordered.some((order) => order.status === 'da_giao');
+      const allWarehouseConfirmed = ordered.every((order) => Boolean(order.warehouse_confirmed_at));
+
+      return {
+        ...first,
+        total_quantity: totalQuantity,
+        delivery_vehicles: mergedDeliveryVehicles,
+        payment_collections: mergedPaymentCollections,
+        source_order_ids: sourceIds,
+        source_orders: ordered,
+        status: allHangOsg ? 'hang_o_sg' : (hasDaGiao ? 'da_giao' : 'can_giao'),
+        warehouse_confirmed_at: allWarehouseConfirmed ? first.warehouse_confirmed_at : null,
+      } as DeliveryOrder;
+    });
+
+    if (!user || hasFullGoodsModuleAccess(user)) return grouped;
+
+    const actor = { id: user.id, role: user.role, full_name: user.full_name };
+    return grouped.filter((groupOrder) =>
+      Array.isArray(groupOrder.source_orders) &&
+      groupOrder.source_orders.some((sourceOrder) =>
+        deliveryOrderVisibleToUser(sourceOrder, actor, vehicles || [])
+      )
+    );
+  }, [baseOrders, user, vehicles]);
+
+  const groupToSourceIdsMap = React.useMemo(() => {
+    const map = new Map<string, string[]>();
+    orders.forEach((order) => {
+      map.set(order.id, order.source_order_ids && order.source_order_ids.length > 0 ? order.source_order_ids : [order.id]);
+    });
+    return map;
+  }, [orders]);
+
+  const expandGroupedIds = React.useCallback((ids: string[]) => {
+    const expanded = new Set<string>();
+    ids.forEach((id) => {
+      const sourceIds = groupToSourceIdsMap.get(id) || [id];
+      sourceIds.forEach((sourceId) => expanded.add(sourceId));
+    });
+    return Array.from(expanded);
+  }, [groupToSourceIdsMap]);
 
   // ---------------------------------------------------------------------------
   // Inventory orders: old + not yet warehouse confirmed
@@ -195,9 +271,11 @@ const WarehousesPage: React.FC = () => {
 
   const inventoryOrders = React.useMemo(() => {
     return orders.filter((o) => {
+      const remaining = getDeliveryRemainingQty(o);
       if (o.warehouse_confirmed_at) return false; // already confirmed → hide permanently
+      if (remaining <= 0) return false;
+      if (getEffectiveDeliveryStatus(o, remaining) === 'da_giao') return false;
       if (!isOldOrderForAgeRule(o, anchorStr)) return false; // only old orders
-      if (isDriverOrLoader && getDeliveryRemainingQty(o) <= 0) return false;
       return true;
     });
   }, [orders, anchorStr, isDriverOrLoader]);
@@ -374,7 +452,7 @@ const WarehousesPage: React.FC = () => {
 
   const handleConfirmWarehouse = async (orderIds: string[]) => {
     try {
-      await confirmWarehouseMutation.mutateAsync(orderIds);
+      await confirmWarehouseMutation.mutateAsync(expandGroupedIds(orderIds));
     } catch {
       // Error handled by mutation's onError
     }
