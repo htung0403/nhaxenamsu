@@ -83,10 +83,10 @@ export const zaloSummaryApi = {
   },
 
   sendVegetableArrivalNotice: async (payload: SendVegetableArrivalNoticePayload) => {
-    const response = await axiosClient.post<{ data: SendVegetableArrivalNoticeResponse }>(
+    const response = await axiosClient.post<SendVegetableArrivalNoticeResponse>(
       '/notifications/zalo/send-vegetable-arrival',
       payload,
     );
-    return response.data.data;
+    return response.data;
   },
 };
