@@ -56,6 +56,8 @@ type DeliveryOrderLike = DeliveryOrder & {
   created_at?: string | null;
 };
 
+type DeliveryVehicleLike = NonNullable<DeliveryOrderLike['delivery_vehicles']>[number];
+
 type ImportOrderLike = ImportOrder & {
   delivery_orders?: DeliveryOrderLike[];
 };
@@ -427,7 +429,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
       url: string | null | undefined,
       source: 'vehicle' | 'payment' | 'delivery',
       delivery: DeliveryOrderLike,
-      vehicleDelivery?: DeliveryOrderLike['delivery_vehicles'][number]
+      vehicleDelivery?: DeliveryVehicleLike
     ) => {
       if (!url || typeof url !== 'string' || !url.trim()) return;
       const plate = vehicleDelivery?.vehicles?.license_plate || delivery.delivery_vehicles?.[0]?.vehicles?.license_plate;
