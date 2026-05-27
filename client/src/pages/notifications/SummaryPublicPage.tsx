@@ -30,7 +30,24 @@ interface SummaryItem {
   taiRank?: number;
   senderName?: string;
   supplierName?: string;
+  importOrderCreatedAt?: string;
+  import_order_created_at?: string;
 }
+
+const getSummaryProductName = (item: SummaryItem) => {
+  const productName = item.productName || 'Hàng hóa';
+  const rawDate = item.importOrderCreatedAt || item.import_order_created_at;
+  if (!rawDate || /\(\d{2}\/\d{2}\)$/.test(productName.trim())) return productName;
+
+  const createdAt = new Date(rawDate);
+  if (Number.isNaN(createdAt.getTime())) return productName;
+
+  const shortDate = new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: '2-digit',
+  }).format(createdAt);
+  return `${productName} (${shortDate})`;
+};
 
 interface SummaryData {
   shopName?: string;
@@ -98,8 +115,9 @@ const SummaryPublicPage: React.FC = () => {
   const groupedItems: Record<string, SummaryItem[]> = {};
   if (type !== 'grocery') {
     data.items.forEach(item => {
-      if (!groupedItems[item.productName]) groupedItems[item.productName] = [];
-      groupedItems[item.productName].push(item);
+      const productName = getSummaryProductName(item);
+      if (!groupedItems[productName]) groupedItems[productName] = [];
+      groupedItems[productName].push(item);
     });
   }
 
@@ -143,7 +161,7 @@ const SummaryPublicPage: React.FC = () => {
               data.items.map((item, i) => (
                 <div key={i} style={styles.itemCard}>
                   <div style={styles.itemHeader}>
-                    <span style={styles.productName}>{item.productName}</span>
+                    <span style={styles.productName}>{getSummaryProductName(item)}</span>
                     <span style={styles.itemQty}>{formatNumber(item.quantity)} kiện</span>
                   </div>
                   <div style={styles.itemDetails}>

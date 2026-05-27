@@ -85,8 +85,23 @@ const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'v
   return vehicle.goods_categories.includes(category);
 };
 
-const getDisplayProductName = (order: DeliveryOrder) =>
-  order.product_name.includes(' - ') ? order.product_name.split(' - ').slice(1).join(' - ') : order.product_name;
+const getImportOrderShortDate = (order: DeliveryOrder) => {
+  const importOrder = Array.isArray(order.import_orders) ? order.import_orders[0] : order.import_orders;
+  if (!importOrder?.created_at) return null;
+
+  const createdAt = new Date(importOrder.created_at);
+  if (Number.isNaN(createdAt.getTime())) return null;
+
+  return format(createdAt, 'dd/MM');
+};
+
+const getDisplayProductName = (order: DeliveryOrder) => {
+  const productName = order.product_name.includes(' - ')
+    ? order.product_name.split(' - ').slice(1).join(' - ')
+    : order.product_name;
+  const createdDate = getImportOrderShortDate(order);
+  return createdDate ? `${productName} (${createdDate})` : productName;
+};
 
 const getReceiverDisplayName = (order: DeliveryOrder) => {
   const orderObj = order.import_orders || order.vegetable_orders;

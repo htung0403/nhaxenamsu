@@ -540,7 +540,7 @@ export class ZaloService {
           `
           *,
           import_orders (
-            id, receiver_phone, customer_id, customers:customers!import_orders_customer_id_fkey (id, phone, name), selected_alias
+            id, created_at, receiver_phone, customer_id, customers:customers!import_orders_customer_id_fkey (id, phone, name), selected_alias
           ),
           vegetable_orders (
             id, receiver_phone, customer_id, customers:customers!vegetable_orders_customer_id_fkey (id, phone, name), selected_alias
@@ -590,7 +590,7 @@ export class ZaloService {
             deliveryTime:
               dv.delivery_time || delivery.delivery_time || format(new Date(), 'HH:mm'),
             quantity: dv.assigned_quantity || 0,
-            productName: delivery.product_name || '-',
+            productName: this.formatGroceryProductNameWithImportDate(delivery),
             price: dv.unit_price || delivery.unit_price || 0,
             total: dv.expected_amount || 0,
             deliveryDate:
@@ -750,7 +750,7 @@ export class ZaloService {
             delivery_orders (
               id, product_name, delivery_date, unit_price, total_quantity, status,
               import_orders (
-                receiver_phone, selected_alias, customers:customers!import_orders_customer_id_fkey (id, phone, name)
+                created_at, receiver_phone, selected_alias, customers:customers!import_orders_customer_id_fkey (id, phone, name)
               ),
               vegetable_orders (
                 receiver_phone, selected_alias, customers:customers!vegetable_orders_customer_id_fkey (id, phone, name)
@@ -765,7 +765,7 @@ export class ZaloService {
           .select(`
             id, product_name, delivery_date, unit_price, total_quantity, status,
             import_orders (
-              receiver_phone, selected_alias, customers:customers!import_orders_customer_id_fkey (id, phone, name)
+              created_at, receiver_phone, selected_alias, customers:customers!import_orders_customer_id_fkey (id, phone, name)
             ),
             vegetable_orders (
               receiver_phone, selected_alias, customers:customers!vegetable_orders_customer_id_fkey (id, phone, name)
@@ -879,7 +879,7 @@ export class ZaloService {
           licensePlate: dv.vehicles?.license_plate || '-',
           staffName: dv.profiles?.full_name || 'NV Giao hàng',
           quantity: dv.assigned_quantity || 0,
-          productName: order.product_name || '-',
+          productName: this.formatGroceryProductNameWithImportDate(order),
           price: dv.unit_price || order.unit_price || 0,
           total: dv.expected_amount || 0,
         });
@@ -1660,6 +1660,22 @@ export class ZaloService {
     const product = String(order?.product_name || '').trim();
     const paymentStatus = this.getGroceryGroupPaymentStatus(order);
     return `${deliveryDate}|${category}|${receiver}|${product}|${paymentStatus}`;
+  }
+
+  private formatImportOrderShortDate(order: any): string | null {
+    const importOrder = this.pickFirstRecord(order?.import_orders);
+    if (!importOrder?.created_at) return null;
+
+    const createdAt = new Date(importOrder.created_at);
+    if (Number.isNaN(createdAt.getTime())) return null;
+
+    return format(createdAt, 'dd/MM');
+  }
+
+  private formatGroceryProductNameWithImportDate(order: any): string {
+    const productName = String(order?.product_name || '-').trim() || '-';
+    const createdDate = this.formatImportOrderShortDate(order);
+    return createdDate ? `${productName} (${createdDate})` : productName;
   }
 
   private async resolveSummaryRecipient(
@@ -2741,6 +2757,7 @@ export class ZaloService {
           total_quantity,
           import_orders (
             customer_id,
+            created_at,
             receiver_name,
             selected_alias,
             receiver_phone,
@@ -2879,7 +2896,7 @@ export class ZaloService {
         licensePlate: dv.vehicles?.license_plate || '-',
         staffName: dv.profiles?.full_name || 'NV Giao hàng',
         quantity,
-        productName: order?.product_name || '-',
+        productName: this.formatGroceryProductNameWithImportDate(order),
         price: unitPrice,
         total,
       };

@@ -325,6 +325,7 @@ export interface DeliveryOrder {
   delivery_vehicles?: DeliveryVehicle[];
     import_orders?: {
       order_code: string;
+      created_at?: string;
       sender_name: string;
       sender_id?: string | null;
       receiver_name: string;
