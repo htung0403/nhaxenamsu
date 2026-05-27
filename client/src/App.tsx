@@ -62,6 +62,7 @@ import VegetableSummaryPublicPage from './pages/notifications/VegetableSummaryPu
 import ZaloGrocerySummaryManagePage from './pages/notifications/ZaloGrocerySummaryManagePage';
 import ZaloSupplierSummaryManagePage from './pages/notifications/ZaloSupplierSummaryManagePage';
 import ZaloSenderSummaryManagePage from './pages/notifications/ZaloSenderSummaryManagePage';
+import ZaloVegetableArrivalManagePage from './pages/notifications/ZaloVegetableArrivalManagePage';
 import React from 'react';
 
 const isRateLimitError = (error: unknown): boolean => {
@@ -144,6 +145,7 @@ function AppRoutes() {
         <Route path="/hang-hoa/kho" element={<WarehousesPage />} />
         <Route path="/hang-hoa/cai-dat" element={<ProductSettingsPage />} />
         <Route path="/hang-hoa/cai-dat-rau" element={<VegetableProductSettingsPage />} />
+        <Route path="/hang-hoa/bao-tai-rau" element={<ZaloVegetableArrivalManagePage />} />
 
         <Route path="/hanh-chinh-nhan-su" element={<ModulePage />} />
         <Route path="/hanh-chinh-nhan-su/nhan-su" element={<EmployeesPage />} />

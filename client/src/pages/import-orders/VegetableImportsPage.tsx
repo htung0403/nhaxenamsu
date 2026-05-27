@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, CheckCircle2, Send } from 'lucide-react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { useImportOrders, useDeleteImportOrder, useConfirmImportOrderByAdmin, useSendVegetableArrivalNotice } from '../../hooks/queries/useImportOrders';
+import { useImportOrders, useDeleteImportOrder, useConfirmImportOrderByAdmin } from '../../hooks/queries/useImportOrders';
 import type { ImportOrder, ImportOrderFilters, OrderStatus } from '../../types';
 import StatusBadge from '../../components/shared/StatusBadge';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
@@ -44,33 +44,10 @@ const formatCurrency = (value?: number | null) => {
 };
 
 const getSupplierName = (order: ImportOrder) => order.customers?.name || order.sender_name || 'Chưa rõ chủ vựa';
-const getVegetableReceiverName = (order: ImportOrder) =>
-  order.customers?.name || order.selected_alias || order.receiver_name || 'Chưa rõ vựa';
-const getVegetableReceiverPhone = (order: ImportOrder) => order.customers?.phone || order.receiver_phone || null;
 
 type ImportOrderWithRelations = ImportOrder & {
   delivery_orders?: DeliveryOrder[];
   profiles?: { full_name?: string; role?: string };
-};
-
-type ArrivalNoticeTarget = {
-  key: string;
-  name: string;
-  phone: string | null;
-  orderCount: number;
-};
-
-type ArrivalNoticeOption = {
-  rank: number;
-  orderCount: number;
-  vehiclePlates: string;
-  driverContacts: string;
-  inChargeContacts: string;
-};
-
-const formatContact = (name?: string | null, phone?: string | null) => {
-  if (!name) return '';
-  return phone ? `${name} (${phone})` : name;
 };
 
 const formatDateDMY = (dateStr?: string) => {
@@ -110,41 +87,6 @@ const getOrderDriverName = (order: ImportOrderWithRelations) => {
   if (order.driver_name) return order.driver_name;
   if (order.profiles?.role === 'driver') return order.profiles.full_name || '';
   return '';
-};
-
-const getOrderDriverContacts = (order: ImportOrderWithRelations) => {
-  const contacts = new Set<string>();
-
-  order.delivery_orders?.forEach((deliveryOrder: DeliveryOrder) => {
-    deliveryOrder.delivery_vehicles?.forEach((deliveryVehicle: DeliveryVehicle) => {
-      const directDriver = formatContact(deliveryVehicle.profiles?.full_name, deliveryVehicle.profiles?.phone);
-      if (directDriver) contacts.add(directDriver);
-
-      const vehicleDriver = formatContact(
-        deliveryVehicle.vehicles?.profiles?.full_name,
-        deliveryVehicle.vehicles?.profiles?.phone,
-      );
-      if (vehicleDriver) contacts.add(vehicleDriver);
-    });
-  });
-
-  return Array.from(contacts).join('; ');
-};
-
-const getOrderInChargeContacts = (order: ImportOrderWithRelations) => {
-  const contacts = new Set<string>();
-
-  order.delivery_orders?.forEach((deliveryOrder: DeliveryOrder) => {
-    deliveryOrder.delivery_vehicles?.forEach((deliveryVehicle: DeliveryVehicle) => {
-      const contact = formatContact(
-        deliveryVehicle.vehicles?.responsible_profile?.full_name,
-        deliveryVehicle.vehicles?.responsible_profile?.phone,
-      );
-      if (contact) contacts.add(contact);
-    });
-  });
-
-  return Array.from(contacts).join('; ');
 };
 
 const getOrderReceiverName = (order: ImportOrderWithRelations) => {
@@ -253,11 +195,9 @@ const VegetableImportsPage: React.FC = () => {
   }, [rankSourceOrders, user, vehicles]);
   const deleteMutation = useDeleteImportOrder();
   const confirmMutation = useConfirmImportOrderByAdmin();
-  const sendVegetableArrivalMutation = useSendVegetableArrivalNotice();
   const assignVehicleMutation = useAssignVehicle();
   const [confirmingOrder, setConfirmingOrder] = useState<ImportOrder | null>(null);
   const [selectedConfirmVehicleId, setSelectedConfirmVehicleId] = useState('');
-  const [pendingArrivalNotice, setPendingArrivalNotice] = useState<ArrivalNoticeOption | null>(null);
 
   const vegetableDeliveryVehicles = useMemo(() => {
     const supportedVehicles = (vehicles || []).filter((vehicle) => vehicleSupportsVegetable(vehicle) && vehicle.driver_id);
@@ -352,76 +292,6 @@ const VegetableImportsPage: React.FC = () => {
     },
     [dailyTaiRankMap]
   );
-
-  const taiArrivalOptions = useMemo<ArrivalNoticeOption[]>(() => {
-    const counts = new Map<number, number>();
-    const platesByRank = new Map<number, Set<string>>();
-    const driversByRank = new Map<number, Set<string>>();
-    const inChargesByRank = new Map<number, Set<string>>();
-    allOrders.forEach((order) => {
-      const rank = getTaiRank(order);
-      if (rank == null) return;
-      counts.set(rank, (counts.get(rank) || 0) + 1);
-
-      const vehiclePlates = getOrderVehicles(order);
-      if (vehiclePlates) {
-        const current = platesByRank.get(rank) || new Set<string>();
-        vehiclePlates.split(', ').forEach((plate) => current.add(plate));
-        platesByRank.set(rank, current);
-      }
-
-      const driverContacts = getOrderDriverContacts(order);
-      if (driverContacts) {
-        const current = driversByRank.get(rank) || new Set<string>();
-        driverContacts.split('; ').forEach((contact) => current.add(contact));
-        driversByRank.set(rank, current);
-      }
-
-      const inChargeContacts = getOrderInChargeContacts(order);
-      if (inChargeContacts) {
-        const current = inChargesByRank.get(rank) || new Set<string>();
-        inChargeContacts.split('; ').forEach((contact) => current.add(contact));
-        inChargesByRank.set(rank, current);
-      }
-    });
-
-    return Array.from(counts.entries())
-      .sort(([rankA], [rankB]) => rankA - rankB)
-      .map(([rank, orderCount]) => ({
-        rank,
-        orderCount,
-        vehiclePlates: Array.from(platesByRank.get(rank) || []).join(', '),
-        driverContacts: Array.from(driversByRank.get(rank) || []).join('; '),
-        inChargeContacts: Array.from(inChargesByRank.get(rank) || []).join('; '),
-      }));
-  }, [allOrders, getTaiRank]);
-
-  const arrivalNoticeTargets = useMemo<ArrivalNoticeTarget[]>(() => {
-    if (!pendingArrivalNotice) return [];
-
-    const targets = new Map<string, ArrivalNoticeTarget>();
-    allOrders.forEach((order) => {
-      if (getTaiRank(order) !== pendingArrivalNotice.rank) return;
-
-      const phone = getVegetableReceiverPhone(order);
-      const key = phone || order.customer_id || order.id;
-      const existing = targets.get(key);
-      if (existing) {
-        existing.orderCount += 1;
-        if (!existing.phone && phone) existing.phone = phone;
-        return;
-      }
-
-      targets.set(key, {
-        key,
-        name: getVegetableReceiverName(order),
-        phone,
-        orderCount: 1,
-      });
-    });
-
-    return Array.from(targets.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [allOrders, getTaiRank, pendingArrivalNotice]);
 
   const { vuaOptions, taiOptions, nguoiNhapOptions } = useMemo(() => {
     if (!allOrders) return { vuaOptions: [], taiOptions: [], nguoiNhapOptions: [] };
@@ -575,22 +445,6 @@ const VegetableImportsPage: React.FC = () => {
     setSelectedConfirmVehicleId('');
   };
 
-  const handleSendVegetableArrivalNotice = async (option: ArrivalNoticeOption) => {
-    if (!filterDate) {
-      toast.error('Vui lòng chọn ngày trước khi gửi Zalo');
-      return;
-    }
-
-    setPendingArrivalNotice(option);
-  };
-
-  const confirmSendVegetableArrivalNotice = async () => {
-    if (!filterDate || !pendingArrivalNotice) return;
-
-    await sendVegetableArrivalMutation.mutateAsync({ date: filterDate, taiRank: pendingArrivalNotice.rank });
-    setPendingArrivalNotice(null);
-  };
-
   const renderConfirmButton = (order: ImportOrder, size: number) => {
     if (!isCustomerSubmittedOrder(order)) return null;
 
@@ -640,21 +494,14 @@ const VegetableImportsPage: React.FC = () => {
           backPath="/hang-hoa"
           actions={
             <div className="flex items-center gap-2 flex-wrap justify-end">
-              {user?.role === 'admin' && taiArrivalOptions.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                  {taiArrivalOptions.map((option) => (
-                    <button
-                      key={option.rank}
-                      onClick={() => handleSendVegetableArrivalNotice(option)}
-                      disabled={sendVegetableArrivalMutation.isPending}
-                      className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 text-[12px] font-bold hover:bg-emerald-500/15 transition-all disabled:opacity-50"
-                      title={`Gửi Zalo báo Tài ${option.rank}${option.vehiclePlates ? ` - xe ${option.vehiclePlates}` : ''} đã tới khu vực`}
-                    >
-                      <Send size={15} />
-                      <span>Tài {option.rank}</span>
-                    </button>
-                  ))}
-                </div>
+              {user?.role === 'admin' && (
+                <button
+                  onClick={() => navigate('/hang-hoa/bao-tai-rau')}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 text-[13px] font-bold hover:bg-emerald-500/15 transition-all"
+                >
+                  <Send size={16} />
+                  <span className="hidden sm:inline">Báo tài</span>
+                </button>
               )}
               <button
                 onClick={() => navigate('/hang-hoa/in-phieu-rau')}
@@ -709,23 +556,17 @@ const VegetableImportsPage: React.FC = () => {
             >
                <Printer size={18} />
             </button>
-          </div>
 
-          {user?.role === 'admin' && taiArrivalOptions.length > 0 && (
-            <div className="md:hidden flex gap-2 overflow-x-auto pb-1">
-              {taiArrivalOptions.map((option) => (
-                <button
-                  key={option.rank}
-                  onClick={() => handleSendVegetableArrivalNotice(option)}
-                  disabled={sendVegetableArrivalMutation.isPending}
-                  className="flex items-center gap-2 px-3 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 text-[12px] font-bold whitespace-nowrap disabled:opacity-50"
-                >
-                  <Send size={15} />
-                  Gửi Zalo Tài {option.rank}
-                </button>
-              ))}
-            </div>
-          )}
+            {user?.role === 'admin' && (
+              <button
+                onClick={() => navigate('/hang-hoa/bao-tai-rau')}
+                className="md:hidden flex items-center justify-center w-[38px] shrink-0 border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 rounded-xl transition-all hover:bg-emerald-500/20"
+                title="Báo tài"
+              >
+                <Send size={18} />
+              </button>
+            )}
+          </div>
 
           <div className="hidden xl:flex gap-2 items-center shrink-0">
             <div className="w-[180px]">
@@ -1167,66 +1008,6 @@ const VegetableImportsPage: React.FC = () => {
           setConfirmingOrder(null);
           setSelectedConfirmVehicleId('');
         }}
-      />
-
-      <ConfirmDialog
-        isOpen={!!pendingArrivalNotice}
-        title={`Gửi Zalo Tài ${pendingArrivalNotice?.rank || ''}`}
-        message={
-          <span className="block space-y-3">
-            <span className="block">
-              Tin nhắn sẽ gửi cho {arrivalNoticeTargets.length} vựa nhận rau ngày {formatDateDMY(filterDate)}.
-            </span>
-            {pendingArrivalNotice?.vehiclePlates && (
-              <span className="block rounded-xl bg-blue-500/10 px-3 py-2 text-[12px] font-bold text-blue-700">
-                Biển số xe: {pendingArrivalNotice.vehiclePlates}
-              </span>
-            )}
-            {(pendingArrivalNotice?.driverContacts || pendingArrivalNotice?.inChargeContacts) && (
-              <span className="block rounded-xl bg-muted/30 px-3 py-2 text-[12px] text-foreground space-y-1">
-                {pendingArrivalNotice?.driverContacts && (
-                  <span className="block"><strong>Tài xế:</strong> {pendingArrivalNotice.driverContacts}</span>
-                )}
-                {pendingArrivalNotice?.inChargeContacts && (
-                  <span className="block"><strong>Phụ trách xe:</strong> {pendingArrivalNotice.inChargeContacts}</span>
-                )}
-              </span>
-            )}
-            <span className="block rounded-xl border border-border bg-muted/20 overflow-hidden">
-              <span className="block max-h-64 overflow-y-auto divide-y divide-border">
-                {arrivalNoticeTargets.map((target) => (
-                  <span key={target.key} className="flex items-start justify-between gap-3 px-3 py-2 text-left">
-                    <span className="min-w-0">
-                      <span className="block text-[13px] font-bold text-foreground truncate">{target.name}</span>
-                      <span className={clsx('block text-[11px] font-medium', target.phone ? 'text-muted-foreground' : 'text-red-500')}>
-                        {target.phone || 'Thiếu số điện thoại'}
-                      </span>
-                    </span>
-                    <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-bold text-primary">
-                      {target.orderCount} đơn
-                    </span>
-                  </span>
-                ))}
-              </span>
-            </span>
-            {arrivalNoticeTargets.some((target) => !target.phone) && (
-              <span className="block text-[12px] font-semibold text-amber-600">
-                Các vựa thiếu số điện thoại sẽ được bỏ qua khi gửi.
-              </span>
-            )}
-            <span className="block rounded-xl bg-emerald-500/10 px-3 py-2 text-[12px] font-medium text-emerald-700">
-              Nội dung: Tài {pendingArrivalNotice?.rank}{pendingArrivalNotice?.vehiclePlates ? ` xe ${pendingArrivalNotice.vehiclePlates}` : ''} Đã tới chợ.
-              {pendingArrivalNotice?.driverContacts ? ` Quý khách cần hàng gấp liên hệ số: Tài xế: ${pendingArrivalNotice.driverContacts}.` : ''}
-              {pendingArrivalNotice?.inChargeContacts ? ` Người phụ trách xe: ${pendingArrivalNotice.inChargeContacts}.` : ''}
-            </span>
-          </span>
-        }
-        confirmLabel="Gửi Zalo"
-        cancelLabel="Để sau"
-        variant="primary"
-        isLoading={sendVegetableArrivalMutation.isPending}
-        onConfirm={confirmSendVegetableArrivalNotice}
-        onCancel={() => setPendingArrivalNotice(null)}
       />
 
       {viewingImages.length > 0 && createPortal(
