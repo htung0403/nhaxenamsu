@@ -335,7 +335,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           dv.delivery_date || currentOrder.delivery_date,
           dv.delivery_time || currentOrder.delivery_time,
           currentOrder.product_name,
-          currentOrder.driver_delivered_at,
+          null,
           currentOrder.created_at
         ));
       });
@@ -426,11 +426,15 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
     const pushImportDeliveryMeta = (
       url: string | null | undefined,
       source: 'vehicle' | 'payment' | 'delivery',
-      delivery: DeliveryOrderLike
+      delivery: DeliveryOrderLike,
+      vehicleDelivery?: DeliveryOrderLike['delivery_vehicles'][number]
     ) => {
       if (!url || typeof url !== 'string' || !url.trim()) return;
-      const plate = delivery.delivery_vehicles?.[0]?.vehicles?.license_plate;
+      const plate = vehicleDelivery?.vehicles?.license_plate || delivery.delivery_vehicles?.[0]?.vehicles?.license_plate;
       const vehicleLabel = plate ? `Xe: ${plate}` : undefined;
+      const deliveryDate = vehicleDelivery?.delivery_date || delivery.delivery_date;
+      const deliveryTime = vehicleDelivery?.delivery_time || delivery.delivery_time;
+      const driverDeliveredAt = source === 'vehicle' ? null : delivery.driver_delivered_at;
       
       if (url.includes(',')) {
         url.split(',').forEach((u: string) => {
@@ -441,10 +445,10 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
               url: t, 
               source, 
               vehicleLabel,
-              deliveryDate: delivery.delivery_date,
-              deliveryTime: delivery.delivery_time,
+              deliveryDate,
+              deliveryTime,
               productName: delivery.product_name,
-              driverDeliveredAt: delivery.driver_delivered_at,
+              driverDeliveredAt,
               createdAt: delivery.created_at
             });
           }
@@ -455,10 +459,10 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           url, 
           source, 
           vehicleLabel,
-          deliveryDate: delivery.delivery_date,
-          deliveryTime: delivery.delivery_time,
+          deliveryDate,
+          deliveryTime,
           productName: delivery.product_name,
-          driverDeliveredAt: delivery.driver_delivered_at,
+          driverDeliveredAt,
           createdAt: delivery.created_at
         });
       }
@@ -471,7 +475,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
       }
       // Also collect from vehicles and payments if they are joined
       (doItem.delivery_vehicles || []).forEach((dv) => {
-        (dv.image_urls || []).forEach((u: string) => pushImportDeliveryMeta(u, 'vehicle', doItem));
+        (dv.image_urls || []).forEach((u: string) => pushImportDeliveryMeta(u, 'vehicle', doItem, dv));
       });
       (doItem.payment_collections || []).forEach((pc) => {
         if (pc.image_url) pushImportDeliveryMeta(pc.image_url, 'payment', doItem);
