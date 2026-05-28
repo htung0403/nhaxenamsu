@@ -47,6 +47,7 @@ export interface SendZaloSummaryResponse {
 export interface SendVegetableArrivalNoticePayload {
   date: string;
   taiRank: number;
+  targetIds?: string[];
 }
 
 export interface VegetableArrivalNoticeItem {
@@ -69,6 +70,25 @@ export interface SendVegetableArrivalNoticeResponse {
   items: VegetableArrivalNoticeItem[];
 }
 
+export interface VegetableArrivalStatusItem {
+  targetId: string;
+  targetName: string;
+  targetPhone: string | null;
+  orderCount: number;
+  status: ZaloSummaryStatus;
+  lastError: string | null;
+  messageId: string | null;
+  lastSentAt: string | null;
+  triggeredBy: 'scheduler' | 'manual' | null;
+}
+
+export interface VegetableArrivalStatusResponse {
+  date: string;
+  taiRank: number;
+  summary: ZaloSummaryStatusResponse['summary'];
+  items: VegetableArrivalStatusItem[];
+}
+
 export const zaloSummaryApi = {
   getSummaryStatus: async (type: ZaloSummaryType, date: string) => {
     const response = await axiosClient.get<ZaloSummaryStatusResponse>('/notifications/zalo/summary-status', {
@@ -87,6 +107,13 @@ export const zaloSummaryApi = {
       '/notifications/zalo/send-vegetable-arrival',
       payload,
     );
+    return response.data;
+  },
+
+  getVegetableArrivalStatus: async (date: string, taiRank: number) => {
+    const response = await axiosClient.get<VegetableArrivalStatusResponse>('/notifications/zalo/vegetable-arrival-status', {
+      params: { date, taiRank },
+    });
     return response.data;
   },
 };

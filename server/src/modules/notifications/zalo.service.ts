@@ -52,7 +52,7 @@ type SummaryDispatchStatus = 'success' | 'failed' | 'skipped';
 type SummaryDispatchTrigger = 'scheduler' | 'manual';
 
 type SummaryDispatchLogPayload = {
-  summaryType: SummaryDispatchType;
+  summaryType: SummaryDispatchType | 'vegetable_arrival';
   summaryDate: string;
   targetCustomerId: string;
   targetName: string;
@@ -86,6 +86,13 @@ type SummaryStatusListItem = {
 
 type VegetableArrivalNoticeStatus = 'success' | 'failed' | 'skipped';
 
+type VegetableArrivalNoticeTarget = {
+  id: string;
+  name: string;
+  phone: string | null;
+  orders: any[];
+};
+
 type VegetableArrivalNoticeItem = {
   targetId: string;
   targetName: string;
@@ -104,6 +111,18 @@ type VegetableArrivalNoticeResult = {
   failed: number;
   skipped: number;
   items: VegetableArrivalNoticeItem[];
+};
+
+type VegetableArrivalNoticeStatusItem = {
+  targetId: string;
+  targetName: string;
+  targetPhone: string | null;
+  orderCount: number;
+  status: 'pending' | VegetableArrivalNoticeStatus;
+  lastError: string | null;
+  messageId: string | null;
+  lastSentAt: string | null;
+  triggeredBy: SummaryDispatchTrigger | null;
 };
 
 export class ZaloService {
@@ -1953,9 +1972,142 @@ export class ZaloService {
     supabaseService: any,
     logger: any,
     normalizePhoneForAuth: (phone: string) => string | null,
-    params: { date: string; taiRank: number },
+    params: { date: string; taiRank: number; targetIds?: string[] },
   ): Promise<VegetableArrivalNoticeResult> {
-    const { date, taiRank } = params;
+    const { date, taiRank, targetIds } = params;
+    const targets = await this.buildVegetableArrivalTargets(supabaseService, date, taiRank);
+    const targetIdSet = targetIds && targetIds.length > 0 ? new Set(targetIds.map(String)) : null;
+    const selectedTargets = targetIdSet ? targets.filter((target) => targetIdSet.has(String(target.id))) : targets;
+
+    const items: VegetableArrivalNoticeItem[] = [];
+    for (const target of selectedTargets) {
+      if (!target.phone) {
+        items.push({
+          targetId: target.id,
+          targetName: target.name,
+          targetPhone: null,
+          orderCount: target.orders.length,
+          status: 'skipped',
+          error: 'Thiếu số điện thoại',
+        });
+        await this.upsertVegetableArrivalDispatchLog(supabaseService, date, taiRank, target, 'skipped', 'Thiếu số điện thoại', null);
+        continue;
+      }
+
+      const normalizedPhone = this.normalizePhoneSafe(normalizePhoneForAuth, target.phone);
+      if (!normalizedPhone) {
+        items.push({
+          targetId: target.id,
+          targetName: target.name,
+          targetPhone: target.phone,
+          orderCount: target.orders.length,
+          status: 'failed',
+          error: 'Số điện thoại không hợp lệ',
+        });
+        await this.upsertVegetableArrivalDispatchLog(supabaseService, date, taiRank, target, 'failed', 'Số điện thoại không hợp lệ', null);
+        continue;
+      }
+
+      const vehiclePlates = this.getVegetableArrivalVehiclePlates(target.orders);
+      const driverContacts = this.getVegetableArrivalDriverContacts(target.orders);
+      const inChargeContacts = this.getVegetableArrivalInChargeContacts(target.orders);
+      const caption = this.buildVegetableArrivalCaption(
+        taiRank,
+        vehiclePlates,
+        driverContacts,
+        inChargeContacts,
+        target.name,
+        target.orders.length,
+      );
+      const result = await this.sendImageMessage({
+        recipientPhone: normalizedPhone,
+        imageUrls: [],
+        caption,
+      });
+
+      const status = result.success ? 'success' : 'failed';
+      const errorMessage = result.success ? null : result.error || 'Gửi thất bại';
+      items.push({
+        targetId: target.id,
+        targetName: target.name,
+        targetPhone: normalizedPhone,
+        orderCount: target.orders.length,
+        status,
+        error: errorMessage,
+        messageId: result.messageId || null,
+      });
+      await this.upsertVegetableArrivalDispatchLog(supabaseService, date, taiRank, target, status, errorMessage, result.messageId || null);
+    }
+
+    const summary = {
+      date,
+      taiRank,
+      totalTargets: items.length,
+      sent: items.filter((item) => item.status === 'success').length,
+      failed: items.filter((item) => item.status === 'failed').length,
+      skipped: items.filter((item) => item.status === 'skipped').length,
+      items,
+    };
+
+    logger.info(
+      `[ZaloService] Vegetable arrival notices sent for ${date} tài ${taiRank}: ${summary.sent}/${summary.totalTargets}`,
+    );
+
+    return summary;
+  }
+
+  async getVegetableArrivalDispatchStatusList(
+    supabaseService: any,
+    date: string,
+    taiRank: number,
+  ): Promise<VegetableArrivalNoticeStatusItem[]> {
+    const targets = await this.buildVegetableArrivalTargets(supabaseService, date, taiRank);
+    if (targets.length === 0) return [];
+
+    const targetIds = targets.map((target) => target.id).filter((id) => /^[0-9a-f-]{36}$/i.test(id));
+    const logMap = new Map<string, any>();
+
+    if (targetIds.length > 0) {
+      const { data: logs, error } = await supabaseService
+        .from('zalo_summary_dispatch_logs')
+        .select(`
+          target_customer_id,
+          status,
+          error_message,
+          message_id,
+          triggered_by,
+          sent_at
+        `)
+        .eq('summary_type', 'vegetable_arrival')
+        .eq('summary_date', date)
+        .in('target_customer_id', targetIds);
+
+      if (!error && Array.isArray(logs)) {
+        logs.forEach((log: any) => logMap.set(String(log.target_customer_id), log));
+      }
+    }
+
+    return targets.map((target) => {
+      const log = logMap.get(target.id);
+      return {
+        targetId: target.id,
+        targetName: target.name,
+        targetPhone: target.phone,
+        orderCount: target.orders.length,
+        status: log?.status || 'pending',
+        lastError: log?.error_message || null,
+        messageId: log?.message_id || null,
+        lastSentAt: log?.sent_at || null,
+        triggeredBy: log?.triggered_by || null,
+      };
+    });
+  }
+
+  private async buildVegetableArrivalTargets(
+    supabaseService: any,
+    date: string,
+    taiRank: number,
+  ): Promise<VegetableArrivalNoticeTarget[]> {
     const { data: orders, error } = await supabaseService
       .from('vegetable_orders')
       .select(`
@@ -1987,7 +2139,7 @@ export class ZaloService {
 
     const rankedOrders = this.assignVegetableTaiRanks(orders || []);
     const targetOrders = rankedOrders.filter((order: any) => Number(order.tai_rank) === taiRank);
-    const targets = new Map<string, { id: string; name: string; phone: string | null; orders: any[] }>();
+    const targets = new Map<string, VegetableArrivalNoticeTarget>();
 
     targetOrders.forEach((order: any) => {
       const receiver = Array.isArray(order.customers) ? order.customers[0] : order.customers;
@@ -2011,78 +2163,33 @@ export class ZaloService {
       });
     });
 
-    const items: VegetableArrivalNoticeItem[] = [];
-    for (const target of targets.values()) {
-      if (!target.phone) {
-        items.push({
-          targetId: target.id,
-          targetName: target.name,
-          targetPhone: null,
-          orderCount: target.orders.length,
-          status: 'skipped',
-          error: 'Thiếu số điện thoại',
-        });
-        continue;
-      }
-
-      const normalizedPhone = this.normalizePhoneSafe(normalizePhoneForAuth, target.phone);
-      if (!normalizedPhone) {
-        items.push({
-          targetId: target.id,
-          targetName: target.name,
-          targetPhone: target.phone,
-          orderCount: target.orders.length,
-          status: 'failed',
-          error: 'Số điện thoại không hợp lệ',
-        });
-        continue;
-      }
-
-      const vehiclePlates = this.getVegetableArrivalVehiclePlates(target.orders);
-      const driverContacts = this.getVegetableArrivalDriverContacts(target.orders);
-      const inChargeContacts = this.getVegetableArrivalInChargeContacts(target.orders);
-      const caption = this.buildVegetableArrivalCaption(
-        taiRank,
-        vehiclePlates,
-        driverContacts,
-        inChargeContacts,
-        target.name,
-        target.orders.length,
-      );
-      const result = await this.sendImageMessage({
-        recipientPhone: normalizedPhone,
-        imageUrls: [],
-        caption,
-      });
-
-      items.push({
-        targetId: target.id,
-        targetName: target.name,
-        targetPhone: normalizedPhone,
-        orderCount: target.orders.length,
-        status: result.success ? 'success' : 'failed',
-        error: result.success ? null : result.error || 'Gửi thất bại',
-        messageId: result.messageId || null,
-      });
-    }
-
-    const summary = {
-      date,
-      taiRank,
-      totalTargets: items.length,
-      sent: items.filter((item) => item.status === 'success').length,
-      failed: items.filter((item) => item.status === 'failed').length,
-      skipped: items.filter((item) => item.status === 'skipped').length,
-      items,
-    };
-
-    logger.info(
-      `[ZaloService] Vegetable arrival notices sent for ${date} tài ${taiRank}: ${summary.sent}/${summary.totalTargets}`,
-    );
-
-    return summary;
+    return Array.from(targets.values()).sort((a, b) => a.name.localeCompare(b.name, 'vi'));
   }
 
+  private async upsertVegetableArrivalDispatchLog(
+    supabaseService: any,
+    date: string,
+    taiRank: number,
+    target: VegetableArrivalNoticeTarget,
+    status: VegetableArrivalNoticeStatus,
+    errorMessage: string | null,
+    messageId: string | null,
+  ): Promise<void> {
+    if (!/^[0-9a-f-]{36}$/i.test(target.id)) return;
+
+    await this.upsertSummaryDispatchLog(supabaseService, {
+      summaryType: 'vegetable_arrival',
+      summaryDate: date,
+      targetCustomerId: target.id,
+      targetName: target.name,
+      targetPhone: target.phone,
+      publicLink: '',
+      status,
+      errorMessage,
+      messageId,
+      triggeredBy: 'manual',
+    });
+  }
   private assignVegetableTaiRanks(orders: any[]): any[] {
     const rankedOrders = orders.map((order) => ({ ...order }));
     const sorted = [...rankedOrders].sort((a, b) => {
@@ -3154,3 +3261,4 @@ export class ZaloService {
 }
 
 export const zaloService = new ZaloService();
+

@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { RefreshCw, Send } from 'lucide-react';
+import toast from 'react-hot-toast';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import EmptyState from '../../components/shared/EmptyState';
 import ErrorState from '../../components/shared/ErrorState';
@@ -8,6 +10,7 @@ import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import PageHeader from '../../components/shared/PageHeader';
 import { DatePicker } from '../../components/shared/DatePicker';
 import { useImportOrders, useSendVegetableArrivalNotice } from '../../hooks/queries/useImportOrders';
+import { zaloSummaryApi } from '../../api/zaloSummaryApi';
 import type { DeliveryOrder, DeliveryVehicle, ImportOrder, ImportOrderFilters } from '../../types';
 
 const formatDateDMY = (dateStr?: string) => {
@@ -20,6 +23,32 @@ const formatDateDMY = (dateStr?: string) => {
 const formatContact = (name?: string | null, phone?: string | null) => {
   if (!name) return '';
   return phone ? `${name} (${phone})` : name;
+};
+
+const statusClassMap: Record<string, string> = {
+  success: 'bg-emerald-100 text-emerald-700 border-emerald-200',
+  failed: 'bg-red-100 text-red-700 border-red-200',
+  skipped: 'bg-amber-100 text-amber-700 border-amber-200',
+  pending: 'bg-slate-100 text-slate-700 border-slate-200',
+};
+
+const statusLabelMap: Record<string, string> = {
+  success: 'Đã gửi',
+  failed: 'Thất bại',
+  skipped: 'Bỏ qua',
+  pending: 'Chưa gửi',
+};
+
+const triggerLabelMap: Record<string, string> = {
+  scheduler: 'Tự động',
+  manual: 'Thủ công',
+};
+
+const formatDateTime = (value: string | null): string => {
+  if (!value) return '-';
+  const time = new Date(value);
+  if (Number.isNaN(time.getTime())) return '-';
+  return format(time, 'dd/MM/yyyy HH:mm:ss');
 };
 
 type ImportOrderWithRelations = ImportOrder & {
@@ -111,6 +140,8 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [activeTaiRank, setActiveTaiRank] = useState<number | null>(null);
   const [pendingArrivalNotice, setPendingArrivalNotice] = useState<ArrivalNoticeOption | null>(null);
+  const [selectedTargetIds, setSelectedTargetIds] = useState<string[]>([]);
+  const queryClient = useQueryClient();
 
   const filters = useMemo<ImportOrderFilters>(() => ({
     dateFrom: date,
@@ -209,7 +240,7 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
       if (rank == null) return;
 
       const phone = getVegetableReceiverPhone(order);
-      const key = phone || order.customer_id || order.id;
+      const key = order.customer_id || phone || order.id;
       const rankTargets = byRank.get(rank) || new Map<string, ArrivalNoticeTarget>();
       const existing = rankTargets.get(key);
 
@@ -245,6 +276,64 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
       .sort((a, b) => a.name.localeCompare(b.name));
   }, [activeArrivalOption, targetsByTaiRank]);
 
+  const activeTaiRankForQuery = activeArrivalOption?.rank || 0;
+  const {
+    data: statusData,
+    isFetching: isStatusFetching,
+  } = useQuery({
+    queryKey: ['zalo-vegetable-arrival-status', date, activeTaiRankForQuery],
+    queryFn: () => zaloSummaryApi.getVegetableArrivalStatus(date, activeTaiRankForQuery),
+    enabled: activeTaiRankForQuery > 0,
+  });
+
+  const statusByTargetId = useMemo(() => {
+    const map = new Map<string, NonNullable<typeof statusData>['items'][number]>();
+    statusData?.items.forEach((item) => map.set(item.targetId, item));
+    return map;
+  }, [statusData]);
+
+  const activeRows = useMemo(() => activeTargets.map((target) => ({
+    ...target,
+    status: statusByTargetId.get(target.key)?.status || 'pending',
+    lastError: statusByTargetId.get(target.key)?.lastError || null,
+    messageId: statusByTargetId.get(target.key)?.messageId || null,
+    lastSentAt: statusByTargetId.get(target.key)?.lastSentAt || null,
+    triggeredBy: statusByTargetId.get(target.key)?.triggeredBy || null,
+  })), [activeTargets, statusByTargetId]);
+
+  const activeStats = statusData?.summary || {
+    total: activeRows.length,
+    sent: activeRows.filter((row) => row.status === 'success').length,
+    failed: activeRows.filter((row) => row.status === 'failed').length,
+    skipped: activeRows.filter((row) => row.status === 'skipped').length,
+    pending: activeRows.filter((row) => row.status === 'pending').length,
+  };
+
+  const selectedRows = useMemo(
+    () => activeRows.filter((row) => selectedTargetIds.includes(row.key)),
+    [activeRows, selectedTargetIds],
+  );
+
+  const allVisibleSelected = activeRows.length > 0 && activeRows.every((row) => selectedTargetIds.includes(row.key));
+
+  const bulkSendMutation = useMutation({
+    mutationFn: async () => {
+      if (!activeArrivalOption || selectedRows.length === 0) return null;
+      return zaloSummaryApi.sendVegetableArrivalNotice({
+        date,
+        taiRank: activeArrivalOption.rank,
+        targetIds: selectedRows.map((row) => row.key),
+      });
+    },
+    onSuccess: (result) => {
+      if (!result) return;
+      toast.success(`Đã gửi ${result.sent}/${result.totalTargets} người nhận`);
+      void queryClient.invalidateQueries({ queryKey: ['zalo-vegetable-arrival-status', date, activeTaiRankForQuery] });
+      setSelectedTargetIds([]);
+    },
+    onError: () => toast.error('Gửi đã chọn thất bại'),
+  });
+
   const arrivalNoticeTargets = useMemo(() => {
     if (!pendingArrivalNotice) return [];
     return Array.from(targetsByTaiRank.get(pendingArrivalNotice.rank)?.values() || [])
@@ -254,6 +343,7 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
   const confirmSendVegetableArrivalNotice = async () => {
     if (!pendingArrivalNotice) return;
     await sendMutation.mutateAsync({ date, taiRank: pendingArrivalNotice.rank });
+    void queryClient.invalidateQueries({ queryKey: ['zalo-vegetable-arrival-status', date, pendingArrivalNotice.rank] });
     setPendingArrivalNotice(null);
   };
 
@@ -277,12 +367,12 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
             />
           </div>
           <button
-            onClick={() => refetch()}
-            disabled={isFetching}
+            onClick={() => { refetch(); void queryClient.invalidateQueries({ queryKey: ['zalo-vegetable-arrival-status', date, activeTaiRankForQuery] }); }}
+            disabled={isFetching || isStatusFetching}
             className="h-[42px] px-4 rounded-xl border border-border bg-background text-[13px] font-bold hover:bg-muted/40 disabled:opacity-60 inline-flex items-center justify-center gap-2"
           >
-            <RefreshCw size={15} className={isFetching ? 'animate-spin' : ''} />
-            {isFetching ? 'Đang tải...' : 'Tải lại'}
+            <RefreshCw size={15} className={isFetching || isStatusFetching ? 'animate-spin' : ''} />
+            {isFetching || isStatusFetching ? 'Đang tải...' : 'Tải lại'}
           </button>
         </div>
 
@@ -300,7 +390,7 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
                 return (
                   <button
                     key={option.rank}
-                    onClick={() => setActiveTaiRank(option.rank)}
+                    onClick={() => { setActiveTaiRank(option.rank); setSelectedTargetIds([]); }}
                     className={`h-10 px-4 rounded-xl border text-[13px] font-bold whitespace-nowrap transition-all ${
                       isActive
                         ? 'bg-primary text-white border-primary shadow-sm'
@@ -323,7 +413,7 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
                     <div className="flex items-center gap-2 flex-wrap">
                       <h3 className="text-lg font-black text-foreground">Tài {activeArrivalOption.rank}</h3>
                       <span className="px-2 py-1 rounded-full bg-muted text-[12px] font-bold text-muted-foreground">
-                        {activeTargets.length} người nhận
+                        {activeRows.length} người nhận
                       </span>
                       <span className="px-2 py-1 rounded-full bg-primary/10 text-[12px] font-bold text-primary">
                         {activeArrivalOption.orderCount} đơn
@@ -344,10 +434,48 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
                   </button>
                 </div>
 
+                <div className="px-4 py-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2 text-[13px] text-muted-foreground">
+                  <span>Đã chọn <strong>{selectedTargetIds.length}</strong> người nhận trong tài này.</span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setSelectedTargetIds([])}
+                      disabled={selectedTargetIds.length === 0 || bulkSendMutation.isPending}
+                      className="h-9 px-3 rounded-lg border border-border bg-background font-semibold hover:bg-muted/40 disabled:opacity-50"
+                    >
+                      Bỏ chọn
+                    </button>
+                    <button
+                      onClick={() => bulkSendMutation.mutate()}
+                      disabled={selectedRows.length === 0 || bulkSendMutation.isPending}
+                      className="h-9 px-4 rounded-lg bg-primary text-white font-bold hover:bg-primary/90 disabled:opacity-50 inline-flex items-center gap-2"
+                    >
+                      <Send size={15} />
+                      {bulkSendMutation.isPending ? 'Đang gửi' : 'Gửi đã chọn'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-5 gap-3 px-4 pb-3">
+                  <div className="rounded-xl border border-border/60 bg-card p-3"><div className="text-[11px] text-muted-foreground uppercase tracking-wide">Tổng khách</div><div className="text-2xl font-black text-foreground">{activeStats.total}</div></div>
+                  <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-3"><div className="text-[11px] text-muted-foreground uppercase tracking-wide">Đã gửi</div><div className="text-2xl font-black text-foreground">{activeStats.sent}</div></div>
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-3"><div className="text-[11px] text-muted-foreground uppercase tracking-wide">Thất bại</div><div className="text-2xl font-black text-foreground">{activeStats.failed}</div></div>
+                  <div className="rounded-xl border border-border/60 bg-card p-3"><div className="text-[11px] text-muted-foreground uppercase tracking-wide">Bỏ qua</div><div className="text-2xl font-black text-foreground">{activeStats.skipped}</div></div>
+                  <div className="rounded-xl border border-border/60 bg-card p-3"><div className="text-[11px] text-muted-foreground uppercase tracking-wide">Chưa gửi</div><div className="text-2xl font-black text-foreground">{activeStats.pending}</div></div>
+                </div>
+
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-border bg-muted/20 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <th className="px-3 py-3 text-center w-12">
+                          <input
+                            type="checkbox"
+                            checked={allVisibleSelected}
+                            onChange={(event) => {
+                              setSelectedTargetIds(event.target.checked ? activeRows.map((row) => row.key) : []);
+                            }}
+                          />
+                        </th>
                         <th className="px-3 py-3 text-center w-14">#</th>
                         <th className="px-3 py-3 text-left min-w-[220px]">Người nhận</th>
                         <th className="px-3 py-3 text-left min-w-[130px]">SĐT</th>
@@ -356,11 +484,26 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
                         <th className="px-3 py-3 text-left min-w-[220px]">Tài xế</th>
                         <th className="px-3 py-3 text-left min-w-[220px]">Phụ trách xe</th>
                         <th className="px-3 py-3 text-center w-28">Trạng thái</th>
+                        <th className="px-3 py-3 text-left min-w-[170px]">Lần gửi gần nhất</th>
+                        <th className="px-3 py-3 text-left min-w-[220px]">Lỗi</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border/60">
-                      {activeTargets.map((target, index) => (
+                      {activeRows.map((target, index) => (
                         <tr key={target.key} className="hover:bg-muted/20">
+                          <td className="px-3 py-3 text-center">
+                            <input
+                              type="checkbox"
+                              checked={selectedTargetIds.includes(target.key)}
+                              onChange={(event) => {
+                                setSelectedTargetIds((current) =>
+                                  event.target.checked
+                                    ? Array.from(new Set([...current, target.key]))
+                                    : current.filter((id) => id !== target.key),
+                                );
+                              }}
+                            />
+                          </td>
                           <td className="px-3 py-3 text-center text-muted-foreground tabular-nums">{index + 1}</td>
                           <td className="px-3 py-3 font-bold text-foreground">{target.name}</td>
                           <td className={target.phone ? 'px-3 py-3 text-foreground' : 'px-3 py-3 text-red-500 font-semibold'}>
@@ -371,10 +514,15 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
                           <td className="px-3 py-3 text-muted-foreground">{target.driverContacts || '-'}</td>
                           <td className="px-3 py-3 text-muted-foreground">{target.inChargeContacts || '-'}</td>
                           <td className="px-3 py-3 text-center">
-                            <span className="inline-flex px-2 py-1 rounded-full border border-slate-200 bg-slate-100 text-slate-700 text-xs font-semibold">
-                              Chưa gửi
+                            <span className={`inline-flex px-2 py-1 rounded-full border text-xs font-semibold ${statusClassMap[target.status]}`}>
+                              {statusLabelMap[target.status]}
                             </span>
                           </td>
+                          <td className="px-3 py-3 text-xs text-muted-foreground">
+                            <div>{formatDateTime(target.lastSentAt)}</div>
+                            <div>{target.triggeredBy ? triggerLabelMap[target.triggeredBy] : '-'}</div>
+                          </td>
+                          <td className="px-3 py-3 text-xs text-red-600 max-w-[260px] break-words">{target.lastError || '-'}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -435,6 +583,8 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
 };
 
 export default ZaloVegetableArrivalManagePage;
+
+
 
 
 

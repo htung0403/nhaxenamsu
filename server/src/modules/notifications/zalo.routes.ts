@@ -169,13 +169,42 @@ router.post('/send-vegetable-arrival', requireRolesOnly('admin'), async (req, re
       supabaseService,
       logger,
       normalizePhoneForAuth,
-      { date, taiRank },
+      { date, taiRank, targetIds: Array.isArray(req.body?.targetIds) ? req.body.targetIds.map(String) : undefined },
     );
 
     return res.json(successResponse(result));
   } catch (err: any) {
     logger.error('[ZaloRoutes] Failed to send vegetable arrival notices:', err);
     return res.status(500).json(errorResponse(err?.message || 'Lỗi gửi thông báo Zalo cho vựa rau'));
+  }
+});
+
+router.get('/vegetable-arrival-status', requireRolesOnly('admin'), async (req, res) => {
+  try {
+    const date = normalizeSummaryDate(String(req.query?.date || ''));
+    const taiRank = Number(req.query?.taiRank);
+
+    if (!date) {
+      return res.status(400).json(errorResponse('Ngày không hợp lệ, định dạng đúng: YYYY-MM-DD'));
+    }
+
+    if (!Number.isInteger(taiRank) || taiRank < 1) {
+      return res.status(400).json(errorResponse('Tài không hợp lệ'));
+    }
+
+    const items = await zaloService.getVegetableArrivalDispatchStatusList(supabaseService, date, taiRank);
+    const summary = {
+      total: items.length,
+      sent: items.filter((item) => item.status === 'success').length,
+      failed: items.filter((item) => item.status === 'failed').length,
+      skipped: items.filter((item) => item.status === 'skipped').length,
+      pending: items.filter((item) => item.status === 'pending').length,
+    };
+
+    return res.json(successResponse({ date, taiRank, summary, items }));
+  } catch (err: any) {
+    logger.error('[ZaloRoutes] Failed to get vegetable arrival status list:', err);
+    return res.status(500).json(errorResponse(err?.message || 'Lỗi lấy trạng thái báo tài rau'));
   }
 });
 
