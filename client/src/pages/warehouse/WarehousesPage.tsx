@@ -31,7 +31,7 @@ import MobileFilterSheet from '../../components/shared/MobileFilterSheet';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { matchesSearch } from '../../lib/str-utils';
 import { getDeliveryAnchorDateString } from '../../lib/deliveryDayAnchor';
-import { isOldOrderForAgeRule, getDeliveryRemainingQty, getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
+import { isOldOrderForAgeRule, getDeliveryRemainingQty } from '../../lib/deliveryAgeRule';
 import type { DeliveryOrder, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
@@ -267,18 +267,13 @@ const WarehousesPage: React.FC = () => {
 
   const anchorStr = getDeliveryAnchorDateString();
 
-  const isDriverOrLoader = isDriver || isLoader;
-
   const inventoryOrders = React.useMemo(() => {
     return orders.filter((o) => {
-      const remaining = getDeliveryRemainingQty(o);
       if (o.warehouse_confirmed_at) return false; // already confirmed → hide permanently
-      if (remaining <= 0) return false;
-      if (getEffectiveDeliveryStatus(o, remaining) === 'da_giao') return false;
       if (!isOldOrderForAgeRule(o, anchorStr)) return false; // only old orders
       return true;
     });
-  }, [orders, anchorStr, isDriverOrLoader]);
+  }, [orders, anchorStr]);
 
   // ---------------------------------------------------------------------------
   // Filter options
@@ -744,7 +739,7 @@ const WarehousesPage: React.FC = () => {
                                     <Truck size={14} strokeWidth={2.5} />
                                   </button>
                                 )}
-                                {/* Xác nhận: admin + old + remaining<=0 + not confirmed */}
+                                {/* Xác nhận giao: admin + old + remaining<=0 + not confirmed */}
                                 {remainingQty <= 0 && isAdmin && !o.warehouse_confirmed_at && (
                                   <button
                                     onClick={(e) => {
@@ -753,7 +748,7 @@ const WarehousesPage: React.FC = () => {
                                     }}
                                     disabled={confirmWarehouseMutation.isPending}
                                     className="p-1.5 rounded-md transition-colors bg-green-500/10 text-green-600 dark:text-green-500 hover:bg-green-500/20 disabled:opacity-50"
-                                    title="Xác nhận tồn kho"
+                                    title="Xác nhận giao"
                                   >
                                     <Check size={14} strokeWidth={2.5} />
                                   </button>
@@ -1081,7 +1076,7 @@ const WarehousesPage: React.FC = () => {
                                   Phân xe
                                 </button>
                               )}
-                              {/* Xác nhận */}
+                              {/* Xác nhận giao */}
                               {remainingQty <= 0 && isAdmin && !o.warehouse_confirmed_at && (
                                 <button
                                   onClick={(e) => {
@@ -1092,7 +1087,7 @@ const WarehousesPage: React.FC = () => {
                                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 bg-green-50 text-green-700 dark:text-green-500 hover:bg-green-100 text-[12px] font-bold transition-colors disabled:opacity-50"
                                 >
                                   <Check size={14} strokeWidth={2.5} />
-                                  Xác nhận
+                                  Xác nhận giao
                                 </button>
                               )}
                             </div>
