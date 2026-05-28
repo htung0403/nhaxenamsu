@@ -70,6 +70,37 @@ export function useDeleteImportOrder() {
   });
 }
 
+export function useBulkDeleteImportOrders() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => importOrdersApi.delete(id))),
+    onSuccess: (_, ids) => {
+      queryClient.invalidateQueries({ queryKey: importOrderKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['delivery'] });
+      queryClient.invalidateQueries({ queryKey: ['export-orders'] });
+      toast.success(`Đã xóa ${ids.length} đơn nhập hàng`);
+    },
+    onError: () => {
+      toast.error('Lỗi khi xóa hàng loạt đơn nhập hàng');
+    },
+  });
+}
+
+export function useBulkUpdateImportOrdersReceivedBy() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ ids, receivedBy, orderCategory }: { ids: string[]; receivedBy: string; orderCategory?: 'standard' | 'vegetable' }) =>
+      Promise.all(ids.map((id) => importOrdersApi.update(id, { received_by: receivedBy, order_category: orderCategory }))),
+    onSuccess: (_, { ids }) => {
+      queryClient.invalidateQueries({ queryKey: importOrderKeys.all });
+      toast.success(`Đã cập nhật nhân viên nhận cho ${ids.length} đơn`);
+    },
+    onError: () => {
+      toast.error('Lỗi khi cập nhật nhân viên nhận hàng loạt');
+    },
+  });
+}
+
 export function useConfirmImportOrderByAdmin() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -99,3 +130,5 @@ export function useSendVegetableArrivalNotice() {
     },
   });
 }
+
+

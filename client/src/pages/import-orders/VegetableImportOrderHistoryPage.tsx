@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, Users } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useImportOrders, useDeleteImportOrder } from '../../hooks/queries/useImportOrders';
+import { useImportOrders, useDeleteImportOrder, useBulkDeleteImportOrders, useBulkUpdateImportOrdersReceivedBy } from '../../hooks/queries/useImportOrders';
 import type { ImportOrder, ImportOrderFilters, OrderStatus } from '../../types';
 import StatusBadge from '../../components/shared/StatusBadge';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
@@ -12,6 +12,7 @@ import PageHeader from '../../components/shared/PageHeader';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { DatePicker } from '../../components/shared/DatePicker';
 import { MultiSearchableSelect } from '../../components/ui/MultiSearchableSelect';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { ColumnSettings, type ColumnOption } from '../../components/shared/ColumnSettings';
 import AddEditVegetableImportOrderDialog from './dialogs/AddEditVegetableImportOrderDialog';
@@ -20,6 +21,7 @@ import DraggableFAB from '../../components/shared/DraggableFAB';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useVehicles } from '../../hooks/queries/useVehicles';
+import { useEmployees } from '../../hooks/queries/useHR';
 import { hasFullGoodsModuleAccess, importOrderVisibleToUser } from '../../utils/goodsModuleScope';
 
 import { removeAccents } from '../../lib/str-utils';
@@ -76,7 +78,7 @@ const getOrderDriverName = (order: any) => {
 
   if (names.size > 0) return Array.from(names).join(', ');
   if (order.driver_name) return order.driver_name;
-  if (order.profiles?.role === 'driver') return order.profiles.full_name || '';
+  if (order.profiles?.full_name && isDriverRole(order.profiles.role)) return order.profiles.full_name;
   return '';
 };
 
@@ -93,9 +95,32 @@ const normalizeRoleText = (value?: string | null) =>
 
 const isDriverRole = (role?: string | null) => {
   const normalized = normalizeRoleText(role).replace(/\s+/g, '_');
-  return normalized === 'driver' || normalized.includes('tai_xe') || normalized.includes('driver');
+  return normalized === 'driver' || normalized.includes('tai_xe') || normalized.includes('driver') || normalized.includes('lo_xe');
 };
 
+const isHeavyDriverRoleRecord = (roleKey?: string | null, roleName?: string | null) => {
+  const normalizedKey = normalizeRoleText(roleKey).replace(/\s+/g, '_');
+  const normalizedName = normalizeRoleText(roleName);
+
+  const heavyKeyCandidates = ['tai_xe_xe_tai_lon', 'tai_xe_tai_lon'];
+  const heavyNameCandidates = ['tai xe xe tai lon', 'tai xe tai lon', 'tai xe xe lon', 'xe lon'];
+
+  const byKey = heavyKeyCandidates.some((candidate) => normalizedKey.includes(candidate));
+  const byName = heavyNameCandidates.some((candidate) => normalizedName.includes(candidate));
+  return byKey || byName;
+};
+
+const isHeavyDriverEmployee = (employee: any) => {
+  const assignedRoles = (employee?.app_user_roles || [])
+    .map((record: any) => record?.app_roles)
+    .filter((role: any) => Boolean(role));
+
+  if (assignedRoles.length > 0) {
+    return assignedRoles.some((role: any) => isHeavyDriverRoleRecord(role?.role_key, role?.role_name));
+  }
+
+  return isHeavyDriverRoleRecord(employee?.role, employee?.role_name || employee?.role);
+};
 const defaultColumns: ColumnOption[] = [
   { id: 'order_datetime', label: 'Ngày giờ', isVisible: true },
   { id: 'driver_received', label: 'Tài xế nhận', isVisible: true },
@@ -141,6 +166,10 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
   const [editingOrder, setEditingOrder] = useState<ImportOrder | null>(null);
 
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkReceivedBy, setBulkReceivedBy] = useState('');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<string>>(() => new Set());
   const [viewingImages, setViewingImages] = useState<string[]>([]);
   const [viewingImageIndex, setViewingImageIndex] = useState(0);
 
@@ -156,6 +185,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
   allFilters.pageSize = 9999;
 
   const { data: vehicles } = useVehicles();
+  const { data: employees } = useEmployees();
   const { data: allApiResponse, isLoading, isError, refetch } = useImportOrders(allFilters);
   const allOrders = useMemo(() => {
     const raw = allApiResponse?.data || [];
@@ -165,6 +195,8 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
     );
   }, [allApiResponse?.data, user, vehicles]);
   const deleteMutation = useDeleteImportOrder();
+  const bulkDeleteMutation = useBulkDeleteImportOrders();
+  const bulkUpdateReceivedByMutation = useBulkUpdateImportOrdersReceivedBy();
 
   const normalizedSearchText = useMemo(
     () => removeAccents(searchText || '').toLowerCase().trim(),
@@ -299,6 +331,36 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
     return result;
   }, [orders, dailyTaiRankMap]);
 
+  const selectedIds = useMemo(() => Array.from(selectedOrderIds), [selectedOrderIds]);
+  const selectedCount = selectedIds.length;
+  const pageOrderIds = useMemo(() => orders.map((order) => order.id), [orders]);
+  const allPageSelected = pageOrderIds.length > 0 && pageOrderIds.every((id) => selectedOrderIds.has(id));
+  const somePageSelected = pageOrderIds.some((id) => selectedOrderIds.has(id));
+  const employeeOptions = useMemo(
+    () => (employees || [])
+        .filter((employee: any) => isHeavyDriverEmployee(employee))
+        .map((employee: any) => ({ value: employee.id, label: employee.full_name })),
+    [employees]
+  );
+
+  const toggleSelectOrder = (orderId: string) => {
+    setSelectedOrderIds((current) => {
+      const next = new Set(current);
+      if (next.has(orderId)) next.delete(orderId);
+      else next.add(orderId);
+      return next;
+    });
+  };
+
+  const toggleSelectPage = () => {
+    setSelectedOrderIds((current) => {
+      const next = new Set(current);
+      if (allPageSelected) pageOrderIds.forEach((id) => next.delete(id));
+      else pageOrderIds.forEach((id) => next.add(id));
+      return next;
+    });
+  };
+
   const openAddDialog = () => {
     setEditingOrder(null);
     setIsDialogOpen(true);
@@ -333,7 +395,27 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
   const handleDelete = async () => {
     if (!deleteId) return;
     await deleteMutation.mutateAsync(deleteId);
+    setSelectedOrderIds((current) => {
+      const next = new Set(current);
+      next.delete(deleteId);
+      return next;
+    });
     setDeleteId(null);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.length === 0) return;
+    await bulkDeleteMutation.mutateAsync(selectedIds);
+    setSelectedOrderIds(new Set());
+    setBulkDeleteOpen(false);
+  };
+
+  const handleBulkUpdateReceivedBy = async () => {
+    if (selectedIds.length === 0 || !bulkReceivedBy) return;
+    await bulkUpdateReceivedByMutation.mutateAsync({ ids: selectedIds, receivedBy: bulkReceivedBy, orderCategory: 'vegetable' });
+    setSelectedOrderIds(new Set());
+    setBulkReceivedBy('');
+    setBulkEditOpen(false);
   };
 
   const clearFilters = () => {
@@ -478,6 +560,32 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
           )}
         </div>
 
+        {selectedCount > 0 && (
+          <div className="px-3 py-2 border-b border-primary/20 bg-primary/5 flex flex-col md:flex-row md:items-center justify-between gap-2">
+            <span className="text-[13px] font-bold text-primary">Đã chọn {selectedCount} đơn</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => setBulkEditOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-blue-500/30 bg-blue-500/10 text-blue-600 text-[12px] font-bold hover:bg-blue-500/15 transition-all"
+              >
+                <Users size={14} /> Sửa nhân viên nhận
+              </button>
+              <button
+                onClick={() => setBulkDeleteOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 text-[12px] font-bold hover:bg-red-500/15 transition-all"
+              >
+                <Trash2 size={14} /> Xóa đã chọn
+              </button>
+              <button
+                onClick={() => setSelectedOrderIds(new Set())}
+                className="px-3 py-2 rounded-xl border border-border text-muted-foreground text-[12px] font-bold hover:bg-muted transition-all"
+              >
+                Bỏ chọn
+              </button>
+            </div>
+          </div>
+        )}
+
         {isLoading ? (
           <div className="p-4">
             <LoadingSkeleton rows={8} columns={8} />
@@ -504,6 +612,16 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
               <table className="w-full border-collapse min-w-[900px]">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-muted/30 border-b border-border">
+                    <th className="px-4 py-3 text-center w-12">
+                      <input
+                        type="checkbox"
+                        checked={allPageSelected}
+                        ref={(input) => { if (input) input.indeterminate = !allPageSelected && somePageSelected; }}
+                        onChange={toggleSelectPage}
+                        className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+                        aria-label="Chọn tất cả đơn trên trang"
+                      />
+                    </th>
                     {columns.filter(c => c.isVisible).map((col) => {
                       switch (col.id) {
                         case 'order_datetime': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left w-36">Ngày giờ</th>;
@@ -524,14 +642,14 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
                   {groupedByDateThenCustomer.map(([dateKey, customerGroups]) => (
                     <React.Fragment key={`date-${dateKey}`}>
                       <tr className="bg-blue-500/10">
-                        <td colSpan={columns.filter(c => c.isVisible).length} className="px-4 py-2">
+                        <td colSpan={columns.filter(c => c.isVisible).length + 1} className="px-4 py-2">
                           <span className="text-[12px] font-black text-blue-700 uppercase tracking-wider flex items-center gap-1.5"><Calendar size={13} /> {formatDateDMY(dateKey)}</span>
                         </td>
                       </tr>
                       {customerGroups.map(([supplierName, ordersInSupplier]) => (
                         <React.Fragment key={`date-${dateKey}-supplier-${supplierName}`}>
                           <tr className="bg-primary/5">
-                            <td colSpan={columns.filter(c => c.isVisible).length} className="px-4 py-1.5 pl-6">
+                            <td colSpan={columns.filter(c => c.isVisible).length + 1} className="px-4 py-1.5 pl-6">
                               <span className="text-[11px] font-bold text-primary uppercase tracking-wider">Chủ vựa: {supplierName}</span>
                             </td>
                           </tr>
@@ -541,6 +659,15 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
                               onClick={() => openEditDialog(order)}
                               className="hover:bg-muted/20 transition-colors cursor-pointer"
                             >
+                              <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                <input
+                                  type="checkbox"
+                                  checked={selectedOrderIds.has(order.id)}
+                                  onChange={() => toggleSelectOrder(order.id)}
+                                  className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+                                  aria-label={`Chọn đơn ${order.order_code}`}
+                                />
+                              </td>
                               {columns.filter(c => c.isVisible).map((col) => {
                                 switch (col.id) {
                                   case 'order_datetime': return (
@@ -651,6 +778,15 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
                             onClick={() => openEditDialog(order)}
                             className="bg-card rounded-xl border border-border shadow-sm cursor-pointer hover:shadow-md active:bg-muted/10 transition-all flex items-center gap-3 p-2.5 overflow-hidden"
                           >
+                            <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                              <input
+                                type="checkbox"
+                                checked={selectedOrderIds.has(order.id)}
+                                onChange={() => toggleSelectOrder(order.id)}
+                                className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+                                aria-label={`Chọn đơn ${order.order_code}`}
+                              />
+                            </div>
                             <div className="w-[64px] h-[64px] shrink-0 bg-muted/20 rounded-lg overflow-hidden">
                               {orderImage ? (
                                 <img src={cloudinarySmall(orderImage)} alt={supplierName} className="w-full h-full object-cover" />
@@ -802,6 +938,46 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
         onCancel={() => setDeleteId(null)}
       />
 
+      <ConfirmDialog
+        isOpen={bulkDeleteOpen}
+        title="Xóa đơn đã chọn"
+        message={`Bạn có chắc chắn muốn xóa ${selectedCount} đơn nhập hàng đã chọn? Hành động này không thể hoàn tác.`}
+        confirmLabel="Xóa đã chọn"
+        variant="danger"
+        isLoading={bulkDeleteMutation.isPending}
+        onConfirm={handleBulkDelete}
+        onCancel={() => setBulkDeleteOpen(false)}
+      />
+
+      <ConfirmDialog
+        isOpen={bulkEditOpen}
+        title="Sửa nhân viên nhận"
+        message={
+          <span className="block space-y-3">
+            <span className="block">Chọn nhân viên nhận mới cho {selectedCount} đơn nhập hàng đã chọn.</span>
+            <label className="block space-y-1.5">
+              <span className="block text-[12px] font-bold text-foreground">Nhân viên nhận</span>
+              <SearchableSelect
+                options={employeeOptions}
+                value={bulkReceivedBy}
+                onValueChange={setBulkReceivedBy}
+                placeholder="Chọn nhân viên nhận"
+                searchPlaceholder="Tìm nhân viên..."
+                emptyMessage="Không có nhân viên"
+              />
+            </label>
+          </span>
+        }
+        confirmLabel="Cập nhật"
+        variant="primary"
+        isLoading={bulkUpdateReceivedByMutation.isPending}
+        onConfirm={handleBulkUpdateReceivedBy}
+        onCancel={() => {
+          setBulkEditOpen(false);
+          setBulkReceivedBy('');
+        }}
+      />
+
       {viewingImages.length > 0 && createPortal(
         <div
           className="fixed inset-0 z-[9999] bg-black/95 flex flex-col items-center justify-center animate-in fade-in duration-200"
@@ -930,3 +1106,9 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
 };
 
 export default VegetableImportOrderHistoryPage;
+
+
+
+
+
+
