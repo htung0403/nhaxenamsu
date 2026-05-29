@@ -7,9 +7,9 @@ import {
   goodsScopeIsDriverRole,
   goodsScopeIsStaffRole,
   importOrderRowMatchesGoodsScope,
-  normalizePersonName,
   type DriverScope,
 } from '../../utils/goodsScope';
+import { assignVegetableTaiRanksByDate } from '../../utils/vegetableTaiRank';
 
 export class ImportOrderService {
   private static resolvePaymentAmounts(mainData: any) {
@@ -177,58 +177,7 @@ export class ImportOrderService {
       return { ...order, total_order_amount: Number(order.total_amount) || 0 };
     });
 
-    const resolveDriverId = (order: any): string => {
-      const driverNames = new Set<string>();
-
-      if (Array.isArray(order.delivery_orders)) {
-        order.delivery_orders.forEach((deliveryOrder: any) => {
-          if (!Array.isArray(deliveryOrder?.delivery_vehicles)) return;
-          deliveryOrder.delivery_vehicles.forEach((deliveryVehicle: any) => {
-            const fullName = deliveryVehicle?.profiles?.full_name;
-            if (fullName) driverNames.add(normalizePersonName(fullName));
-          });
-        });
-      }
-
-      if (driverNames.size > 0) {
-        return `dn:${Array.from(driverNames).sort().join('|')}`;
-      }
-      if (order.driver_name) return `dn:${normalizePersonName(order.driver_name)}`;
-
-      const dvDriverId = order.delivery_orders?.[0]?.delivery_vehicles?.[0]?.driver_id;
-      if (dvDriverId) return `dvid:${dvDriverId}`;
-      if (order.received_by) return `rb:${order.received_by}`;
-      return 'unknown';
-    };
-
-    const ordersByDate = new Map<string, any[]>();
-    mapped.forEach((order: any) => {
-      const orderDate = order.order_date || '';
-      const current = ordersByDate.get(orderDate) || [];
-      current.push(order);
-      ordersByDate.set(orderDate, current);
-    });
-
-    ordersByDate.forEach((ordersOnDate) => {
-      const sorted = [...ordersOnDate].sort((a, b) => {
-        const timeA = new Date(a.created_at || 0).getTime();
-        const timeB = new Date(b.created_at || 0).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        return String(a.id).localeCompare(String(b.id));
-      });
-
-      const driverRankMap = new Map<string, number>();
-      let nextRank = 1;
-
-      sorted.forEach((order) => {
-        const driverId = resolveDriverId(order);
-        if (!driverRankMap.has(driverId)) {
-          driverRankMap.set(driverId, nextRank);
-          nextRank += 1;
-        }
-        order.tai_rank = driverRankMap.get(driverId);
-      });
-    });
+    assignVegetableTaiRanksByDate(mapped);
 
     if (actor && !goodsScopeFullAccess(actor.role)) {
       const isStaff = goodsScopeIsStaffRole(actor.role);

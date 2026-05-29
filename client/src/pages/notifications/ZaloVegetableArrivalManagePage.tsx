@@ -12,6 +12,7 @@ import { DatePicker } from '../../components/shared/DatePicker';
 import { useImportOrders, useSendVegetableArrivalNotice } from '../../hooks/queries/useImportOrders';
 import { zaloSummaryApi } from '../../api/zaloSummaryApi';
 import type { DeliveryOrder, DeliveryVehicle, ImportOrder, ImportOrderFilters } from '../../types';
+import { buildVegetableDailyTaiRankMap, getVegetableTaiRank } from '../../utils/vegetableTaiRank';
 
 const formatDateDMY = (dateStr?: string) => {
   if (!dateStr) return '';
@@ -74,9 +75,6 @@ type ArrivalNoticeOption = {
   inChargeContacts: string;
 };
 
-const isCustomerSubmittedOrder = (order: ImportOrder) => order.profiles?.role === 'customer';
-const isUnconfirmedCustomerOrder = (order: ImportOrder) => isCustomerSubmittedOrder(order) && !order.admin_confirmed_at;
-
 const getVegetableReceiverName = (order: ImportOrder) =>
   order.customers?.name || order.selected_alias || order.receiver_name || 'Chưa rõ vựa';
 const getVegetableReceiverPhone = (order: ImportOrder) => order.customers?.phone || order.receiver_phone || null;
@@ -90,19 +88,6 @@ const getOrderVehicles = (order: ImportOrderWithRelations) => {
     });
   });
   return plates.size > 0 ? Array.from(plates).join(', ') : '';
-};
-
-const getOrderDriverName = (order: ImportOrderWithRelations) => {
-  const names = new Set<string>();
-  order.delivery_orders?.forEach((deliveryOrder) => {
-    deliveryOrder.delivery_vehicles?.forEach((deliveryVehicle: DeliveryVehicle) => {
-      if (deliveryVehicle.profiles?.full_name) names.add(deliveryVehicle.profiles.full_name);
-    });
-  });
-  if (names.size > 0) return Array.from(names).join(', ');
-  if (order.driver_name) return order.driver_name;
-  if (order.profiles?.role === 'driver') return order.profiles.full_name || '';
-  return '';
 };
 
 const getOrderDriverContacts = (order: ImportOrderWithRelations) => {
@@ -154,48 +139,11 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
   const orders = useMemo<ImportOrderWithRelations[]>(() => data?.data || [], [data?.data]);
   const sendMutation = useSendVegetableArrivalNotice();
 
-  const dailyTaiRankMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const byDriver = new Map<string, ImportOrderWithRelations[]>();
-
-    orders.forEach((order) => {
-      if (isUnconfirmedCustomerOrder(order)) return;
-      const driverName = getOrderDriverName(order) || order.sender_name || '_';
-      const current = byDriver.get(driverName) || [];
-      current.push(order);
-      byDriver.set(driverName, current);
-    });
-
-    const driverFirstOrders: { driverName: string; firstOrder: ImportOrderWithRelations }[] = [];
-    byDriver.forEach((driverOrders, driverName) => {
-      const sorted = [...driverOrders].sort((a, b) => {
-        const timeA = new Date(a.created_at || 0).getTime();
-        const timeB = new Date(b.created_at || 0).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        return a.id.localeCompare(b.id);
-      });
-      driverFirstOrders.push({ driverName, firstOrder: sorted[0] });
-    });
-
-    driverFirstOrders
-      .sort((a, b) => {
-        const timeA = new Date(a.firstOrder.created_at || 0).getTime();
-        const timeB = new Date(b.firstOrder.created_at || 0).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        return a.firstOrder.id.localeCompare(b.firstOrder.id);
-      })
-      .forEach((item, idx) => {
-        const driverOrders = byDriver.get(item.driverName) || [];
-        driverOrders.forEach((order) => map.set(order.id, idx + 1));
-      });
-
-    return map;
-  }, [orders]);
+  const dailyTaiRankMap = useMemo(() => buildVegetableDailyTaiRankMap(orders), [orders]);
 
   const getTaiRank = useCallback(
     (order: ImportOrderWithRelations) => {
-      if (isUnconfirmedCustomerOrder(order)) return null;
-      return order.tai_rank ?? dailyTaiRankMap.get(order.id) ?? 1;
+      return getVegetableTaiRank(order, dailyTaiRankMap);
     },
     [dailyTaiRankMap],
   );

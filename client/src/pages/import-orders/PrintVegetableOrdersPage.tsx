@@ -4,7 +4,7 @@ import { DatePicker } from '../../components/shared/DatePicker';
 import { CreatableSearchableSelect } from '../../components/ui/CreatableSearchableSelect';
 import { useImportOrders } from '../../hooks/queries/useImportOrders';
 import { useVehicles } from '../../hooks/queries/useVehicles';
-import type { DeliveryOrder, DeliveryVehicle, ImportOrder, ImportOrderFilters, Vehicle } from '../../types';
+import type { DeliveryOrder, ImportOrder, ImportOrderFilters, Vehicle } from '../../types';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
 import ErrorState from '../../components/shared/ErrorState';
@@ -13,6 +13,7 @@ import { format } from 'date-fns';
 import html2canvas from 'html2canvas';
 import toast from 'react-hot-toast';
 import { Image as ImageIcon } from 'lucide-react';
+import { buildVegetableDailyTaiRankMap, getVegetableTaiRank } from '../../utils/vegetableTaiRank';
 
 // ─── Helpers ──────────────────────────────────────────────
 const formatNumber = (value?: number | null) => {
@@ -27,21 +28,6 @@ type ImportOrderWithRelations = ImportOrder & {
 
 const getSupplierName = (order: ImportOrderWithRelations) =>
   order.customers?.name || order.sender_name || '';
-
-const getOrderDriverName = (order: ImportOrderWithRelations) => {
-  const names = new Set<string>();
-  if (order.delivery_orders) {
-    order.delivery_orders.forEach((d: DeliveryOrder) => {
-      d.delivery_vehicles?.forEach((dv: DeliveryVehicle) => {
-        if (dv.profiles?.full_name) names.add(dv.profiles.full_name);
-      });
-    });
-  }
-  if (names.size > 0) return Array.from(names).join(', ');
-  if (order.driver_name) return order.driver_name;
-  if (order.profiles?.role === 'driver') return order.profiles.full_name || '';
-  return '';
-};
 
 const getOrderVehiclePlates = (order: ImportOrderWithRelations) => {
   const plates = new Set<string>();
@@ -120,51 +106,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
     }));
   }, [vehicles]);
 
-  const dailyTaiRankMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const byDate = new Map<string, ImportOrderWithRelations[]>();
-    (orders || []).forEach((order) => {
-      const orderDate = order.order_date || '';
-      const current = byDate.get(orderDate) || [];
-      current.push(order);
-      byDate.set(orderDate, current);
-    });
-    byDate.forEach((ordersOnDate) => {
-      const byDriver = new Map<string, ImportOrderWithRelations[]>();
-      ordersOnDate.forEach((order) => {
-        const driverName = getOrderDriverName(order) || order.sender_name || '_';
-        const current = byDriver.get(driverName) || [];
-        current.push(order);
-        byDriver.set(driverName, current);
-      });
-
-      const driverFirstOrders: { driverName: string; firstOrder: ImportOrderWithRelations }[] = [];
-      byDriver.forEach((driverOrders, driverName) => {
-        const sorted = [...driverOrders].sort((a, b) => {
-          const timeA = new Date(a.created_at || 0).getTime();
-          const timeB = new Date(b.created_at || 0).getTime();
-          if (timeA !== timeB) return timeA - timeB;
-          return a.id.localeCompare(b.id);
-        });
-        driverFirstOrders.push({ driverName, firstOrder: sorted[0] });
-      });
-
-      driverFirstOrders.sort((a, b) => {
-        const timeA = new Date(a.firstOrder.created_at || 0).getTime();
-        const timeB = new Date(b.firstOrder.created_at || 0).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        return a.firstOrder.id.localeCompare(b.firstOrder.id);
-      });
-
-      driverFirstOrders.forEach((item, idx) => {
-        const driverOrders = byDriver.get(item.driverName) || [];
-        driverOrders.forEach((order) => {
-          map.set(order.id, idx + 1);
-        });
-      });
-    });
-    return map;
-  }, [orders]);
+  const dailyTaiRankMap = useMemo(() => buildVegetableDailyTaiRankMap(orders || []), [orders]);
 
   // ─── Flatten & sort ABC ───────────────────────────────
   const flatItems: FlatItem[] = useMemo(() => {
@@ -176,7 +118,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
       const supplierName = getSupplierName(order);
       const senderName = order.sender_name || '';
       const supplierNote = order.notes || '';
-      const taiRank = order.tai_rank ?? dailyTaiRankMap.get(order.id) ?? 1;
+      const taiRank = getVegetableTaiRank(order, dailyTaiRankMap) || 1;
 
       if (order.import_order_items && order.import_order_items.length > 0) {
         order.import_order_items.forEach((item) => {
@@ -254,7 +196,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
     const map = new Map<number, string>();
     orders.forEach((order) => {
       if (order.deleted_at) return;
-      const taiRank = order.tai_rank ?? dailyTaiRankMap.get(order.id) ?? 1;
+      const taiRank = getVegetableTaiRank(order, dailyTaiRankMap) || 1;
       const plates = getOrderVehiclePlates(order);
       if (plates.length > 0 && !map.has(taiRank)) {
         map.set(taiRank, plates.join(', '));

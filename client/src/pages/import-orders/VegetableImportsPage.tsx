@@ -4,7 +4,7 @@ import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck,
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import { useImportOrders, useDeleteImportOrder, useConfirmImportOrderByAdmin, useBulkDeleteImportOrders, useBulkUpdateImportOrdersReceivedBy } from '../../hooks/queries/useImportOrders';
-import type { ImportOrder, ImportOrderFilters, OrderStatus } from '../../types';
+import type { ImportOrder, ImportOrderFilters, OrderStatus, User } from '../../types';
 import StatusBadge from '../../components/shared/StatusBadge';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
@@ -29,6 +29,7 @@ import type { DeliveryOrder, DeliveryVehicle, Vehicle } from '../../types';
 
 import { removeAccents } from '../../lib/str-utils';
 import { cloudinarySmall } from '../../lib/cloudinaryUrl';
+import { buildVegetableDailyTaiRankMap, getVegetableTaiRank } from '../../utils/vegetableTaiRank';
 
 const statusLabels: Record<OrderStatus, string> = {
   pending: 'Chờ xử lý',
@@ -50,6 +51,9 @@ type ImportOrderWithRelations = ImportOrder & {
   delivery_orders?: DeliveryOrder[];
   profiles?: { full_name?: string; role?: string };
 };
+
+type EmployeeRole = NonNullable<User['app_user_roles']>[number]['app_roles'];
+type EmployeeOptionSource = User & { role_name?: string | null };
 
 const formatDateDMY = (dateStr?: string) => {
   if (!dateStr) return '';
@@ -118,21 +122,18 @@ const isHeavyDriverRoleRecord = (roleKey?: string | null, roleName?: string | nu
   return byKey || byName;
 };
 
-const isHeavyDriverEmployee = (employee: any) => {
+const isHeavyDriverEmployee = (employee: EmployeeOptionSource) => {
   const assignedRoles = (employee?.app_user_roles || [])
-    .map((record: any) => record?.app_roles)
-    .filter((role: any) => Boolean(role));
+    .map((record) => record?.app_roles)
+    .filter((role): role is NonNullable<EmployeeRole> => Boolean(role));
 
   if (assignedRoles.length > 0) {
-    return assignedRoles.some((role: any) => isHeavyDriverRoleRecord(role?.role_key, role?.role_name));
+    return assignedRoles.some((role) => isHeavyDriverRoleRecord(role.role_key, role.role_name));
   }
 
   return isHeavyDriverRoleRecord(employee?.role, employee?.role_name || employee?.role);
 };
 const isCustomerSubmittedOrder = (order: ImportOrder) => order.profiles?.role === 'customer';
-
-const isUnconfirmedCustomerOrder = (order: ImportOrder) =>
-  isCustomerSubmittedOrder(order) && !order.admin_confirmed_at;
 
 const vehicleSupportsVegetable = (vehicle: Vehicle) =>
   !vehicle.goods_categories || vehicle.goods_categories.length === 0 || vehicle.goods_categories.includes('vegetable');
@@ -269,57 +270,11 @@ const VegetableImportsPage: React.FC = () => {
     );
   }, [allOrders, normalizedSearchText]);
 
-  const dailyTaiRankMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const byDate = new Map<string, ImportOrder[]>();
-    rankSourceOrders.forEach((order) => {
-      if (isUnconfirmedCustomerOrder(order)) return;
-      const orderDate = order.order_date || '';
-      const current = byDate.get(orderDate) || [];
-      current.push(order);
-      byDate.set(orderDate, current);
-    });
-    byDate.forEach((ordersOnDate) => {
-      const byDriver = new Map<string, ImportOrder[]>();
-      ordersOnDate.forEach((order) => {
-        const driverName = getOrderDriverName(order) || order.sender_name || '_';
-        const current = byDriver.get(driverName) || [];
-        current.push(order);
-        byDriver.set(driverName, current);
-      });
-
-      const driverFirstOrders: { driverName: string; firstOrder: ImportOrder }[] = [];
-      byDriver.forEach((driverOrders, driverName) => {
-        const sorted = [...driverOrders].sort((a, b) => {
-          const timeA = new Date(a.created_at || 0).getTime();
-          const timeB = new Date(b.created_at || 0).getTime();
-          if (timeA !== timeB) return timeA - timeB;
-          return a.id.localeCompare(b.id);
-        });
-        driverFirstOrders.push({ driverName, firstOrder: sorted[0] });
-      });
-
-      driverFirstOrders.sort((a, b) => {
-        const timeA = new Date(a.firstOrder.created_at || 0).getTime();
-        const timeB = new Date(b.firstOrder.created_at || 0).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        return a.firstOrder.id.localeCompare(b.firstOrder.id);
-      });
-
-      driverFirstOrders.forEach((item, idx) => {
-        const driverOrders = byDriver.get(item.driverName) || [];
-        driverOrders.forEach((order) => {
-          map.set(order.id, idx + 1);
-        });
-      });
-    });
-    return map;
-  }, [rankSourceOrders]);
+  const dailyTaiRankMap = useMemo(() => buildVegetableDailyTaiRankMap(rankSourceOrders), [rankSourceOrders]);
 
   const getTaiRank = useCallback(
     (order: ImportOrderWithRelations) => {
-      if (isUnconfirmedCustomerOrder(order)) return null;
-      return dailyTaiRankMap.get(order.id) ?? order.tai_rank ?? 1;
+      return getVegetableTaiRank(order, dailyTaiRankMap);
     },
     [dailyTaiRankMap]
   );
@@ -407,8 +362,8 @@ const VegetableImportsPage: React.FC = () => {
   const somePageSelected = pageOrderIds.some((id) => selectedOrderIds.has(id));
   const employeeOptions = useMemo(
     () => (employees || [])
-        .filter((employee: any) => isHeavyDriverEmployee(employee))
-        .map((employee: any) => ({ value: employee.id, label: employee.full_name })),
+        .filter((employee: EmployeeOptionSource) => isHeavyDriverEmployee(employee))
+        .map((employee: EmployeeOptionSource) => ({ value: employee.id, label: employee.full_name })),
     [employees]
   );
 

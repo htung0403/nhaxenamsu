@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useImportOrders, useDeleteImportOrder, useBulkDeleteImportOrders, useBulkUpdateImportOrdersReceivedBy } from '../../hooks/queries/useImportOrders';
-import type { ImportOrder, ImportOrderFilters, OrderStatus } from '../../types';
+import type { DeliveryOrder, DeliveryVehicle, ImportOrder, ImportOrderFilters, OrderStatus, User } from '../../types';
 import StatusBadge from '../../components/shared/StatusBadge';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
@@ -26,6 +26,7 @@ import { hasFullGoodsModuleAccess, importOrderVisibleToUser } from '../../utils/
 
 import { removeAccents } from '../../lib/str-utils';
 import { cloudinarySmall } from '../../lib/cloudinaryUrl';
+import { buildVegetableDailyTaiRankMap, getVegetableTaiRank } from '../../utils/vegetableTaiRank';
 
 const statusLabels: Record<OrderStatus, string> = {
   pending: 'Chờ xử lý',
@@ -43,6 +44,14 @@ const formatCurrency = (value?: number | null) => {
 
 const getSupplierName = (order: ImportOrder) => order.customers?.name || order.sender_name || 'Chưa rõ chủ vựa';
 
+type ImportOrderWithRelations = ImportOrder & {
+  delivery_orders?: DeliveryOrder[];
+  profiles?: { full_name?: string; role?: string };
+};
+
+type EmployeeRole = NonNullable<User['app_user_roles']>[number]['app_roles'];
+type EmployeeOptionSource = User & { role_name?: string | null };
+
 const formatDateDMY = (dateStr?: string) => {
   if (!dateStr) return '';
   const parts = dateStr.split('-');
@@ -50,13 +59,13 @@ const formatDateDMY = (dateStr?: string) => {
   return dateStr;
 };
 
-const getOrderVehicles = (order: any) => {
+const getOrderVehicles = (order: ImportOrderWithRelations) => {
   const plates = new Set<string>();
   if (order.license_plate) plates.add(order.license_plate);
   if (order.delivery_orders) {
-    order.delivery_orders.forEach((d: any) => {
+    order.delivery_orders.forEach((d: DeliveryOrder) => {
       if (d.delivery_vehicles) {
-        d.delivery_vehicles.forEach((dv: any) => {
+        d.delivery_vehicles.forEach((dv: DeliveryVehicle) => {
           if (dv.vehicles?.license_plate) plates.add(dv.vehicles.license_plate);
         });
       }
@@ -65,12 +74,12 @@ const getOrderVehicles = (order: any) => {
   return plates.size > 0 ? Array.from(plates).join(', ') : '';
 };
 
-const getOrderDriverName = (order: any) => {
+const getOrderDriverName = (order: ImportOrderWithRelations) => {
   const names = new Set<string>();
 
   if (order.delivery_orders) {
-    order.delivery_orders.forEach((d: any) => {
-      d.delivery_vehicles?.forEach((dv: any) => {
+    order.delivery_orders.forEach((d: DeliveryOrder) => {
+      d.delivery_vehicles?.forEach((dv: DeliveryVehicle) => {
         if (dv.profiles?.full_name) names.add(dv.profiles.full_name);
       });
     });
@@ -82,7 +91,7 @@ const getOrderDriverName = (order: any) => {
   return '';
 };
 
-const getOrderReceiverName = (order: any) => {
+const getOrderReceiverName = (order: ImportOrderWithRelations) => {
   return order.selected_alias || order.receiver_name || order.profiles?.full_name || '-';
 };
 
@@ -110,13 +119,13 @@ const isHeavyDriverRoleRecord = (roleKey?: string | null, roleName?: string | nu
   return byKey || byName;
 };
 
-const isHeavyDriverEmployee = (employee: any) => {
+const isHeavyDriverEmployee = (employee: EmployeeOptionSource) => {
   const assignedRoles = (employee?.app_user_roles || [])
-    .map((record: any) => record?.app_roles)
-    .filter((role: any) => Boolean(role));
+    .map((record) => record?.app_roles)
+    .filter((role): role is NonNullable<EmployeeRole> => Boolean(role));
 
   if (assignedRoles.length > 0) {
-    return assignedRoles.some((role: any) => isHeavyDriverRoleRecord(role?.role_key, role?.role_name));
+    return assignedRoles.some((role) => isHeavyDriverRoleRecord(role.role_key, role.role_name));
   }
 
   return isHeavyDriverRoleRecord(employee?.role, employee?.role_name || employee?.role);
@@ -187,7 +196,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
   const { data: vehicles } = useVehicles();
   const { data: employees } = useEmployees();
   const { data: allApiResponse, isLoading, isError, refetch } = useImportOrders(allFilters);
-  const allOrders = useMemo(() => {
+  const allOrders = useMemo<ImportOrderWithRelations[]>(() => {
     const raw = allApiResponse?.data || [];
     if (!user || hasFullGoodsModuleAccess(user)) return raw;
     return raw.filter((o) =>
@@ -210,51 +219,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
     );
   }, [allOrders, normalizedSearchText]);
 
-  const dailyTaiRankMap = useMemo(() => {
-    const map = new Map<string, number>();
-    const byDate = new Map<string, ImportOrder[]>();
-    allOrders.forEach((order) => {
-      const orderDate = order.order_date || '';
-      const current = byDate.get(orderDate) || [];
-      current.push(order);
-      byDate.set(orderDate, current);
-    });
-    byDate.forEach((ordersOnDate) => {
-      const byDriver = new Map<string, ImportOrder[]>();
-      ordersOnDate.forEach((order) => {
-        const driverName = getOrderDriverName(order) || order.sender_name || '_';
-        const current = byDriver.get(driverName) || [];
-        current.push(order);
-        byDriver.set(driverName, current);
-      });
-
-      const driverFirstOrders: { driverName: string; firstOrder: ImportOrder }[] = [];
-      byDriver.forEach((driverOrders, driverName) => {
-        const sorted = [...driverOrders].sort((a, b) => {
-          const timeA = new Date(a.created_at || 0).getTime();
-          const timeB = new Date(b.created_at || 0).getTime();
-          if (timeA !== timeB) return timeA - timeB;
-          return a.id.localeCompare(b.id);
-        });
-        driverFirstOrders.push({ driverName, firstOrder: sorted[0] });
-      });
-
-      driverFirstOrders.sort((a, b) => {
-        const timeA = new Date(a.firstOrder.created_at || 0).getTime();
-        const timeB = new Date(b.firstOrder.created_at || 0).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        return a.firstOrder.id.localeCompare(b.firstOrder.id);
-      });
-
-      driverFirstOrders.forEach((item, idx) => {
-        const driverOrders = byDriver.get(item.driverName) || [];
-        driverOrders.forEach((order) => {
-          map.set(order.id, idx + 1);
-        });
-      });
-    });
-    return map;
-  }, [allOrders]);
+  const dailyTaiRankMap = useMemo(() => buildVegetableDailyTaiRankMap(allOrders), [allOrders]);
 
   const { vuaOptions, taiOptions, nguoiNhapOptions } = useMemo(() => {
     if (!allOrders) return { vuaOptions: [], taiOptions: [], nguoiNhapOptions: [] };
@@ -314,8 +279,8 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
       const customerGroups: [string, ImportOrder[]][] = [];
       byCustomer.forEach((customerOrders, customerName) => {
         const sorted = [...customerOrders].sort((a, b) => {
-          const rankA = dailyTaiRankMap.get(a.id) || 1;
-          const rankB = dailyTaiRankMap.get(b.id) || 1;
+          const rankA = getVegetableTaiRank(a, dailyTaiRankMap) || 1;
+          const rankB = getVegetableTaiRank(b, dailyTaiRankMap) || 1;
           if (rankA !== rankB) return rankA - rankB;
           const timeA = new Date(a.created_at || 0).getTime();
           const timeB = new Date(b.created_at || 0).getTime();
@@ -338,8 +303,8 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
   const somePageSelected = pageOrderIds.some((id) => selectedOrderIds.has(id));
   const employeeOptions = useMemo(
     () => (employees || [])
-        .filter((employee: any) => isHeavyDriverEmployee(employee))
-        .map((employee: any) => ({ value: employee.id, label: employee.full_name })),
+        .filter((employee: EmployeeOptionSource) => isHeavyDriverEmployee(employee))
+        .map((employee: EmployeeOptionSource) => ({ value: employee.id, label: employee.full_name })),
     [employees]
   );
 
@@ -686,7 +651,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
                                   case 'tai_rank': return (
                                     <td key={col.id} className="px-4 py-3 text-center">
                                       <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500/10 text-amber-700 text-[12px] font-black">
-                                        {dailyTaiRankMap.get(order.id) || 1}
+                                        {getVegetableTaiRank(order, dailyTaiRankMap) || 1}
                                       </span>
                                     </td>
                                   );
@@ -767,7 +732,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
 
                       {ordersInSupplier.map((order) => {
                         const orderImage = order.receipt_image_url || order.import_order_items?.[0]?.image_url;
-                        const taiRank = dailyTaiRankMap.get(order.id) || 1;
+                        const taiRank = getVegetableTaiRank(order, dailyTaiRankMap) || 1;
                         
                         const totalQuantity = order.import_order_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
                         const itemNames = order.import_order_items?.map(item => item.products?.name).filter(Boolean).join(', ') || '';
