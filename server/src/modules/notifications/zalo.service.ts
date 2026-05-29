@@ -1343,43 +1343,8 @@ export class ZaloService {
         return;
       }
 
-      // 2. Pre-calculate tai_ranks per supplier group (matching ImportOrderService logic)
-      const ordersBySupplier = new Map<string, any[]>();
-      allOrders.forEach((order: any) => {
-        const supplierName = order.customers?.name || order.sender_name || '';
-        const key = `${supplierName}`;
-        if (!ordersBySupplier.has(key)) ordersBySupplier.set(key, []);
-        ordersBySupplier.get(key)!.push(order);
-      });
-
-      const resolveDriverId = (order: any): string => {
-        const dvDriverId = order.delivery_orders?.[0]?.delivery_vehicles?.[0]?.driver_id;
-        if (dvDriverId) return `dvid:${dvDriverId}`;
-        if (order.driver_name) return `dn:${normalizePersonName(order.driver_name)}`;
-        if (order.received_by) return `rb:${order.received_by}`;
-        return 'unknown';
-      };
-
-      ordersBySupplier.forEach((supplierOrders) => {
-        const sorted = [...supplierOrders].sort((a, b) => {
-          const timeA = new Date(a.created_at || 0).getTime();
-          const timeB = new Date(b.created_at || 0).getTime();
-          if (timeA !== timeB) return timeA - timeB;
-          return String(a.id).localeCompare(String(b.id));
-        });
-
-        const driverRankMap = new Map<string, number>();
-        let nextRank = 1;
-
-        sorted.forEach((order) => {
-          const driverId = resolveDriverId(order);
-          if (!driverRankMap.has(driverId)) {
-            driverRankMap.set(driverId, nextRank);
-            nextRank += 1;
-          }
-          order.tai_rank = driverRankMap.get(driverId);
-        });
-      });
+      // 2. Pre-calculate tai_ranks consistently with supplier summaries.
+      const dailyDriverRankMap = this.buildDailyDriverRankMap(allOrders);
 
       // 3. Group by Sender (sender_id)
       const senderGroups: Record<string, { senderId: string; senderName: string; phone: string | null; items: any[] }> = {};
@@ -1397,7 +1362,7 @@ export class ZaloService {
           };
         }
 
-        const taiRank = order.tai_rank || 0;
+        const taiRank = dailyDriverRankMap.get(this.resolveVegetableOrderDriverKey(order)) || 0;
         const depotName = order.customers?.name || 'Vựa';
         const licensePlate = order.delivery_orders?.[0]?.delivery_vehicles?.[0]?.vehicles?.license_plate || '-';
 
@@ -2678,41 +2643,6 @@ export class ZaloService {
     return dailyDriverRankMap;
   }
 
-  private buildTaiRankBySupplierOrderId(orders: any[]): Map<string, number> {
-    const ordersBySupplier = new Map<string, any[]>();
-
-    orders.filter((order) => !this.isUnconfirmedVegetableCustomerOrder(order)).forEach((order) => {
-      const supplierKey = String(order.customer_id || 'unknown');
-      const current = ordersBySupplier.get(supplierKey) || [];
-      current.push(order);
-      ordersBySupplier.set(supplierKey, current);
-    });
-
-    const orderRankMap = new Map<string, number>();
-
-    ordersBySupplier.forEach((supplierOrders) => {
-      const sorted = [...supplierOrders].sort((a, b) => {
-        const timeA = new Date(a.created_at || 0).getTime();
-        const timeB = new Date(b.created_at || 0).getTime();
-        if (timeA !== timeB) return timeA - timeB;
-        return String(a.id).localeCompare(String(b.id));
-      });
-
-      const driverRankMap = new Map<string, number>();
-      let nextRank = 1;
-
-      sorted.forEach((order) => {
-        const driverKey = this.resolveVegetableOrderDriverKey(order);
-        if (!driverRankMap.has(driverKey)) {
-          driverRankMap.set(driverKey, nextRank++);
-        }
-        orderRankMap.set(String(order.id), driverRankMap.get(driverKey) || 0);
-      });
-    });
-
-    return orderRankMap;
-  }
-
   private buildSupplierSummaryItemsFromOrders(orders: any[], dailyDriverRankMap: Map<string, number>): any[] {
     const resolveLicensePlate = (order: any): string =>
       order.delivery_orders?.[0]?.delivery_vehicles?.[0]?.vehicles?.license_plate || '-';
@@ -3107,7 +3037,7 @@ export class ZaloService {
   }
 
   async getSenderSummaryData(supabaseService: any, senderId: string, date: string) {
-    // 1. Fetch minimal daily dataset to build tai rank per supplier (matching import-orders logic)
+    // 1. Fetch minimal daily dataset to build tai rank consistently with supplier summaries
     const { data: allOrders, error: allOrdersError } = await supabaseService
       .from('vegetable_orders')
       .select(`
@@ -3124,7 +3054,7 @@ export class ZaloService {
       .is('deleted_at', null);
 
     if (allOrdersError || !allOrders || allOrders.length === 0) return null;
-    const orderRankMap = this.buildTaiRankBySupplierOrderId(allOrders);
+    const dailyDriverRankMap = this.buildDailyDriverRankMap(allOrders);
 
     // 2. Fetch only this sender's orders and only required columns for public page
     const { data: senderOrders, error: senderError } = await supabaseService
@@ -3163,7 +3093,7 @@ export class ZaloService {
     };
 
     sortedSenderOrders.forEach((order) => {
-      const taiRank = orderRankMap.get(String(order.id)) || 0;
+      const taiRank = dailyDriverRankMap.get(this.resolveVegetableOrderDriverKey(order)) || 0;
       const licensePlate = resolveLicensePlate(order);
 
       (order.vegetable_order_items || []).forEach((item: any) => {
