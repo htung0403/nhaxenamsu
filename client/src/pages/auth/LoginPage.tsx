@@ -75,7 +75,7 @@ const LoginPage: React.FC = () => {
         <div className="max-w-7xl w-full grid grid-cols-1 lg:grid-cols-12 bg-v-surface-container-lowest rounded-xl overflow-hidden shadow-gentle border border-v-outline-variant/30">
           {/* Left Side: Visual Inspiration */}
           <div className="hidden lg:block lg:col-span-7 relative overflow-hidden bg-v-surface-variant">
-            <img className="absolute inset-0 w-full h-full object-cover" alt="Fresh organic microgreens" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMb7jAwrhSbIuXw-isr77u29Lw7jN0ACfso5NL272nVhtSOolXyGfEEqhmvEocwVdfCzeF1alYAZS8XtjIqxvZtuycaAbUj-SnVJrHO9yaFDSdeAoDREqmTu9WrG4DG5Dg6u8_V2D-l1-DRz5ZYArZYNgJgKiP6-_LF0cglPhaBSnid-KtSwCDC72chQJFI87Rdss8IrdsLK7AKreaVR0aNqbQShOH8YmhsrWM5op4xO_45ZW9W6neR5_q_2OmKnuf5lTOa1cK" />
+            <img loading="lazy" decoding="async" className="absolute inset-0 w-full h-full object-cover" alt="Fresh organic microgreens" src="https://lh3.googleusercontent.com/aida-public/AB6AXuDMb7jAwrhSbIuXw-isr77u29Lw7jN0ACfso5NL272nVhtSOolXyGfEEqhmvEocwVdfCzeF1alYAZS8XtjIqxvZtuycaAbUj-SnVJrHO9yaFDSdeAoDREqmTu9WrG4DG5Dg6u8_V2D-l1-DRz5ZYArZYNgJgKiP6-_LF0cglPhaBSnid-KtSwCDC72chQJFI87Rdss8IrdsLK7AKreaVR0aNqbQShOH8YmhsrWM5op4xO_45ZW9W6neR5_q_2OmKnuf5lTOa1cK" />
             <div className="absolute bottom-12 left-12 right-12 z-10">
               <div className="bg-white/70 backdrop-blur-xl p-10 rounded-3xl max-w-md shadow-sm border border-white/50">
                 <span className="inline-block px-4 py-1.5 bg-v-primary-container text-v-on-primary-container text-xs font-bold rounded-full mb-5 uppercase tracking-wider">SẠCH & TƯƠI MỚI</span>

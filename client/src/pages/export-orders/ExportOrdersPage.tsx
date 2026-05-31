@@ -246,7 +246,7 @@ const ExportOrdersPage: React.FC = () => {
                             className="w-10 h-10 rounded-lg bg-muted/30 overflow-hidden cursor-pointer mx-auto border border-border group relative flex items-center justify-center"
                             onClick={(e) => { e.stopPropagation(); setViewingImage(o.image_url!); }}
                           >
-                            <img src={cloudinarySmall(o.image_url)} alt="Receipt" className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={cloudinarySmall(o.image_url)} alt="Receipt" className="w-full h-full object-cover" />
                             <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                               <Eye size={16} className="text-white" />
                             </div>
@@ -320,7 +320,7 @@ const ExportOrdersPage: React.FC = () => {
                     >
                       {o.image_url ? (
                         <div className="w-full h-full relative group cursor-pointer">
-                            <img
+                            <img loading="lazy" decoding="async"
                               src={cloudinarySmall(o.image_url)}
                               alt="Receipt"
                               className="w-full h-full object-cover"
@@ -480,7 +480,7 @@ const ExportOrdersPage: React.FC = () => {
             <X size={20} />
           </button>
 
-          <img
+          <img loading="lazy" decoding="async"
             src={cloudinaryFull(viewingImage)}
             alt="View full"
             className="max-w-[95vw] max-h-[85vh] object-contain rounded-lg"

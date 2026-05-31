@@ -910,7 +910,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                             key={`row-${index}-${url}-${uidx}`}
                             className="relative w-20 h-20 rounded-xl border border-border overflow-hidden shrink-0 group/rowimg bg-muted/20"
                           >
-                            <img src={cloudinaryThumb(url)} alt="" className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt="" className="w-full h-full object-cover" />
                             {!isRowDisabled && (
                               <button
                                 type="button"

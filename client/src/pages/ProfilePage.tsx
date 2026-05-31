@@ -417,7 +417,7 @@ const ProfilePage: React.FC = () => {
                 <div className="px-6 pb-6 -mt-10 flex flex-col items-center">
                   <div className="relative group">
                     <div className="w-24 h-24 rounded-full border-4 border-card bg-primary/10 flex items-center justify-center text-3xl font-bold text-primary overflow-hidden shadow-md">
-                      <img
+                      <img loading="lazy" decoding="async"
                         src={cloudinaryThumb(displayAvatar)}
                         alt="Avatar"
                         className="w-full h-full object-cover"
@@ -926,7 +926,7 @@ const ProfilePage: React.FC = () => {
               />
               <div className="relative">
                 <div className="w-48 h-48 rounded-full border-4 border-card bg-primary/10 flex items-center justify-center text-6xl font-bold text-primary overflow-hidden shadow-inner">
-                  <img
+                  <img loading="lazy" decoding="async"
                     src={cloudinaryThumb(previewAvatar || defaultAvatar)}
                     alt="Preview"
                     className="w-full h-full object-cover"

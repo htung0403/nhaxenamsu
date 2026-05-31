@@ -152,7 +152,7 @@ const SgImportOrderDetailPanel: React.FC<Props> = ({ isOpen, isClosing, onClose,
                         rel="noreferrer"
                         className="block rounded-lg border border-border overflow-hidden w-24 h-24 bg-muted shrink-0 hover:opacity-90"
                       >
-                        <img src={cloudinaryThumb(url)} alt="" className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt="" className="w-full h-full object-cover" />
                       </a>
                     ))}
                   </div>

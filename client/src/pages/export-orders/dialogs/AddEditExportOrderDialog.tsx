@@ -726,7 +726,7 @@ const AddEditExportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, onClose 
                 <div className="flex flex-col gap-2">
                   {watchImageUrl ? (
                     <div className="relative inline-block w-24 h-24 rounded-xl border border-border overflow-hidden">
-                      <img src={cloudinarySmall(watchImageUrl)} alt="Receipt" className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={cloudinarySmall(watchImageUrl)} alt="Receipt" className="w-full h-full object-cover" />
                       <button
                         type="button"
                         onClick={() => setValue('image_url', null, { shouldValidate: true })}

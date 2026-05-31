@@ -635,7 +635,7 @@ const ExpensesPage = () => {
                                   }}
                                   className="relative w-10 h-10 rounded-lg border border-border overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all group"
                                 >
-                                  <img src={cloudinaryThumb(e.image_urls[0])} alt="Receipt" className="w-full h-full object-cover" />
+                                  <img loading="lazy" decoding="async" src={cloudinaryThumb(e.image_urls[0])} alt="Receipt" className="w-full h-full object-cover" />
                                   {e.image_urls.length > 1 && (
                                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center text-[10px] text-white font-bold opacity-0 group-hover:opacity-100 transition-opacity">
                                       +{e.image_urls.length - 1}
@@ -988,7 +988,7 @@ const ExpensesPage = () => {
                     <div className="grid grid-cols-3 gap-2">
                       {formData.image_urls.map((url, idx) => (
                         <div key={idx} className="relative aspect-square rounded-xl border border-border overflow-hidden group">
-                          <img src={cloudinaryThumb(url)} alt="Receipt" className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt="Receipt" className="w-full h-full object-cover" />
                           <button
                             type="button"
                             onClick={() => removeImage(idx)}
@@ -1270,7 +1270,7 @@ const ExpensesPage = () => {
           )}
 
           <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
-            <img
+            <img loading="lazy" decoding="async"
               src={previewImages[currentImageIndex]}
               alt="Preview"
               className="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg animate-in zoom-in-95 duration-300"

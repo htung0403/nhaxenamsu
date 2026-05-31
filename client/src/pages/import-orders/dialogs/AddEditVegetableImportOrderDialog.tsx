@@ -1236,7 +1236,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                       <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                         {(watch('receipt_image_urls') || []).map((url: string, idx: number) => (
                           <div key={idx} className="relative aspect-square rounded-xl border border-border overflow-hidden">
-                            <img src={cloudinaryThumb(url)} alt="Receipt" className="w-full h-full object-cover" />
+                            <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt="Receipt" className="w-full h-full object-cover" />
                             <button
                               type="button"
                               onClick={() => {
@@ -1576,7 +1576,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar w-full">
                                     {(watch(`items.${index}.image_urls`) || []).map((url: string, imgIdx: number) => (
                                       <div key={imgIdx} className="relative w-12 h-12 rounded-lg border border-border overflow-hidden shrink-0">
-                                        <img src={cloudinaryThumb(url)} alt="item" className="w-full h-full object-cover" />
+                                        <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt="item" className="w-full h-full object-cover" />
                                         <button
                                           type="button"
                                           onClick={(e) => {
@@ -1625,7 +1625,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
                                 <div className={clsx("relative", "w-12 h-12")}>
                                   {watch(`items.${index}.image_urls`)?.length > 0 ? (
                                     <div className="relative w-full h-full rounded-lg border border-border overflow-hidden group/imgDesk">
-                                      <img src={cloudinaryThumb(watch(`items.${index}.image_urls`)[0])} alt="item" className="w-full h-full object-cover" />
+                                      <img loading="lazy" decoding="async" src={cloudinaryThumb(watch(`items.${index}.image_urls`)[0])} alt="item" className="w-full h-full object-cover" />
                                       {watch(`items.${index}.image_urls`).length > 1 && (
                                         <div className="absolute top-0 right-0 bg-primary text-white text-[9px] font-bold px-1 rounded-bl-lg">
                                           +{watch(`items.${index}.image_urls`).length - 1}

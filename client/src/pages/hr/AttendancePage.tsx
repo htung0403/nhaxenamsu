@@ -281,7 +281,7 @@ const AttendancePage: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-3">
                             {e.avatar_url ? (
-                              <img src={cloudinaryThumb(e.avatar_url)} alt={e.full_name} className="w-8 h-8 rounded-full object-cover ring-2 ring-muted group-hover:ring-primary/20 transition-all" />
+                              <img loading="lazy" decoding="async" src={cloudinaryThumb(e.avatar_url)} alt={e.full_name} className="w-8 h-8 rounded-full object-cover ring-2 ring-muted group-hover:ring-primary/20 transition-all" />
                             ) : (
                               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border border-primary/20 group-hover:bg-primary group-hover:text-white transition-all shadow-sm">
                                 <UserIcon size={14} />
@@ -360,7 +360,7 @@ const AttendancePage: React.FC = () => {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           {e.avatar_url ? (
-                            <img src={cloudinaryThumb(e.avatar_url)} alt={e.full_name} className="w-10 h-10 rounded-full object-cover ring-2 ring-muted" />
+                            <img loading="lazy" decoding="async" src={cloudinaryThumb(e.avatar_url)} alt={e.full_name} className="w-10 h-10 rounded-full object-cover ring-2 ring-muted" />
                           ) : (
                             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-sm">
                               <UserIcon size={18} />
@@ -458,7 +458,7 @@ const AttendancePage: React.FC = () => {
                 <div className="relative">
                   <div className="w-24 h-24 rounded-3xl bg-muted/30 flex items-center justify-center border border-border/50 overflow-hidden ring-4 ring-muted shadow-inner">
                     {attEmployee?.avatar_url ? (
-                      <img src={cloudinaryThumb(attEmployee.avatar_url)} alt={attEmployee.full_name} className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={cloudinaryThumb(attEmployee.avatar_url)} alt={attEmployee.full_name} className="w-full h-full object-cover" />
                     ) : (
                       <UserIcon size={40} className="text-muted-foreground/50" />
                     )}

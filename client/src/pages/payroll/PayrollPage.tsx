@@ -266,7 +266,7 @@ const PayrollPage: React.FC = () => {
                         <td className="sticky left-0 z-10 bg-white group-hover:bg-muted/10 px-4 py-3 border-r border-border/10 transition-colors">
                           <div className="flex items-center gap-3">
                             {e.avatar_url ? (
-                              <img src={cloudinaryThumb(e.avatar_url)} alt="" className="w-8 h-8 rounded-lg object-cover bg-muted/30 border border-border/50 shadow-sm" />
+                              <img loading="lazy" decoding="async" src={cloudinaryThumb(e.avatar_url)} alt="" className="w-8 h-8 rounded-lg object-cover bg-muted/30 border border-border/50 shadow-sm" />
                             ) : (
                               <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-sm">
                                 <UserIcon size={14} />
@@ -385,7 +385,7 @@ const PayrollPage: React.FC = () => {
                       <div className="flex justify-between items-start pl-1">
                         <div className="flex items-center gap-3 min-w-0">
                           {e.avatar_url ? (
-                            <img src={cloudinaryThumb(e.avatar_url)} alt="" className="w-10 h-10 rounded-full object-cover bg-muted/30 border border-border/50 shadow-sm shrink-0" />
+                            <img loading="lazy" decoding="async" src={cloudinaryThumb(e.avatar_url)} alt="" className="w-10 h-10 rounded-full object-cover bg-muted/30 border border-border/50 shadow-sm shrink-0" />
                           ) : (
                             <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary border border-primary/20 shadow-sm shrink-0">
                               <span className="font-bold text-[14px]">

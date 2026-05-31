@@ -222,7 +222,7 @@ const CreateEditPaymentDialog: React.FC<Props> = ({ isOpen, onClose, payment }) 
                 <div className="flex flex-col gap-2">
                   {proofImageUrl ? (
                     <div className="relative inline-block w-28 h-28 rounded-xl border border-border overflow-hidden group">
-                      <img src={cloudinaryThumb(proofImageUrl)} alt="Ảnh xác minh" className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={cloudinaryThumb(proofImageUrl)} alt="Ảnh xác minh" className="w-full h-full object-cover" />
                       <button
                         type="button"
                         onClick={() => setProofImageUrl(null)}

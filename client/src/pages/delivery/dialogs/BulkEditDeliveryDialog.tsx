@@ -395,7 +395,7 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
                           <div className="flex items-center gap-1 overflow-x-auto max-w-[120px] custom-scrollbar pb-1">
                             {displayImages.map((url, idx) => (
                               <div key={idx} className="relative shrink-0 w-10 h-10 rounded-lg border border-border overflow-hidden group bg-muted/20">
-                                <img src={cloudinaryThumb(url)} alt={`Receipt ${idx + 1}`} className="w-full h-full object-cover" />
+                                <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt={`Receipt ${idx + 1}`} className="w-full h-full object-cover" />
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -514,7 +514,7 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
                           <div className="flex flex-col gap-1 overflow-y-auto max-h-[100px] custom-scrollbar pr-1">
                             {displayImages.map((url, idx) => (
                               <div key={idx} className="relative shrink-0 w-16 h-16 rounded-lg border border-border overflow-hidden group bg-muted/20">
-                                <img src={cloudinaryThumb(url)} alt={`Receipt ${idx + 1}`} className="w-full h-full object-cover" />
+                                <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt={`Receipt ${idx + 1}`} className="w-full h-full object-cover" />
                                 <button
                                   type="button"
                                   onClick={() => {

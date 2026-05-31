@@ -406,7 +406,7 @@ const ExpenseHistoryPage = () => {
                         }}
                         className="relative aspect-[4/3] rounded-xl border border-border overflow-hidden hover:ring-2 hover:ring-primary/50 transition-all group"
                       >
-                        <img src={cloudinaryThumb(url)} alt="Receipt" className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt="Receipt" className="w-full h-full object-cover" />
                         <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </button>
                     ))}
@@ -461,7 +461,7 @@ const ExpenseHistoryPage = () => {
           )}
 
           <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
-            <img
+            <img loading="lazy" decoding="async"
               src={previewImages[currentImageIndex]}
               alt="Preview"
               className="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg animate-in zoom-in-95 duration-300"

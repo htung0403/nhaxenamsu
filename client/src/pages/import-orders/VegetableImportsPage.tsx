@@ -910,7 +910,7 @@ const VegetableImportsPage: React.FC = () => {
                             </div>
                             <div className="w-[64px] h-[64px] shrink-0 bg-muted/20 rounded-lg overflow-hidden">
                               {orderImage ? (
-                                <img src={cloudinarySmall(orderImage)} alt={supplierName} className="w-full h-full object-cover" />
+                                <img loading="lazy" decoding="async" src={cloudinarySmall(orderImage)} alt={supplierName} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
                                   <ImageIcon size={22} className="text-muted-foreground/30" />
@@ -1156,7 +1156,7 @@ const VegetableImportsPage: React.FC = () => {
               {viewingImageIndex + 1} / {viewingImages.length}
             </div>
           )}
-          <img
+          <img loading="lazy" decoding="async"
             src={viewingImages[viewingImageIndex]}
             alt="Receipt"
             className="max-w-[95vw] max-h-[85vh] object-contain rounded-lg"

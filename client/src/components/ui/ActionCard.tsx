@@ -49,7 +49,7 @@ export const ActionCard: React.FC<ActionCardProps> = ({
 
       <div className="flex flex-col items-center text-center h-full">
         {iconSrc ? (
-          <img 
+          <img loading="lazy" decoding="async" 
             src={iconSrc} 
             alt={title} 
             className="w-16 h-16 rounded-[22px] object-cover mb-5 transition-transform duration-300 group-hover:scale-110 shadow-sm" 

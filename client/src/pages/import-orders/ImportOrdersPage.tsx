@@ -440,7 +440,7 @@ const ImportOrdersPage: React.FC = () => {
                                   }}
                                 >
                                   {orderImage ? (
-                                    <img src={cloudinarySmall(orderImage)} alt={order.order_code} className="w-full h-full object-cover" />
+                                    <img loading="lazy" decoding="async" src={cloudinarySmall(orderImage)} alt={order.order_code} className="w-full h-full object-cover" />
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center">
                                       <ImageIcon size={14} className="text-muted-foreground/30" />
@@ -582,7 +582,7 @@ const ImportOrdersPage: React.FC = () => {
                         }}
                       >
                         {orderImage ? (
-                          <img src={cloudinarySmall(orderImage)} alt={order.order_code} className="w-full h-full object-cover" />
+                          <img loading="lazy" decoding="async" src={cloudinarySmall(orderImage)} alt={order.order_code} className="w-full h-full object-cover" />
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <ImageIcon size={22} className="text-muted-foreground/30" />

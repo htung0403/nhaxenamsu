@@ -1287,7 +1287,7 @@ const DeliveryPage: React.FC = () => {
                             }}>
                               {getOrderPreviewImage(o) ? (
                                 <div className="w-8 h-8 rounded-md bg-muted/30 overflow-hidden mx-auto border border-border group relative flex items-center justify-center">
-                                  <img src={cloudinarySmall(getOrderPreviewImage(o) || undefined)} alt="Receipt" className="w-full h-full object-cover" />
+                                  <img loading="lazy" decoding="async" src={cloudinarySmall(getOrderPreviewImage(o) || undefined)} alt="Receipt" className="w-full h-full object-cover" />
                                   <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                     <Eye size={12} className="text-white" />
                                   </div>
@@ -1560,7 +1560,7 @@ const DeliveryPage: React.FC = () => {
                               >
                                 {getOrderPreviewImage(o) ? (
                                   <div className="w-full h-full relative group cursor-pointer">
-                                    <img
+                                    <img loading="lazy" decoding="async"
                                       src={cloudinarySmall(getOrderPreviewImage(o) || undefined)}
                                       alt="Receipt"
                                       className="w-full h-full object-cover"

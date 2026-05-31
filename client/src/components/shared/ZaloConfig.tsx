@@ -129,7 +129,7 @@ const ZaloConfig: React.FC = () => {
             {status === 'waiting' && qrBase64 && (
               <div className="space-y-4 flex flex-col items-center">
                 <div className="p-2 bg-white rounded-xl shadow-inner border border-border">
-                  <img src={qrBase64} alt="Zalo Login QR" className="w-[180px] h-[180px]" />
+                  <img loading="lazy" decoding="async" src={qrBase64} alt="Zalo Login QR" className="w-[180px] h-[180px]" />
                 </div>
                 <div className="flex flex-col items-center gap-1">
                   <p className="text-[11px] font-bold text-emerald-500 animate-pulse">Đang chờ quét mã...</p>

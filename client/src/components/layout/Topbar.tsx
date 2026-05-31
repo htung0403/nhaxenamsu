@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { sidebarMenu, extraMenuItems } from '../../data/sidebarMenu';
-import { moduleData } from '../../data/moduleData';
+import { moduleData, type ModuleCardWithPath } from '../../data/moduleData';
 import { clsx } from 'clsx';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../context/AuthContext';
@@ -62,9 +62,12 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
 
   useEffect(() => {
     if (user) {
-      fetchNotifications();
+      const initialFetch = setTimeout(fetchNotifications, 0);
       const interval = setInterval(fetchNotifications, 60000);
-      return () => clearInterval(interval);
+      return () => {
+        clearTimeout(initialFetch);
+        clearInterval(interval);
+      };
     }
   }, [user, fetchNotifications]);
 
@@ -80,7 +83,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     // Check specific module items in moduleData first
     for (const mainPath in moduleData) {
       for (const section of moduleData[mainPath]) {
-        const found = section.items.find((item: any) => item.path === path);
+        const found = section.items.find((item: ModuleCardWithPath) => item.path === path);
         if (found) return found.title;
       }
     }
@@ -420,7 +423,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
           >
             <div className="relative">
               <div className="w-9 h-9 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center overflow-hidden shadow-sm shadow-primary/5">
-                <img
+                <img loading="lazy" decoding="async"
                   src={cloudinaryThumb(userAvatar)}
                   alt="Avatar"
                   className="w-full h-full object-cover"

@@ -624,7 +624,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
                     className="relative bg-muted/50 border border-border rounded-xl overflow-hidden flex flex-col group cursor-pointer aspect-video sm:aspect-square"
                     onClick={() => setFullscreenImage(img)}
                     >
-                      <img src={cloudinaryMedium(img)} alt={`Nhập hàng ${idx + 1}`} className="w-full h-full object-cover" />
+                      <img loading="lazy" decoding="async" src={cloudinaryMedium(img)} alt={`Nhập hàng ${idx + 1}`} className="w-full h-full object-cover" />
                       {(() => {
                         const meta = nhapHangImageMeta[idx] || nhapHangImageMeta.find((m) => m.url === img);
                         const displayDateTime = meta?.displayDateTime || '--';
@@ -666,7 +666,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
                     className="relative bg-muted/50 border border-border rounded-xl overflow-hidden flex flex-col group cursor-pointer aspect-video sm:aspect-square"
                     onClick={() => setFullscreenImage(img)}
                   >
-                    <img src={cloudinaryMedium(img)} alt={`Nhận hàng ${idx + 1}`} className="w-full h-full object-cover" />
+                    <img loading="lazy" decoding="async" src={cloudinaryMedium(img)} alt={`Nhận hàng ${idx + 1}`} className="w-full h-full object-cover" />
                     {(() => {
                       const meta = nhanHangImageMeta[idx];
                       if (!meta) return null;
@@ -762,7 +762,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           >
             <X size={20} />
           </button>
-          <img
+          <img loading="lazy" decoding="async"
             src={cloudinaryFull(fullscreenImage)}
             alt="View full"
             className="max-w-[95vw] max-h-[85vh] object-contain rounded-lg shadow-2xl"

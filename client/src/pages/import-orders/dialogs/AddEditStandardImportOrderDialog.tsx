@@ -1391,7 +1391,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                   <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar w-full">
                                     {(watch(`items.${index}.image_urls`) || []).map((url, imgIdx) => (
                                       <div key={imgIdx} className="relative w-12 h-12 rounded-lg border border-border overflow-hidden shrink-0">
-                                        <img src={cloudinaryThumb(url)} alt="item" className="w-full h-full object-cover" />
+                                        <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt="item" className="w-full h-full object-cover" />
                                         <button
                                           type="button"
                                           onClick={(e) => {
@@ -1428,7 +1428,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                   <div className="flex items-center gap-1 flex-wrap w-[110px]">
                                     {(watch(`items.${index}.image_urls`) || []).map((url, imgIdx) => (
                                       <div key={imgIdx} className="relative w-8 h-8 rounded-md border border-border overflow-hidden shrink-0">
-                                        <img src={cloudinaryThumb(url)} alt="item" className="w-full h-full object-cover" />
+                                        <img loading="lazy" decoding="async" src={cloudinaryThumb(url)} alt="item" className="w-full h-full object-cover" />
                                         <button
                                           type="button"
                                           onClick={(e) => {

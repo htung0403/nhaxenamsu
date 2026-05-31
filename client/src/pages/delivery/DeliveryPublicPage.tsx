@@ -321,7 +321,7 @@ const DeliveryPublicPage: React.FC = () => {
             <button style={styles.lightboxClose} onClick={() => setLightboxIndex(null)}>
               <X size={24} />
             </button>
-            <img
+            <img loading="lazy" decoding="async"
               src={cloudinaryLarge(allImages[lightboxIndex])}
               alt={`Ảnh ${lightboxIndex + 1}`}
               style={styles.lightboxImg}

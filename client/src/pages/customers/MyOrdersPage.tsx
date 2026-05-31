@@ -578,7 +578,7 @@ const MyOrdersPage: React.FC = () => {
                           >
                             {previewImage ? (
                               <div className="w-8 h-8 rounded-md bg-muted/30 overflow-hidden mx-auto border border-border group relative flex items-center justify-center">
-                                <img src={cloudinarySmall(previewImage)} alt="Ảnh đơn" className="w-full h-full object-cover" />
+                                <img loading="lazy" decoding="async" src={cloudinarySmall(previewImage)} alt="Ảnh đơn" className="w-full h-full object-cover" />
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                   <Eye size={12} className="text-white" />
                                 </div>
@@ -1094,7 +1094,7 @@ const ImagePicker: React.FC<{
     <div className="flex flex-wrap gap-2">
       {urls.map((url, index) => (
         <div key={`${url}-${index}`} className="relative w-16 h-16 rounded-xl border border-border overflow-hidden bg-muted">
-          <img src={url} alt={label} className="w-full h-full object-cover" />
+          <img loading="lazy" decoding="async" src={url} alt={label} className="w-full h-full object-cover" />
           <button
             type="button"
             onClick={() => onRemove(index)}
