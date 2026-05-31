@@ -89,6 +89,10 @@ const customerTypeLabel: Record<string, string> = {
 };
 
 const statusConfig: Record<string, { label: string; className: string }> = {
+  in_sg: {
+    label: 'Hàng ở SG',
+    className: 'bg-primary/10 text-primary border-primary/20',
+  },
   processing: {
     label: 'Đang giao',
     className: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -103,16 +107,16 @@ const statusConfig: Record<string, { label: string; className: string }> = {
   },
 };
 
-type OrderStatusFilter = 'all' | 'processing' | 'delivered';
+type OrderStatusFilter = 'in_sg' | 'processing' | 'delivered';
 
 const statusFilterLabels: Record<OrderStatusFilter, string> = {
-  all: 'Tất cả',
+  in_sg: 'Hàng ở SG',
   processing: 'Đang giao',
   delivered: 'Đã giao',
 };
 
 const statusFilterClasses: Record<OrderStatusFilter, { active: string; badge: string }> = {
-  all: { active: 'bg-primary/10 text-primary', badge: 'bg-primary/10 text-primary' },
+  in_sg: { active: 'bg-primary/10 text-primary', badge: 'bg-primary/10 text-primary' },
   processing: { active: 'bg-amber-50 text-amber-700', badge: 'bg-amber-100 text-amber-700' },
   delivered: { active: 'bg-emerald-50 text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
 };
@@ -126,7 +130,11 @@ type DeliveryImageRef = {
 };
 
 const getOrderFilterStatus = (order: DeliveryOrder): OrderStatusFilter => {
-  return order.status === 'da_giao' ? 'delivered' : 'processing';
+  const totalQuantity = Number(order.total_quantity || 0);
+  const deliveredQuantity = Number(order.delivered_quantity || 0);
+  if (order.status === 'da_giao' || (totalQuantity > 0 && deliveredQuantity >= totalQuantity)) return 'delivered';
+  if (order.status === 'hang_o_sg' || !order.confirmed_at) return 'in_sg';
+  return 'processing';
 };
 
 const getDeliverySourceOrder = (order: DeliveryOrder): DeliverySourceOrder | undefined => {
@@ -194,7 +202,7 @@ const MyOrdersPage: React.FC = () => {
   const [formState, setFormState] = useState<FormState>(createInitialFormState());
   const [uploadingItemIndex, setUploadingItemIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('all');
+  const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('in_sg');
   const [viewingImageOrder, setViewingImageOrder] = useState<DeliveryOrder | null>(null);
   const [isViewingClosing, setIsViewingClosing] = useState(false);
 
@@ -245,8 +253,9 @@ const MyOrdersPage: React.FC = () => {
         summary.total += 1;
         const sourceOrder = getDeliverySourceOrder(order);
         summary.amount += sourceOrder?.total_amount || order.unit_price || 0;
-        if (order.status === 'da_giao') summary.delivered += 1;
-        else summary.processing += 1;
+        const status = getOrderFilterStatus(order);
+        if (status === 'delivered') summary.delivered += 1;
+        else if (status === 'processing') summary.processing += 1;
         return summary;
       },
       { total: 0, processing: 0, delivered: 0, amount: 0 },
@@ -256,12 +265,11 @@ const MyOrdersPage: React.FC = () => {
   const statusCounts = useMemo(() => {
     return sortedOrders.reduce(
       (counts, order) => {
-        counts.all += 1;
         const status = getOrderFilterStatus(order);
-        if (status !== 'all') counts[status] += 1;
+        counts[status] += 1;
         return counts;
       },
-      { all: 0, processing: 0, delivered: 0 } as Record<OrderStatusFilter, number>,
+      { in_sg: 0, processing: 0, delivered: 0 } as Record<OrderStatusFilter, number>,
     );
   }, [sortedOrders]);
 
@@ -269,7 +277,7 @@ const MyOrdersPage: React.FC = () => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
     return sortedOrders.filter((order) => {
       const sourceOrder = getDeliverySourceOrder(order);
-      if (statusFilter !== 'all' && getOrderFilterStatus(order) !== statusFilter) return false;
+      if (getOrderFilterStatus(order) !== statusFilter) return false;
       if (!normalizedSearch) return true;
       return [
         sourceOrder?.order_code,
@@ -432,6 +440,7 @@ const MyOrdersPage: React.FC = () => {
   };
 
   const isSubmitting = createOrderMutation.isPending || updateOrderMutation.isPending;
+  const isInSgTab = statusFilter === 'in_sg';
 
   if (loadingCustomer || isLoading) {
     return (
@@ -498,7 +507,7 @@ const MyOrdersPage: React.FC = () => {
         <div className="bg-card rounded-2xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
           <div className="flex flex-col shrink-0 border-b border-border bg-muted/50">
             <div className="grid grid-cols-5 gap-1 px-3 py-2 md:flex md:items-center md:gap-1 md:overflow-x-auto custom-scrollbar">
-              {(['all', 'processing', 'delivered'] as OrderStatusFilter[]).map((status) => {
+              {(['in_sg', 'processing', 'delivered'] as OrderStatusFilter[]).map((status) => {
                 const isActive = statusFilter === status;
                 const colors = statusFilterClasses[status];
                 const count = statusCounts[status];
@@ -524,7 +533,7 @@ const MyOrdersPage: React.FC = () => {
           </div>
 
           <div className="flex-1 overflow-auto custom-scrollbar bg-muted/30 md:bg-transparent relative">
-            <div className="hidden md:block">
+            <div className={isInSgTab ? 'block min-w-[760px]' : 'hidden md:block'}>
               <table className="w-full border-collapse bg-card text-[13px]">
                 <thead className="sticky top-0 z-20">
                   <tr className="bg-card border-b border-border text-muted-foreground">
@@ -532,14 +541,14 @@ const MyOrdersPage: React.FC = () => {
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Ngày</th>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">{isSenderCustomer ? 'Người nhận' : 'Người gửi'}</th>
                   {!isVegetableOrder && <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-14 border-r border-border">Ảnh</th>}
-                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-right border-r border-border">Cước SG</th>
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-right border-r border-border">{isInSgTab ? 'Số lượng' : 'Cước SG'}</th>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center border-r border-border">Trạng thái</th>
-                  {displayedVehicles.map((vehicle) => (
+                  {!isInSgTab && displayedVehicles.map((vehicle) => (
                     <th key={vehicle.id} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-28 border-r border-border last:border-r-0">
                       {vehicle.license_plate}
                     </th>
                   ))}
-                  {displayedVehicles.length === 0 && FALLBACK_VEHICLE_COLUMNS.map((column) => (
+                  {!isInSgTab && displayedVehicles.length === 0 && FALLBACK_VEHICLE_COLUMNS.map((column) => (
                     <th key={column} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-12 border-r border-border last:border-r-0">
                       {column}
                     </th>
@@ -549,14 +558,14 @@ const MyOrdersPage: React.FC = () => {
               <tbody className="divide-y divide-border">
                 {displayedOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + (isVegetableOrder ? 0 : 1) + (displayedVehicles.length || FALLBACK_VEHICLE_COLUMNS.length)} className="px-4 py-12 text-center">
+                    <td colSpan={5 + (isVegetableOrder ? 0 : 1) + (isInSgTab ? 0 : (displayedVehicles.length || FALLBACK_VEHICLE_COLUMNS.length))} className="px-4 py-12 text-center">
                       <EmptyOrdersState canSelfCreate={canSelfCreate} onCreate={openCreateModal} />
                     </td>
                   </tr>
                 ) : (
                   displayedOrders.map((order) => {
                     const sourceOrder = getDeliverySourceOrder(order);
-                    const statusLabel = order.status === 'da_giao' ? 'delivered' : 'processing';
+                    const statusLabel = getOrderFilterStatus(order);
                     const counterpartName = isSenderCustomer
                       ? (sourceOrder?.receiver_name || sourceOrder?.customers?.name || '-')
                       : (sourceOrder?.sender_name || sourceOrder?.sender_customers?.name || '-');
@@ -590,11 +599,13 @@ const MyOrdersPage: React.FC = () => {
                             )}
                           </td>
                         )}
-                        <td className="px-4 py-3 text-right font-bold border-r border-border/70">{formatCurrency(displayAmount)}</td>
+                        <td className="px-4 py-3 text-right font-bold border-r border-border/70">
+                          {isInSgTab ? formatNumber(Number(order.total_quantity || 0)) : formatCurrency(displayAmount)}
+                        </td>
                         <td className="px-4 py-3 text-center border-r border-border/70">
                           <StatusBadge status={statusLabel} />
                         </td>
-                        {displayedVehicles.map((vehicle) => {
+                        {!isInSgTab && displayedVehicles.map((vehicle) => {
                           const deliveryVehicleRows = (order.delivery_vehicles || []).filter(
                             (deliveryVehicle) => deliveryVehicle.vehicle_id === vehicle.id && (deliveryVehicle.assigned_quantity || 0) > 0,
                           );
@@ -645,7 +656,7 @@ const MyOrdersPage: React.FC = () => {
                             </td>
                           );
                         })}
-                        {displayedVehicles.length === 0 && FALLBACK_VEHICLE_COLUMNS.map((column) => {
+                        {!isInSgTab && displayedVehicles.length === 0 && FALLBACK_VEHICLE_COLUMNS.map((column) => {
                           const quantity = (order.delivery_vehicles || [])
                             .filter((deliveryVehicle) => {
                               const plate = (deliveryVehicle.vehicles?.license_plate || '').toLowerCase();
@@ -673,13 +684,13 @@ const MyOrdersPage: React.FC = () => {
               </table>
             </div>
 
-            <div className="md:hidden p-3 space-y-3">
+            <div className={`${isInSgTab ? 'hidden' : 'md:hidden'} p-3 space-y-3`}>
             {displayedOrders.length === 0 ? (
               <EmptyOrdersState canSelfCreate={canSelfCreate} onCreate={openCreateModal} />
             ) : (
               displayedOrders.map((order) => {
                 const sourceOrder = getDeliverySourceOrder(order);
-                const statusLabel = order.status === 'da_giao' ? 'delivered' : 'processing';
+                const statusLabel = getOrderFilterStatus(order);
                 const counterpartName = isSenderCustomer
                   ? (sourceOrder?.receiver_name || sourceOrder?.customers?.name || '-')
                   : (sourceOrder?.sender_name || sourceOrder?.sender_customers?.name || '-');
