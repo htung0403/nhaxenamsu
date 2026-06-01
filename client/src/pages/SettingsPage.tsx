@@ -5,12 +5,15 @@ import {
   CheckCircle2, ChevronDown, X
 } from 'lucide-react';
 import { clsx } from 'clsx';
+import { useAuth } from '../context/AuthContext';
 import { useTheme, THEME_COLORS, THEME_FONTS, THEME_SIZES } from '../context/ThemeContext';
 import ZaloConfig from '../components/shared/ZaloConfig';
 
 
 const SettingsPage: React.FC = () => {
+  const { user } = useAuth();
   const { theme, setTheme, primaryColor, setPrimaryColor, font, setFont, fontSize, setFontSize } = useTheme();
+  const isAdmin = user?.role === 'admin';
   const [isFontDropdownOpen, setIsFontDropdownOpen] = React.useState(false);
   const [isSizeDropdownOpen, setIsSizeDropdownOpen] = React.useState(false);
   const fontDropdownRef = React.useRef<HTMLDivElement>(null);
@@ -254,10 +257,11 @@ const SettingsPage: React.FC = () => {
           </div>
         </div>
 
-        {/* Zalo Notification Settings */}
-        <div className="lg:col-span-2">
-          <ZaloConfig />
-        </div>
+        {isAdmin && (
+          <div className="lg:col-span-2">
+            <ZaloConfig />
+          </div>
+        )}
 
         {/* Regional Settings */}
         <div className="bg-card rounded-2xl border border-border shadow-sm">

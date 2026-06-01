@@ -18,6 +18,8 @@ const { Zalo, ThreadType } = require('zca-js') as {
   ThreadType: { User: number; Group: number };
 };
 
+const VEGETABLE_SUMMARY_IMAGE_HINT = 'Nhấn vào ảnh để xem chi tiết mối rau, tài , số xe, tài xế';
+
 type ZcaApi = any;
 type ZcaCredentials = {
   imei: string;
@@ -1178,7 +1180,7 @@ export class ZaloService {
         }
 
         try {
-          const caption = `Phiếu tổng kết hàng đã nhận ngày ${this.formatDisplayDate(today)}. Cảm ơn vựa.\n\nXem chi tiết tại: ${publicLink}`;
+          const caption = `Phiếu tổng kết hàng đã nhận ngày ${this.formatDisplayDate(today)}. Cảm ơn vựa.\n\n${VEGETABLE_SUMMARY_IMAGE_HINT}\n\nXem chi tiết tại: ${publicLink}`;
           const attachments = await this.buildSummaryAttachments('supplier', {
             shopName: 'Nhà Xe Năm Sự',
             supplierName: group.supplierName,
@@ -1417,7 +1419,7 @@ export class ZaloService {
         }
 
         try {
-          const caption = `Phiếu tổng kết hàng đã gửi ngày ${this.formatDisplayDate(today)}. Cảm ơn bạn.\n\nXem chi tiết tại: ${publicLink}`;
+          const caption = `Phiếu tổng kết hàng đã gửi ngày ${this.formatDisplayDate(today)}. Cảm ơn bạn.\n\n${VEGETABLE_SUMMARY_IMAGE_HINT}\n\nXem chi tiết tại: ${publicLink}`;
           const attachments = await this.buildSummaryAttachments('sender', {
             shopName: 'Nhà Xe Năm Sự',
             senderName: group.senderName,
@@ -1720,9 +1722,9 @@ export class ZaloService {
       return `Phiếu tổng kết giao hàng ngày ${displayDate}\n\nQuý khách đã được giao đủ hàng. Cảm ơn quý khách đã sử dụng dịch vụ.\n\nXem chi tiết tại: ${publicLink}`;
     }
     if (type === 'supplier') {
-      return `Phiếu tổng kết hàng đã nhận ngày ${displayDate}. Cảm ơn vựa.\n\nXem chi tiết tại: ${publicLink}`;
+      return `Phiếu tổng kết hàng đã nhận ngày ${displayDate}. Cảm ơn vựa.\n\n${VEGETABLE_SUMMARY_IMAGE_HINT}\n\nXem chi tiết tại: ${publicLink}`;
     }
-    return `Phiếu tổng kết hàng đã gửi ngày ${displayDate}. Cảm ơn bạn.\n\nXem chi tiết tại: ${publicLink}`;
+    return `Phiếu tổng kết hàng đã gửi ngày ${displayDate}. Cảm ơn bạn.\n\n${VEGETABLE_SUMMARY_IMAGE_HINT}\n\nXem chi tiết tại: ${publicLink}`;
   }
 
   private async buildSummaryAttachments(

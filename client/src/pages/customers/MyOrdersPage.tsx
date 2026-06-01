@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, CheckCircle2, Clock3, Eye, Image as ImageIcon, ImagePlus, Loader2, Package, Plus, ShieldCheck, Trash2, Wallet, X } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock3, Eye, Image as ImageIcon, ImagePlus, Loader2, Package, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/shared/PageHeader';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
@@ -121,6 +121,15 @@ const statusFilterClasses: Record<OrderStatusFilter, { active: string; badge: st
   delivered: { active: 'bg-emerald-50 text-emerald-700', badge: 'bg-emerald-100 text-emerald-700' },
 };
 
+type PaymentStatusKey = 'unpaid' | 'partial' | 'paid_sg' | 'paid_driver';
+
+const paymentStatusConfig: Record<PaymentStatusKey, { label: string; className: string }> = {
+  unpaid: { label: 'Chưa trả cước', className: 'bg-red-500/10 text-red-700 dark:text-red-500 border-red-200/20' },
+  partial: { label: 'Trả một phần', className: 'bg-amber-500/10 text-amber-700 dark:text-amber-500 border-amber-200/20' },
+  paid_sg: { label: 'Đã trả cước', className: 'bg-indigo-500/10 text-indigo-700 dark:text-indigo-500 border-indigo-200/20' },
+  paid_driver: { label: 'Đã trả cước', className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-200/20' },
+};
+
 type DeliverySourceOrder = NonNullable<DeliveryOrder['import_orders']> | NonNullable<DeliveryOrder['vegetable_orders']>;
 
 type DeliveryImageRef = {
@@ -139,6 +148,32 @@ const getOrderFilterStatus = (order: DeliveryOrder): OrderStatusFilter => {
 
 const getDeliverySourceOrder = (order: DeliveryOrder): DeliverySourceOrder | undefined => {
   return order.vegetable_orders || order.import_orders;
+};
+
+const getOrderPaymentStatus = (order: DeliveryOrder): PaymentStatusKey => {
+  const sourceOrder = getDeliverySourceOrder(order);
+
+  if (sourceOrder?.payment_status === 'paid') return 'paid_sg';
+  if (order.export_order_payment_status) return order.export_order_payment_status === 'paid' ? 'paid_driver' : order.export_order_payment_status;
+
+  const assignedVehicleIds = (order.delivery_vehicles || [])
+    .filter((deliveryVehicle) => (deliveryVehicle.assigned_quantity || 0) > 0)
+    .map((deliveryVehicle) => deliveryVehicle.vehicle_id)
+    .filter((vehicleId): vehicleId is string => Boolean(vehicleId));
+
+  if (assignedVehicleIds.length === 0) return 'unpaid';
+
+  const paidVehicleIds = new Set(
+    (order.payment_collections || [])
+      .filter((paymentCollection) => isPaidCollectionStatus(paymentCollection.status))
+      .map((paymentCollection) => paymentCollection.vehicle_id)
+      .filter((vehicleId): vehicleId is string => Boolean(vehicleId)),
+  );
+
+  const paidCount = assignedVehicleIds.filter((vehicleId) => paidVehicleIds.has(vehicleId)).length;
+  if (paidCount === 0) return 'unpaid';
+  if (paidCount === assignedVehicleIds.length) return 'paid_driver';
+  return 'partial';
 };
 
 const collectFirstImage = (refs: DeliveryImageRef[] | DeliveryImageRef | null | undefined, targetProductName?: string | null): string | null => {
@@ -251,14 +286,12 @@ const MyOrdersPage: React.FC = () => {
     return sortedOrders.reduce(
       (summary, order) => {
         summary.total += 1;
-        const sourceOrder = getDeliverySourceOrder(order);
-        summary.amount += sourceOrder?.total_amount || order.unit_price || 0;
         const status = getOrderFilterStatus(order);
         if (status === 'delivered') summary.delivered += 1;
         else if (status === 'processing') summary.processing += 1;
         return summary;
       },
-      { total: 0, processing: 0, delivered: 0, amount: 0 },
+      { total: 0, processing: 0, delivered: 0 },
     );
   }, [sortedOrders]);
 
@@ -465,6 +498,17 @@ const MyOrdersPage: React.FC = () => {
 
       <div className="space-y-3 flex-1 min-h-0 flex flex-col">
         <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2.5 overflow-x-auto custom-scrollbar">
+          <button
+            type="button"
+            onClick={openCreateModal}
+            disabled={!canSelfCreate}
+            className="flex items-center gap-2 justify-center h-9.5 px-3 shrink-0 border border-primary/20 rounded-xl transition-all bg-primary text-white hover:bg-primary/90 font-bold text-[13px] disabled:opacity-60"
+            title={canSelfCreate ? 'Tạo đơn đổi trả' : 'Bạn chưa có quyền tạo đơn đổi trả'}
+          >
+            <Plus size={16} />
+            <span className="hidden sm:inline">Tạo đơn đổi trả</span>
+          </button>
+
           <div className="flex-1 min-w-58 md:max-w-full">
             <SearchInput
               placeholder="Tìm mã trả hàng, người gửi, người nhận..."
@@ -485,23 +529,12 @@ const MyOrdersPage: React.FC = () => {
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={openCreateModal}
-            disabled={!canSelfCreate}
-            className="flex items-center gap-2 justify-center h-9.5 px-3 shrink-0 border border-primary/20 rounded-xl transition-all bg-primary text-white hover:bg-primary/90 font-bold text-[13px] disabled:opacity-60"
-            title={canSelfCreate ? 'Tạo đơn trả hàng về SG' : 'Bạn chưa có quyền tạo đơn trả hàng'}
-          >
-            <Plus size={16} />
-            <span className="hidden sm:inline">Tạo trả hàng</span>
-          </button>
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 shrink-0">
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
           <SummaryCard icon={Package} label="Tổng phiếu" value={orderSummary.total.toLocaleString('vi-VN')} tone="text-primary bg-primary/10" />
           <SummaryCard icon={Clock3} label="Đang giao" value={orderSummary.processing.toLocaleString('vi-VN')} tone="text-amber-600 bg-amber-50" />
           <SummaryCard icon={CheckCircle2} label="Đã giao" value={orderSummary.delivered.toLocaleString('vi-VN')} tone="text-emerald-600 bg-emerald-50" />
-          <SummaryCard icon={Wallet} label="Tổng cước SG" value={formatCurrency(orderSummary.amount)} tone="text-blue-600 bg-blue-50" />
         </div>
 
         <div className="bg-card rounded-2xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
@@ -543,6 +576,8 @@ const MyOrdersPage: React.FC = () => {
                   {!isVegetableOrder && <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-14 border-r border-border">Ảnh</th>}
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-right border-r border-border">{isInSgTab ? 'Số lượng' : 'Cước SG'}</th>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center border-r border-border">Trạng thái</th>
+                  {!isInSgTab && <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">SL Tổng</th>}
+                  {!isInSgTab && <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Còn lại</th>}
                   {!isInSgTab && displayedVehicles.map((vehicle) => (
                     <th key={vehicle.id} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-28 border-r border-border last:border-r-0">
                       {vehicle.license_plate}
@@ -558,7 +593,7 @@ const MyOrdersPage: React.FC = () => {
               <tbody className="divide-y divide-border">
                 {displayedOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + (isVegetableOrder ? 0 : 1) + (isInSgTab ? 0 : (displayedVehicles.length || FALLBACK_VEHICLE_COLUMNS.length))} className="px-4 py-12 text-center">
+                    <td colSpan={5 + (isVegetableOrder ? 0 : 1) + (isInSgTab ? 0 : 2 + (displayedVehicles.length || FALLBACK_VEHICLE_COLUMNS.length))} className="px-4 py-12 text-center">
                       <EmptyOrdersState canSelfCreate={canSelfCreate} onCreate={openCreateModal} />
                     </td>
                   </tr>
@@ -569,8 +604,11 @@ const MyOrdersPage: React.FC = () => {
                     const counterpartName = isSenderCustomer
                       ? (sourceOrder?.receiver_name || sourceOrder?.customers?.name || '-')
                       : (sourceOrder?.sender_name || sourceOrder?.sender_customers?.name || '-');
-                    const displayAmount = sourceOrder?.total_amount || order.unit_price || 0;
                     const previewImage = getOrderPreviewImage(order);
+                    const paymentStatus = getOrderPaymentStatus(order);
+                    const totalAssigned = (order.delivery_vehicles || []).reduce((sum, deliveryVehicle) => sum + Number(deliveryVehicle.assigned_quantity || 0), 0);
+                    const remainingQuantity = Number(order.total_quantity || 0) - totalAssigned;
+                    const isPartiallyDelivered = totalAssigned > 0 && totalAssigned < Number(order.total_quantity || 0) && statusLabel === 'delivered';
                     return (
                       <tr key={order.id} className="transition-colors hover:bg-muted/30">
                         <td className="px-4 py-3 font-black text-foreground border-r border-border/70">{sourceOrder?.order_code || '-'}</td>
@@ -600,11 +638,26 @@ const MyOrdersPage: React.FC = () => {
                           </td>
                         )}
                         <td className="px-4 py-3 text-right font-bold border-r border-border/70">
-                          {isInSgTab ? formatNumber(Number(order.total_quantity || 0)) : formatCurrency(displayAmount)}
+                          {isInSgTab ? formatNumber(Number(order.total_quantity || 0)) : <PaymentStatusBadge status={paymentStatus} />}
                         </td>
                         <td className="px-4 py-3 text-center border-r border-border/70">
                           <StatusBadge status={statusLabel} />
                         </td>
+                        {!isInSgTab && (
+                          <td className="px-2 py-3 text-[13px] font-bold text-muted-foreground text-center tabular-nums border-r border-border/70">
+                            {formatNumber(Number(order.total_quantity || 0))}
+                            {isPartiallyDelivered && (
+                              <div className="text-[10px] text-green-600 dark:text-green-500 mt-0.5 font-bold">
+                                Đã giao: {formatNumber(totalAssigned)}
+                              </div>
+                            )}
+                          </td>
+                        )}
+                        {!isInSgTab && (
+                          <td className="px-2 py-3 text-[13px] font-black text-orange-600 dark:text-orange-500 text-center tabular-nums border-r border-border/70">
+                            {formatNumber(remainingQuantity > 0 ? remainingQuantity : 0)}
+                          </td>
+                        )}
                         {!isInSgTab && displayedVehicles.map((vehicle) => {
                           const deliveryVehicleRows = (order.delivery_vehicles || []).filter(
                             (deliveryVehicle) => deliveryVehicle.vehicle_id === vehicle.id && (deliveryVehicle.assigned_quantity || 0) > 0,
@@ -694,8 +747,10 @@ const MyOrdersPage: React.FC = () => {
                 const counterpartName = isSenderCustomer
                   ? (sourceOrder?.receiver_name || sourceOrder?.customers?.name || '-')
                   : (sourceOrder?.sender_name || sourceOrder?.sender_customers?.name || '-');
-                const displayAmount = sourceOrder?.total_amount || order.unit_price || 0;
                 const previewImage = getOrderPreviewImage(order);
+                const paymentStatus = getOrderPaymentStatus(order);
+                const totalAssigned = (order.delivery_vehicles || []).reduce((sum, deliveryVehicle) => sum + Number(deliveryVehicle.assigned_quantity || 0), 0);
+                const remainingQuantity = Number(order.total_quantity || 0) - totalAssigned;
                 return (
                   <div key={order.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
@@ -708,7 +763,9 @@ const MyOrdersPage: React.FC = () => {
                     <div className="mt-4 grid grid-cols-2 gap-3 text-[13px]">
                       <InfoBlock label="Ngày" value={order.delivery_date || '-'} />
                       <InfoBlock label={isSenderCustomer ? 'Người nhận' : 'Người gửi'} value={counterpartName} />
-                      <InfoBlock label="Cước SG" value={formatCurrency(displayAmount)} strong />
+                      <InfoBlock label="Cước SG" value={paymentStatusConfig[paymentStatus].label} strong />
+                      <InfoBlock label="SL Tổng" value={formatNumber(Number(order.total_quantity || 0))} strong />
+                      <InfoBlock label="Còn lại" value={formatNumber(remainingQuantity > 0 ? remainingQuantity : 0)} strong />
                     </div>
                     {!isVegetableOrder && (
                       <button
@@ -1062,6 +1119,16 @@ const StatusBadge: React.FC<{ status: string }> = ({ status }) => {
 
   return (
     <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] font-black ${config.className}`}>
+      {config.label}
+    </span>
+  );
+};
+
+const PaymentStatusBadge: React.FC<{ status: PaymentStatusKey }> = ({ status }) => {
+  const config = paymentStatusConfig[status];
+
+  return (
+    <span className={`inline-flex items-center justify-center rounded-full border px-2.5 py-1 text-[11px] font-black ${config.className}`}>
       {config.label}
     </span>
   );
