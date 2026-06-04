@@ -1996,8 +1996,11 @@ export class ZaloService {
         caption,
       });
 
-      const status = result.success ? 'success' : 'failed';
-      const errorMessage = result.success ? null : result.error || 'Gửi thất bại';
+      const hasMessageId = Boolean(result.messageId);
+      const status = result.success && hasMessageId ? 'success' : 'failed';
+      const errorMessage = status === 'success'
+        ? null
+        : result.error || 'Zalo không trả mã tin nhắn, chưa xác nhận đã gửi';
       items.push({
         targetId: target.id,
         targetName: target.name,
@@ -2008,6 +2011,10 @@ export class ZaloService {
         messageId: result.messageId || null,
       });
       await this.upsertVegetableArrivalDispatchLog(supabaseService, date, taiRank, target, status, errorMessage, result.messageId || null);
+
+      if (selectedTargets.length > 1) {
+        await this.sleep(1000);
+      }
     }
 
     const summary = {
@@ -2233,6 +2240,10 @@ export class ZaloService {
       : '';
     const inChargeText = inChargeContacts ? ` Người phụ trách xe: ${inChargeContacts}.` : '';
     return `Tài ${taiRank}${vehicleText} Đã tới chợ.${contactText}${inChargeText} Vựa ${receiverName}${orderText}.`;
+  }
+
+  private async sleep(ms: number): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
 
   private async buildGrocerySummaryTargets(supabaseService: any, date: string) {
