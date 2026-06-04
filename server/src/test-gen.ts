@@ -7,11 +7,11 @@ async function test() {
     supplierName: 'Dũng Hiển',
     date: '15/05/2026',
     items: [
-      { taiRank: 2, licensePlate: '49C-12345', quantity: 60, productName: 'Két Cà Chua', senderName: 'Hằng Bên' },
-      { taiRank: 2, licensePlate: '49C-12345', quantity: 65, productName: 'Két Cà Chua', senderName: 'Hằng Bên' },
-      { taiRank: 3, licensePlate: '49H-78901', quantity: 20, productName: 'Két Cà Chua', senderName: 'Định' },
-      { taiRank: 1, licensePlate: '49C-55555', quantity: 10, productName: 'Rau Muống', senderName: 'Lan' },
-      { taiRank: 1, licensePlate: '49C-55555', quantity: 15, productName: 'Rau Muống', senderName: 'Huệ' },
+      { taiRank: 2, licensePlate: '49C-12345', quantity: 60, productName: 'Két Cà Chua', senderName: 'Hằng Bên', price: 12000, total: 720000 },
+      { taiRank: 2, licensePlate: '49C-12345', quantity: 65, productName: 'Két Cà Chua', senderName: 'Hằng Bên', price: 12000, total: 780000 },
+      { taiRank: 3, licensePlate: '49H-78901', quantity: 20, productName: 'Két Cà Chua', senderName: 'Định', price: 12000, total: 240000 },
+      { taiRank: 1, licensePlate: '49C-55555', quantity: 10, productName: 'Rau Muống', senderName: 'Lan', price: 8000, total: 80000 },
+      { taiRank: 1, licensePlate: '49C-55555', quantity: 15, productName: 'Rau Muống', senderName: 'Huệ', price: 8000, total: 120000 },
     ]
   };
 
