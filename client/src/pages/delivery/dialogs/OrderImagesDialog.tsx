@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { X, Image as ImageIcon, Package, Truck, ZoomIn } from 'lucide-react';
 import { clsx } from 'clsx';
 import type { DeliveryOrder, ImportOrder, ExportOrder } from '../../../types';
-import { cloudinaryMedium, cloudinaryFull } from '../../../lib/cloudinaryUrl';
+import { cloudinarySmall, cloudinaryFull } from '../../../lib/cloudinaryUrl';
 
 interface Props {
   isOpen: boolean;
@@ -624,7 +624,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
                     className="relative bg-muted/50 border border-border rounded-xl overflow-hidden flex flex-col group cursor-pointer aspect-video sm:aspect-square"
                     onClick={() => setFullscreenImage(img)}
                     >
-                      <img loading="lazy" decoding="async" src={cloudinaryMedium(img)} alt={`Nhập hàng ${idx + 1}`} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={cloudinarySmall(img)} alt={`Nhập hàng ${idx + 1}`} className="w-full h-full object-cover" />
                       {(() => {
                         const meta = nhapHangImageMeta[idx] || nhapHangImageMeta.find((m) => m.url === img);
                         const displayDateTime = meta?.displayDateTime || '--';
@@ -666,7 +666,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
                     className="relative bg-muted/50 border border-border rounded-xl overflow-hidden flex flex-col group cursor-pointer aspect-video sm:aspect-square"
                     onClick={() => setFullscreenImage(img)}
                   >
-                    <img loading="lazy" decoding="async" src={cloudinaryMedium(img)} alt={`Nhận hàng ${idx + 1}`} className="w-full h-full object-cover" />
+                        <img loading="lazy" decoding="async" src={cloudinarySmall(img)} alt={`Nhận hàng ${idx + 1}`} className="w-full h-full object-cover" />
                     {(() => {
                       const meta = nhanHangImageMeta[idx];
                       if (!meta) return null;

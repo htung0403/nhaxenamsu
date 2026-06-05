@@ -1172,7 +1172,7 @@ const ImagePicker: React.FC<{
     <div className="flex flex-wrap gap-2">
       {urls.map((url, index) => (
         <div key={`${url}-${index}`} className="relative w-16 h-16 rounded-xl border border-border overflow-hidden bg-muted">
-          <img loading="lazy" decoding="async" src={url} alt={label} className="w-full h-full object-cover" />
+          <img loading="lazy" decoding="async" src={cloudinarySmall(url)} alt={label} className="w-full h-full object-cover" />
           <button
             type="button"
             onClick={() => onRemove(index)}

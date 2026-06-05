@@ -25,7 +25,7 @@ import { useEmployees } from '../../hooks/queries/useHR';
 import { hasFullGoodsModuleAccess, importOrderVisibleToUser } from '../../utils/goodsModuleScope';
 
 import { removeAccents } from '../../lib/str-utils';
-import { cloudinarySmall } from '../../lib/cloudinaryUrl';
+import { cloudinaryLarge, cloudinarySmall } from '../../lib/cloudinaryUrl';
 import { buildVegetableDailyTaiRankMap, getVegetableTaiRank } from '../../utils/vegetableTaiRank';
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -960,7 +960,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
             </div>
           )}
           <img loading="lazy" decoding="async"
-            src={viewingImages[viewingImageIndex]}
+            src={cloudinaryLarge(viewingImages[viewingImageIndex])}
             alt="Receipt"
             className="max-w-[95vw] max-h-[85vh] object-contain rounded-lg"
             onClick={(e) => e.stopPropagation()}

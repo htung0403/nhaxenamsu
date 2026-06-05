@@ -28,7 +28,7 @@ import { hasFullGoodsModuleAccess, importOrderVisibleToUser } from '../../utils/
 import type { DeliveryOrder, DeliveryVehicle, Vehicle } from '../../types';
 
 import { removeAccents } from '../../lib/str-utils';
-import { cloudinarySmall } from '../../lib/cloudinaryUrl';
+import { cloudinaryLarge, cloudinarySmall } from '../../lib/cloudinaryUrl';
 import { buildVegetableDailyTaiRankMap, getVegetableTaiRank } from '../../utils/vegetableTaiRank';
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -1157,7 +1157,7 @@ const VegetableImportsPage: React.FC = () => {
             </div>
           )}
           <img loading="lazy" decoding="async"
-            src={viewingImages[viewingImageIndex]}
+            src={cloudinaryLarge(viewingImages[viewingImageIndex])}
             alt="Receipt"
             className="max-w-[95vw] max-h-[85vh] object-contain rounded-lg"
             onClick={(e) => e.stopPropagation()}

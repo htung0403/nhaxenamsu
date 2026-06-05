@@ -4,6 +4,33 @@ import cloudinary from '../../config/cloudinary';
 import { getCloudinaryUploadConfig } from '../../config/cloudinary';
 
 export class UploadController {
+  static async createUploadSignature(req: Request, res: Response) {
+    try {
+      const folderPath = typeof req.body.folder === 'string' && req.body.folder.trim()
+        ? req.body.folder.trim()
+        : 'import-orders';
+      const uploadConfig = getCloudinaryUploadConfig();
+      const timestamp = Math.round(Date.now() / 1000);
+      const paramsToSign = {
+        folder: folderPath,
+        timestamp,
+      };
+
+      const signature = cloudinary.utils.api_sign_request(paramsToSign, uploadConfig.api_secret);
+
+      return res.status(200).json(successResponse({
+        cloudName: uploadConfig.cloud_name,
+        apiKey: uploadConfig.api_key,
+        folder: folderPath,
+        timestamp,
+        signature,
+      }, 'Tạo chữ ký upload thành công'));
+    } catch (err: any) {
+      console.error('Upload signature catch error:', err);
+      return res.status(500).json(errorResponse(err.message || 'Lỗi server khi tạo chữ ký upload'));
+    }
+  }
+
   static async uploadFile(req: Request, res: Response) {
     try {
       if (!req.file) {

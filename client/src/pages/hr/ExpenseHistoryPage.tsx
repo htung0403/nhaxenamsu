@@ -10,7 +10,7 @@ import StatusBadge from '../../components/shared/StatusBadge';
 import { CustomSelect } from '../../components/shared/CustomSelect';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { matchesSearch } from '../../lib/str-utils';
-import { cloudinaryThumb } from '../../lib/cloudinaryUrl';
+import { cloudinaryLarge, cloudinaryThumb } from '../../lib/cloudinaryUrl';
 import { format } from 'date-fns';
 import { Receipt, X, ChevronLeft, Image as ImageIcon, CalendarDays, User, Car, Banknote, CheckCircle2, ChevronRight as ChevronRightIcon, Printer } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -462,7 +462,7 @@ const ExpenseHistoryPage = () => {
 
           <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
             <img loading="lazy" decoding="async"
-              src={previewImages[currentImageIndex]}
+              src={cloudinaryLarge(previewImages[currentImageIndex])}
               alt="Preview"
               className="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg animate-in zoom-in-95 duration-300"
             />

@@ -15,6 +15,7 @@ const upload = multer({
 
 router.use(authMiddleware);
 
+router.post('/signature', UploadController.createUploadSignature);
 router.post('/', upload.single('file'), UploadController.uploadFile);
 
 export default router;

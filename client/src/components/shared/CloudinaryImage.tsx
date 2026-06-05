@@ -24,6 +24,7 @@ export const CloudinaryImage: React.FC<CloudinaryImageProps> = ({
       alt={alt || ''}
       className={className}
       loading="lazy"
+      decoding="async"
       {...rest}
     />
   );

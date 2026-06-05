@@ -22,7 +22,7 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import MobileFilterSheet from '../../components/shared/MobileFilterSheet';
 import { uploadApi } from '../../api/uploadApi';
 import { matchesSearch } from '../../lib/str-utils';
-import { cloudinaryThumb } from '../../lib/cloudinaryUrl';
+import { cloudinaryLarge, cloudinaryThumb } from '../../lib/cloudinaryUrl';
 import { format } from 'date-fns';
 import { Plus, Receipt, X, ChevronRight, Upload, Trash2, Edit2, CheckCircle2, Image as ImageIcon, ChevronLeft, ChevronRight as ChevronRightIcon, Camera, Filter, CalendarDays, Printer } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -1271,7 +1271,7 @@ const ExpensesPage = () => {
 
           <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center">
             <img loading="lazy" decoding="async"
-              src={previewImages[currentImageIndex]}
+              src={cloudinaryLarge(previewImages[currentImageIndex])}
               alt="Preview"
               className="max-w-full max-h-[80vh] object-contain shadow-2xl rounded-lg animate-in zoom-in-95 duration-300"
             />
