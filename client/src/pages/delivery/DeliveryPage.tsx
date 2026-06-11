@@ -451,7 +451,8 @@ const DeliveryPage: React.FC = () => {
   const [callDialog, setCallDialog] = useState<{ name: string; phone: string } | null>(null);
 
   const isLoading = ordersLoading;
-  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
+  const isAdminRole = user?.role === 'admin';
+  const isAdmin = isAdminRole || user?.role === 'manager';
   const normalizedRole = (user?.role || '').toLowerCase();
   const isLoader = normalizedRole.includes('lo_xe') || normalizedRole.includes('lơ xe');
   const isDriver = normalizedRole === 'driver' || normalizedRole.includes('tai_xe') || normalizedRole.includes('tài xế') || normalizedRole.includes('driver');
@@ -1244,7 +1245,7 @@ const DeliveryPage: React.FC = () => {
                                     </button>
                                   </>
                                 )}
-                                {statusFilter === 'da_giao' && (isAdmin || (isDriver && myVehicleIds.length > 0) || isLoader) && totalAssigned > 0 && isRevertAllowed(o, isAdmin) && (
+                                {statusFilter === 'da_giao' && isAdminRole && totalAssigned > 0 && isRevertAllowed(o, isAdminRole) && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
@@ -1722,7 +1723,7 @@ const DeliveryPage: React.FC = () => {
                                   </button>
                                 </>
                               )}
-                              {statusFilter === 'da_giao' && (isAdmin || (isDriver && myVehicleIds.length > 0) || isLoader) && totalAssigned > 0 && isRevertAllowed(o, isAdmin) && (
+                              {statusFilter === 'da_giao' && isAdminRole && totalAssigned > 0 && isRevertAllowed(o, isAdminRole) && (
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
@@ -1877,7 +1878,7 @@ const DeliveryPage: React.FC = () => {
         isOpen={!!revertingOrder}
         isClosing={isRevertClosing}
         order={revertingOrder}
-        isAdmin={isAdmin}
+        isAdmin={isAdminRole}
         myVehicleIds={myVehicleIds}
         onClose={closeRevert}
       />
