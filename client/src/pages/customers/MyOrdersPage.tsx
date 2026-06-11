@@ -1,27 +1,53 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CalendarDays, CheckCircle2, Clock3, Eye, Image as ImageIcon, ImagePlus, Loader2, Package, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
+import { CheckCircle2, Clock3, Eye, Image as ImageIcon, ImagePlus, Loader2, Package, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/shared/PageHeader';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import ErrorState from '../../components/shared/ErrorState';
+import { DateRangePicker } from '../../components/shared/DateRangePicker';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { useAuth } from '../../context/AuthContext';
-import { useCustomerByUserId, useCreateMyOrder, useMyDeliveryOrders, useMyDeliveryVehicles, useMyOrderProducts, useUpdateMyOrder } from '../../hooks/queries/useCustomers';
+import { useCustomerByUserId, useCreateMyOrder, useMyDeliveryOrders, useMyDeliveryVehicles, useUpdateMyOrder } from '../../hooks/queries/useCustomers';
 import { useMyPermissions } from '../../hooks/queries/useRoles';
 import { uploadApi } from '../../api/uploadApi';
-import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { VehicleCellTooltip } from '../delivery/components/VehicleCellTooltip';
 import OrderImagesDialog from '../delivery/dialogs/OrderImagesDialog';
 import { cloudinarySmall } from '../../lib/cloudinaryUrl';
+import { getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
 import type { Customer, DeliveryOrder, ImportOrder } from '../../types';
 
 const CUSTOMER_ORDER_CREATE_PATH = '/tai-khoan/don-hang/tao-don';
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getCurrentTime = () => new Date().toTimeString().slice(0, 5);
-const formatCurrency = (value: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
+const formatDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+const getOneWeekAgo = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 6);
+  return formatDateInputValue(date);
+};
+const getOrderDateValue = (order: DeliveryOrder) => (order.delivery_date || order.created_at || '').slice(0, 10);
+const isOrderInDateRange = (order: DeliveryOrder, startDate: string, endDate: string) => {
+  const orderDate = getOrderDateValue(order);
+  if (!orderDate) return false;
+  if (startDate && orderDate < startDate) return false;
+  if (endDate && orderDate > endDate) return false;
+  return true;
+};
 const formatNumber = (value: number) => new Intl.NumberFormat('vi-VN').format(value);
+const formatDisplayDate = (value?: string | null) => {
+  if (!value) return '-';
+  const datePart = value.slice(0, 10);
+  const [year, month, day] = datePart.split('-');
+  if (!year || !month || !day) return value;
+  return `${day}-${month}-${year}`;
+};
 const FALLBACK_VEHICLE_COLUMNS = ['1', '2', '3', '4', '5', '6', '7', '8', 'ba', 'kho'];
 const isPaidCollectionStatus = (status?: string) => status === 'confirmed' || status === 'self_confirmed';
 
@@ -40,6 +66,7 @@ type FormState = {
 
 type CustomerOrderItemForm = {
   product_id: string;
+  product_name: string;
   package_type: string;
   item_note: string;
   weight_kg: string;
@@ -51,6 +78,7 @@ type CustomerOrderItemForm = {
 
 const createInitialItem = (): CustomerOrderItemForm => ({
   product_id: '',
+  product_name: '',
   package_type: '',
   item_note: '',
   weight_kg: '',
@@ -139,15 +167,73 @@ type DeliveryImageRef = {
 };
 
 const getOrderFilterStatus = (order: DeliveryOrder): OrderStatusFilter => {
-  const totalQuantity = Number(order.total_quantity || 0);
-  const deliveredQuantity = Number(order.delivered_quantity || 0);
-  if (order.status === 'da_giao' || (totalQuantity > 0 && deliveredQuantity >= totalQuantity)) return 'delivered';
-  if (order.status === 'hang_o_sg' || !order.confirmed_at) return 'in_sg';
-  return 'processing';
+  const effectiveStatus = getEffectiveDeliveryStatus(order);
+  if (effectiveStatus === 'hang_o_sg') return 'in_sg';
+  if (effectiveStatus === 'can_giao') return 'processing';
+  return 'delivered';
 };
 
 const getDeliverySourceOrder = (order: DeliveryOrder): DeliverySourceOrder | undefined => {
   return order.vegetable_orders || order.import_orders;
+};
+
+const getCustomerDeliveryReceiverName = (order: DeliveryOrder) => {
+  const sourceOrder = getDeliverySourceOrder(order);
+  if (!sourceOrder) return '-';
+  if (order.status === 'hang_o_sg' && sourceOrder.selected_alias) return sourceOrder.selected_alias;
+  return sourceOrder.customers?.name || sourceOrder.receiver_name?.trim() || sourceOrder.profiles?.full_name || '-';
+};
+
+const getCustomerSourcePaymentStatus = (order: DeliveryOrder) => {
+  return getDeliverySourceOrder(order)?.payment_status || 'unpaid';
+};
+
+const getDisplayProductName = (order: DeliveryOrder) => {
+  const productName = order.product_name || '-';
+  return productName.includes(' - ')
+    ? productName.split(' - ').slice(1).join(' - ').trim() || productName
+    : productName;
+};
+
+const getCustomerDeliveryGroupKey = (order: DeliveryOrder) => {
+  if (order.status === 'hang_o_sg') return `single:${order.id}`;
+  const deliveryDate = order.delivery_date || 'N/A';
+  const category = order.order_category || 'standard';
+  const receiver = getCustomerDeliveryReceiverName(order);
+  const product = (order.product_name || '').trim();
+  const paymentStatus = getCustomerSourcePaymentStatus(order);
+  return `${deliveryDate}|${category}|${receiver}|${product}|${paymentStatus}`;
+};
+
+const groupCustomerDeliveryOrders = (orders: DeliveryOrder[]) => {
+  const map = new Map<string, DeliveryOrder[]>();
+  orders.forEach((order) => {
+    const key = getCustomerDeliveryGroupKey(order);
+    const list = map.get(key) || [];
+    list.push(order);
+    map.set(key, list);
+  });
+
+  return Array.from(map.values()).map((group) => {
+    const ordered = [...group].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+    const first = ordered[0];
+    const totalQuantity = ordered.reduce((sum, order) => sum + Number(order.total_quantity || 0), 0);
+    const mergedDeliveryVehicles = ordered.flatMap((order) => order.delivery_vehicles || []);
+    const mergedPaymentCollections = ordered.flatMap((order) => order.payment_collections || []);
+    const sourceIds = ordered.map((order) => order.id);
+    const allInSg = ordered.every((order) => order.status === 'hang_o_sg');
+    const hasDelivered = ordered.some((order) => order.status === 'da_giao');
+
+    return {
+      ...first,
+      total_quantity: totalQuantity,
+      delivery_vehicles: mergedDeliveryVehicles,
+      payment_collections: mergedPaymentCollections,
+      source_order_ids: sourceIds,
+      source_orders: ordered,
+      status: allInSg ? 'hang_o_sg' : (hasDelivered ? 'da_giao' : 'can_giao'),
+    } as DeliveryOrder;
+  });
 };
 
 const getOrderPaymentStatus = (order: DeliveryOrder): PaymentStatusKey => {
@@ -225,7 +311,16 @@ const getOrderPreviewImage = (order: DeliveryOrder | null | undefined) => {
   return collectFirstImage(sourceOrder?.import_order_items || sourceOrder?.vegetable_order_items, targetProductName);
 };
 
-const MyOrdersPage: React.FC = () => {
+export type CustomerOrdersPageType = Extract<
+  Customer['customer_type'],
+  'grocery_receiver' | 'grocery_sender' | 'vegetable_receiver' | 'vegetable_sender'
+>;
+
+type MyOrdersPageProps = {
+  customerType?: CustomerOrdersPageType;
+};
+
+const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
   const { user } = useAuth();
   const { data: customer, isLoading: loadingCustomer } = useCustomerByUserId(user?.id || '');
   const { data: myPermissions } = useMyPermissions(!!user?.id);
@@ -238,40 +333,32 @@ const MyOrdersPage: React.FC = () => {
   const [uploadingItemIndex, setUploadingItemIndex] = useState<number | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<OrderStatusFilter>('in_sg');
+  const today = getToday();
+  const oneWeekAgo = getOneWeekAgo();
+  const [startDate, setStartDate] = useState(oneWeekAgo);
+  const [endDate, setEndDate] = useState(today);
   const [viewingImageOrder, setViewingImageOrder] = useState<DeliveryOrder | null>(null);
   const [isViewingClosing, setIsViewingClosing] = useState(false);
 
-  const orderPolicy = getCustomerOrderPolicy(customer?.customer_type);
+  const effectiveCustomerType = customerType || customer?.customer_type;
+  const orderPolicy = useMemo(() => getCustomerOrderPolicy(effectiveCustomerType), [effectiveCustomerType]);
   const isSenderCustomer = orderPolicy?.binding === 'sender';
   const orderCategory = orderPolicy?.orderCategory || 'standard';
   const isVegetableOrder = orderCategory === 'vegetable';
   const { data: deliveryOrders, isLoading, isError, refetch } = useMyDeliveryOrders(!!user?.id);
   const { data: deliveryVehicles } = useMyDeliveryVehicles(!!user?.id);
-  const { data: products } = useMyOrderProducts(isCreateOpen);
   const canSelfCreate = (myPermissions?.page_paths || []).includes(CUSTOMER_ORDER_CREATE_PATH);
-  const productOptions = useMemo(
-    () => (products || []).map((product) => ({ value: product.id, label: product.name, searchText: product.name })),
-    [products],
-  );
-  const productsById = useMemo(() => new Map((products || []).map((product) => [product.id, product])), [products]);
-  const calculatedVegetableTotal = useMemo(() => {
-    if (!isVegetableOrder) return 0;
-    return formState.items.reduce((total, item) => {
-      const product = productsById.get(item.product_id);
-      const quantity = Number(item.quantity) || 0;
-      const unitPrice = item.unit_price ? Number(item.unit_price) : Number(product?.base_price) || 0;
-      return total + (Number.isFinite(unitPrice) ? unitPrice : 0) * quantity;
-    }, 0);
-  }, [formState.items, isVegetableOrder, productsById]);
 
   const sortedOrders = useMemo(() => {
-    if (!deliveryOrders || !customer?.id) return [];
-    return deliveryOrders.filter((order) => {
+    if (!deliveryOrders || !customer?.id || !orderPolicy) return [];
+    const customerOrders = deliveryOrders.filter((order) => {
       const sourceOrder = getDeliverySourceOrder(order);
       if (!sourceOrder) return false;
       if (isSenderCustomer) return sourceOrder.sender_id === customer.id;
       return sourceOrder.customer_id === customer.id;
-    }).sort(
+    });
+
+    return groupCustomerDeliveryOrders(customerOrders).sort(
       (a, b) => {
         return (
           new Date(b.delivery_date || b.created_at).getTime() -
@@ -280,10 +367,14 @@ const MyOrdersPage: React.FC = () => {
         );
       },
     );
-  }, [customer?.id, deliveryOrders, isSenderCustomer]);
+  }, [customer?.id, deliveryOrders, isSenderCustomer, orderPolicy]);
+
+  const dateFilteredOrders = useMemo(() => {
+    return sortedOrders.filter((order) => isOrderInDateRange(order, startDate, endDate));
+  }, [endDate, sortedOrders, startDate]);
 
   const orderSummary = useMemo(() => {
-    return sortedOrders.reduce(
+    return dateFilteredOrders.reduce(
       (summary, order) => {
         summary.total += 1;
         const status = getOrderFilterStatus(order);
@@ -293,10 +384,10 @@ const MyOrdersPage: React.FC = () => {
       },
       { total: 0, processing: 0, delivered: 0 },
     );
-  }, [sortedOrders]);
+  }, [dateFilteredOrders]);
 
   const statusCounts = useMemo(() => {
-    return sortedOrders.reduce(
+    return dateFilteredOrders.reduce(
       (counts, order) => {
         const status = getOrderFilterStatus(order);
         counts[status] += 1;
@@ -304,11 +395,11 @@ const MyOrdersPage: React.FC = () => {
       },
       { in_sg: 0, processing: 0, delivered: 0 } as Record<OrderStatusFilter, number>,
     );
-  }, [sortedOrders]);
+  }, [dateFilteredOrders]);
 
   const displayedOrders = useMemo(() => {
     const normalizedSearch = searchQuery.trim().toLowerCase();
-    return sortedOrders.filter((order) => {
+    return dateFilteredOrders.filter((order) => {
       const sourceOrder = getDeliverySourceOrder(order);
       if (getOrderFilterStatus(order) !== statusFilter) return false;
       if (!normalizedSearch) return true;
@@ -323,11 +414,9 @@ const MyOrdersPage: React.FC = () => {
         order.product_name,
       ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
     });
-  }, [searchQuery, sortedOrders, statusFilter]);
+  }, [dateFilteredOrders, searchQuery, statusFilter]);
 
-  const latestOrder = sortedOrders[0];
-  const latestSourceOrder = latestOrder ? getDeliverySourceOrder(latestOrder) : undefined;
-  const currentCustomerType = customer?.customer_type ? customerTypeLabel[customer.customer_type] || customer.customer_type : 'Chưa xác định';
+  const currentCustomerType = effectiveCustomerType ? customerTypeLabel[effectiveCustomerType] || effectiveCustomerType : 'Chưa xác định';
   const displayedVehicles = useMemo(
     () => (deliveryVehicles || []).filter((vehicle) => {
       if (isVegetableOrder) return true;
@@ -338,7 +427,11 @@ const MyOrdersPage: React.FC = () => {
 
   const openCreateModal = () => {
     setEditingOrder(null);
-    setFormState(createInitialFormState());
+    setFormState((() => {
+      const initialState = createInitialFormState();
+      initialState.sender_name = customer?.name || '';
+      return initialState;
+    })());
     setIsCreateOpen(true);
   };
 
@@ -420,39 +513,36 @@ const MyOrdersPage: React.FC = () => {
     const validItems = formState.items.map((item) => ({
       ...item,
       quantity: Number(item.quantity),
-      weight_kg: item.weight_kg ? Number(item.weight_kg) : null,
-      unit_price: isVegetableOrder
-        ? item.unit_price ? Number(item.unit_price) : Number(productsById.get(item.product_id)?.base_price) || 0
-        : item.unit_price ? Number(item.unit_price) : null,
+      weight_kg: null,
+      unit_price: null,
     }));
 
-    if (validItems.some((item) => !item.product_id || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
-      toast.error('Vui lòng chọn mặt hàng và nhập số lượng lớn hơn 0');
+    if (validItems.some((item) => !item.product_name?.trim() || !Number.isFinite(item.quantity) || item.quantity <= 0)) {
+      toast.error('Vui lòng nhập mặt hàng và số lượng lớn hơn 0');
       return;
     }
 
     const payload = {
       order_date: formState.order_date || undefined,
       order_time: formState.order_time || undefined,
-      sender_name: formState.sender_name || undefined,
+      sender_name: customer?.name || formState.sender_name || undefined,
       receiver_name: formState.receiver_name || undefined,
       receiver_phone: formState.receiver_phone || undefined,
       receiver_address: formState.receiver_address || undefined,
       status: 'processing' as const,
       payment_status: formState.payment_status,
-      total_amount: isVegetableOrder
-        ? calculatedVegetableTotal
-        : formState.total_amount ? Number(formState.total_amount) : undefined,
+      total_amount: formState.total_amount ? Number(formState.total_amount) : undefined,
       notes: formState.notes || 'Đơn trả hàng lỗi về lại SG',
       is_custom_amount: true,
       order_category: orderCategory,
       items: validItems.map((item) => ({
-        product_id: item.product_id,
+        product_id: undefined,
+        product_name: item.product_name.trim(),
         quantity: item.quantity,
-        package_type: !isVegetableOrder && item.package_type ? item.package_type : undefined,
-        item_note: item.item_note || undefined,
-        weight_kg: !isVegetableOrder ? item.weight_kg : undefined,
-        unit_price: item.unit_price,
+        package_type: item.product_name.trim(),
+        item_note: item.package_type || item.item_note || undefined,
+        weight_kg: undefined,
+        unit_price: undefined,
         image_url: item.image_url,
         image_urls: item.image_urls,
         payment_status: formState.payment_status,
@@ -522,12 +612,17 @@ const MyOrdersPage: React.FC = () => {
             <span className="whitespace-nowrap">{currentCustomerType}</span>
           </div>
 
-          {latestOrder && (
-            <div className="hidden lg:flex items-center gap-2 shrink-0 rounded-xl border border-border/80 bg-muted/20 px-3 py-2 text-[12px] font-bold text-muted-foreground">
-              <CalendarDays size={15} />
-              <span className="whitespace-nowrap">Mới nhất: {latestSourceOrder?.order_code || latestOrder.delivery_date || '-'}</span>
-            </div>
-          )}
+          <div className="hidden md:flex shrink-0">
+            <DateRangePicker
+              initialDateFrom={startDate}
+              initialDateTo={endDate}
+              onUpdate={(values) => {
+                setStartDate(values.range.from ? formatDateInputValue(values.range.from) : '');
+                setEndDate(values.range.to ? formatDateInputValue(values.range.to) : '');
+              }}
+            />
+          </div>
+
 
         </div>
 
@@ -570,21 +665,21 @@ const MyOrdersPage: React.FC = () => {
               <table className="w-full border-collapse bg-card text-[13px]">
                 <thead className="sticky top-0 z-20">
                   <tr className="bg-card border-b border-border text-muted-foreground">
-                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Mã đơn</th>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Ngày</th>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">{isSenderCustomer ? 'Người nhận' : 'Người gửi'}</th>
                   {!isVegetableOrder && <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-14 border-r border-border">Ảnh</th>}
+                  <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Tên hàng</th>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-right border-r border-border">{isInSgTab ? 'Số lượng' : 'Cước SG'}</th>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center border-r border-border">Trạng thái</th>
                   {!isInSgTab && <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">SL Tổng</th>}
                   {!isInSgTab && <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Còn lại</th>}
                   {!isInSgTab && displayedVehicles.map((vehicle) => (
-                    <th key={vehicle.id} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-28 border-r border-border last:border-r-0">
+                    <th key={vehicle.id} className="px-1 py-3 text-[10px] font-bold uppercase tracking-tight text-center w-20 border-r border-border last:border-r-0">
                       {vehicle.license_plate}
                     </th>
                   ))}
                   {!isInSgTab && displayedVehicles.length === 0 && FALLBACK_VEHICLE_COLUMNS.map((column) => (
-                    <th key={column} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-12 border-r border-border last:border-r-0">
+                    <th key={column} className="px-1 py-3 text-[10px] font-bold uppercase tracking-tight text-center w-10 border-r border-border last:border-r-0">
                       {column}
                     </th>
                   ))}
@@ -611,8 +706,7 @@ const MyOrdersPage: React.FC = () => {
                     const isPartiallyDelivered = totalAssigned > 0 && totalAssigned < Number(order.total_quantity || 0) && statusLabel === 'delivered';
                     return (
                       <tr key={order.id} className="transition-colors hover:bg-muted/30">
-                        <td className="px-4 py-3 font-black text-foreground border-r border-border/70">{sourceOrder?.order_code || '-'}</td>
-                        <td className="px-4 py-3 text-muted-foreground border-r border-border/70">{order.delivery_date || '-'}</td>
+                        <td className="px-4 py-3 text-muted-foreground border-r border-border/70">{formatDisplayDate(order.delivery_date || order.created_at)}</td>
                         <td className="px-4 py-3 border-r border-border/70">{counterpartName}</td>
                         {!isVegetableOrder && (
                           <td
@@ -637,6 +731,9 @@ const MyOrdersPage: React.FC = () => {
                             )}
                           </td>
                         )}
+                        <td className="px-4 py-3 font-semibold text-foreground border-r border-border/70 min-w-40">
+                          {getDisplayProductName(order)}
+                        </td>
                         <td className="px-4 py-3 text-right font-bold border-r border-border/70">
                           {isInSgTab ? formatNumber(Number(order.total_quantity || 0)) : <PaymentStatusBadge status={paymentStatus} />}
                         </td>
@@ -668,7 +765,7 @@ const MyOrdersPage: React.FC = () => {
                           return (
                             <td
                               key={vehicle.id}
-                              className={`px-1 py-1 text-[13px] text-center tabular-nums border-r border-border/70 last:border-r-0 transition-all relative ${
+                              className={`px-0.5 py-1 text-[12px] text-center tabular-nums border-r border-border/70 last:border-r-0 transition-all relative ${
                                 deliveryVehicleRows.length > 0 ? 'font-bold bg-blue-500/10' : 'text-muted-foreground/30'
                               }`}
                             >
@@ -721,7 +818,7 @@ const MyOrdersPage: React.FC = () => {
                           return (
                             <td
                               key={column}
-                              className={`px-2 py-3 text-[13px] text-center tabular-nums border-r border-border/70 last:border-r-0 ${
+                              className={`px-1 py-2 text-[12px] text-center tabular-nums border-r border-border/70 last:border-r-0 ${
                                 quantity > 0 ? 'font-bold text-orange-600 bg-orange-500/10' : 'text-muted-foreground/30'
                               }`}
                             >
@@ -755,14 +852,14 @@ const MyOrdersPage: React.FC = () => {
                   <div key={order.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <div className="text-[12px] text-muted-foreground">Mã đơn</div>
-                        <div className="font-black text-foreground">{sourceOrder?.order_code || '-'}</div>
+                        <div className="text-[12px] text-muted-foreground">Ngày</div>
+                        <div className="font-black text-foreground">{formatDisplayDate(order.delivery_date || order.created_at)}</div>
                       </div>
                       <StatusBadge status={statusLabel} />
                     </div>
                     <div className="mt-4 grid grid-cols-2 gap-3 text-[13px]">
-                      <InfoBlock label="Ngày" value={order.delivery_date || '-'} />
                       <InfoBlock label={isSenderCustomer ? 'Người nhận' : 'Người gửi'} value={counterpartName} />
+                      <InfoBlock label="Tên hàng" value={getDisplayProductName(order)} />
                       <InfoBlock label="Cước SG" value={paymentStatusConfig[paymentStatus].label} strong />
                       <InfoBlock label="SL Tổng" value={formatNumber(Number(order.total_quantity || 0))} strong />
                       <InfoBlock label="Còn lại" value={formatNumber(remainingQuantity > 0 ? remainingQuantity : 0)} strong />
@@ -806,9 +903,9 @@ const MyOrdersPage: React.FC = () => {
       </div>
 
       {isCreateOpen && createPortal(
-        <div className="fixed inset-0 z-[9999] bg-black/35 flex items-center justify-center p-4">
-          <div className="w-full max-w-5xl max-h-[92vh] bg-white rounded-2xl border border-border shadow-xl overflow-hidden flex flex-col">
-            <form onSubmit={handleSubmit}>
+        <div className="fixed inset-0 z-[9999] bg-black/35 flex items-stretch justify-end">
+          <div className="h-full w-full max-w-3xl bg-white border-l border-border shadow-2xl overflow-hidden flex flex-col animate-in slide-in-from-right duration-300">
+            <form onSubmit={handleSubmit} className="h-full flex flex-col">
               <div className="px-5 py-4 border-b border-border bg-muted/20">
                 <h3 className="text-[15px] font-bold text-foreground">
                   {editingOrder ? 'Sửa đơn trả hàng' : 'Tạo đơn trả hàng về SG'}
@@ -818,7 +915,7 @@ const MyOrdersPage: React.FC = () => {
                 </p>
               </div>
 
-              <div className="p-5 space-y-5 overflow-y-auto max-h-[calc(92vh-140px)]">
+              <div className="p-5 space-y-5 overflow-y-auto flex-1 min-h-0">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Input
                     label="Ngày đơn"
@@ -836,48 +933,35 @@ const MyOrdersPage: React.FC = () => {
                   />
                 </div>
 
-                {isSenderCustomer ? (
-                  <>
-                    <Input
-                      label="Người nhận"
-                      value={formState.receiver_name}
-                      onChange={(value) => setFormState((prev) => ({ ...prev, receiver_name: value }))}
-                    />
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <Input
-                        label="Số điện thoại người nhận"
-                        value={formState.receiver_phone}
-                        onChange={(value) => setFormState((prev) => ({ ...prev, receiver_phone: value }))}
-                      />
-                      <Input
-                        label="Địa chỉ người nhận"
-                        value={formState.receiver_address}
-                        onChange={(value) => setFormState((prev) => ({ ...prev, receiver_address: value }))}
-                      />
-                    </div>
-                  </>
-                ) : (
-                  <Input
-                    label="Người gửi"
-                    value={formState.sender_name}
-                    onChange={(value) => setFormState((prev) => ({ ...prev, sender_name: value }))}
-                  />
-                )}
+                <Input
+                  label="Người gửi"
+                  value={customer?.name || formState.sender_name}
+                  onChange={() => undefined}
+                  disabled
+                  required
+                />
 
-                {isVegetableOrder ? (
-                  <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
-                    <div className="text-[12px] font-semibold text-emerald-700">Cước SG tự tính theo giá rau đã cài đặt</div>
-                    <div className="text-xl font-black text-emerald-800 mt-1">{formatCurrency(calculatedVegetableTotal)}</div>
-                  </div>
-                ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <Input
-                    label="Cước SG"
-                    type="number"
-                    min={0}
-                    value={formState.total_amount}
-                    onChange={(value) => setFormState((prev) => ({ ...prev, total_amount: value }))}
+                    label="Người nhận"
+                    value={formState.receiver_name}
+                    onChange={(value) => setFormState((prev) => ({ ...prev, receiver_name: value }))}
+                    required
                   />
-                )}
+                  <Input
+                    label="Số điện thoại"
+                    value={formState.receiver_phone}
+                    onChange={(value) => setFormState((prev) => ({ ...prev, receiver_phone: value }))}
+                  />
+                </div>
+
+                <Input
+                  label="Cước SG"
+                  type="number"
+                  min={0}
+                  value={formState.total_amount}
+                  onChange={(value) => setFormState((prev) => ({ ...prev, total_amount: value }))}
+                />
 
                 <div className="space-y-2">
                   <label className="text-[12px] font-semibold text-muted-foreground">Trạng thái cước SG</label>
@@ -922,30 +1006,16 @@ const MyOrdersPage: React.FC = () => {
 
                   <div className="space-y-3">
                     {formState.items.map((item, index) => {
-                      const selectedProduct = productsById.get(item.product_id);
-                      const vegetableUnitPrice = item.unit_price ? Number(item.unit_price) : Number(selectedProduct?.base_price) || 0;
-                      const quantity = Number(item.quantity) || 0;
-                      const vegetableLineTotal = vegetableUnitPrice * quantity;
-
                       return (
                       <div key={index} className="rounded-2xl border border-border bg-muted/10 p-3 space-y-3">
-                        <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,1fr)_110px_140px_auto] gap-3 items-end">
-                          <div className="space-y-1.5">
-                            <label className="text-[12px] font-semibold text-muted-foreground">Mặt hàng</label>
-                            <SearchableSelect
-                              options={productOptions}
-                              value={item.product_id}
-                              onValueChange={(value) => {
-                                const product = productsById.get(value);
-                                updateItem(index, {
-                                  product_id: value,
-                                  unit_price: isVegetableOrder ? String(Number(product?.base_price) || 0) : item.unit_price,
-                                });
-                              }}
-                              placeholder="Chọn mặt hàng"
-                              searchPlaceholder="Tìm mặt hàng..."
-                            />
-                          </div>
+                        <div className="grid grid-cols-1 md:grid-cols-[minmax(220px,1fr)_110px_auto] gap-3 items-end">
+                          <Input
+                            label="Mặt hàng"
+                            value={item.product_name}
+                            onChange={(value) => updateItem(index, { product_name: value })}
+                            placeholder="Nhập tên mặt hàng"
+                            required
+                          />
                           <Input
                             label="Số lượng"
                             type="number"
@@ -954,22 +1024,6 @@ const MyOrdersPage: React.FC = () => {
                             onChange={(value) => updateItem(index, { quantity: value })}
                             required
                           />
-                          {isVegetableOrder ? (
-                            <div className="space-y-1.5">
-                              <label className="text-[12px] font-semibold text-muted-foreground">Đơn giá</label>
-                              <div className="h-10 px-3 rounded-xl border border-border bg-muted/40 text-sm font-bold flex items-center">
-                                {selectedProduct ? formatCurrency(vegetableUnitPrice) : '-'}
-                              </div>
-                            </div>
-                          ) : (
-                            <Input
-                              label="Kg"
-                              type="number"
-                              min={0}
-                              value={item.weight_kg}
-                              onChange={(value) => updateItem(index, { weight_kg: value })}
-                            />
-                          )}
                           <button
                             type="button"
                             onClick={() => removeItem(index)}
@@ -981,36 +1035,11 @@ const MyOrdersPage: React.FC = () => {
                           </button>
                         </div>
 
-                        {isVegetableOrder ? (
-                          <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-3">
-                            <Input
-                              label="Ghi chú nhanh"
-                              value={item.item_note}
-                              onChange={(value) => updateItem(index, { item_note: value })}
-                            />
-                            <div className="space-y-1.5">
-                              <label className="text-[12px] font-semibold text-muted-foreground">Thành tiền</label>
-                              <div className="h-10 px-3 rounded-xl border border-border bg-background text-sm font-black flex items-center justify-end">
-                                {formatCurrency(vegetableLineTotal)}
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <Input
-                              label="Loại kiện / ghi chú kiện"
-                              value={item.package_type}
-                              onChange={(value) => updateItem(index, { package_type: value })}
-                            />
-                            <Input
-                              label="Đơn giá"
-                              type="number"
-                              min={0}
-                              value={item.unit_price}
-                              onChange={(value) => updateItem(index, { unit_price: value })}
-                            />
-                          </div>
-                        )}
+                        <Input
+                          label="Ghi chú"
+                          value={item.package_type}
+                          onChange={(value) => updateItem(index, { package_type: value })}
+                        />
 
                         <ImagePicker
                           label="Ảnh hàng lỗi"
@@ -1082,7 +1111,9 @@ const Input: React.FC<{
   type?: string;
   required?: boolean;
   min?: number;
-}> = ({ label, value, onChange, type = 'text', required = false, min }) => (
+  disabled?: boolean;
+  placeholder?: string;
+}> = ({ label, value, onChange, type = 'text', required = false, min, disabled = false, placeholder }) => (
   <div className="space-y-1.5">
     <label className="text-[12px] font-semibold text-muted-foreground">{label}</label>
     <input
@@ -1091,7 +1122,9 @@ const Input: React.FC<{
       type={type}
       required={required}
       min={min}
-      className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm"
+      disabled={disabled}
+      placeholder={placeholder}
+      className="w-full px-3 py-2 rounded-xl border border-border bg-background text-sm disabled:bg-muted/40 disabled:text-muted-foreground disabled:cursor-not-allowed"
     />
   </div>
 );
@@ -1192,3 +1225,4 @@ const ImagePicker: React.FC<{
 );
 
 export default MyOrdersPage;
+

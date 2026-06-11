@@ -77,6 +77,7 @@ const resolveAddressSchema = z.object({
 
 const customerSelfOrderItemSchema = z.object({
   product_id: z.string().uuid().optional().nullable(),
+  product_name: z.string().optional().nullable(),
   package_type: z.string().optional().nullable(),
   item_note: z.string().optional().nullable(),
   weight_kg: z.number().optional().nullable(),
@@ -378,3 +379,4 @@ export class CustomerController {
     }
   }
 }
+

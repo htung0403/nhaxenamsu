@@ -47,7 +47,7 @@ import SalarySettingsPage from './pages/hr/SalarySettingsPage';
 import RolePermissionsPage from './pages/hr/RolePermissionsPage';
 import SystemSettingsPage from './pages/admin/SystemSettingsPage';
 import CustomerDetailPage from './pages/customers/CustomerDetailPage';
-import MyOrdersPage from './pages/customers/MyOrdersPage';
+import MyOrdersByCustomerTypePage from './pages/customers/MyOrdersByCustomerTypePage';
 import CustomerDebtPage from './pages/customers/CustomerDebtPage';
 import RevenueReportPage from './pages/customers/RevenueReportPage';
 import SgCashCollectionsPage from './pages/accounting/SgCashCollectionsPage';
@@ -127,7 +127,8 @@ function AppRoutes() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/ho-so" element={<ProfilePage />} />
         <Route path="/ho-so/:id" element={<ProfilePage />} />
-        <Route path="/tai-khoan/don-hang" element={<MyOrdersPage />} />
+        <Route path="/tai-khoan/don-hang" element={<Navigate to="/don-hang-cua-toi" replace />} />
+        <Route path="/don-hang-cua-toi" element={<MyOrdersByCustomerTypePage />} />
 
         {/* Hang hoa module */}
         <Route path="/hang-hoa" element={<ModulePage />} />
@@ -277,3 +278,4 @@ function App() {
 }
 
 export default App;
+

@@ -18,7 +18,8 @@ export class CustomerService {
           const item = rawItem && typeof rawItem === 'object' ? rawItem as Record<string, unknown> : {};
           return {
             product_id: item.product_id,
-            package_type: item.package_type,
+            product_name: item.product_name,
+            package_type: item.package_type || item.product_name,
             item_note: item.item_note,
             weight_kg: item.weight_kg,
             quantity: item.quantity,
@@ -57,7 +58,10 @@ export class CustomerService {
       if (!rawItem || typeof rawItem !== 'object') return true;
       const item = rawItem as Record<string, unknown>;
       const quantity = Number(item.quantity);
-      return typeof item.product_id !== 'string' || !item.product_id || !Number.isFinite(quantity) || quantity <= 0;
+      const productId = typeof item.product_id === 'string' ? item.product_id.trim() : '';
+      const productName = typeof item.product_name === 'string' ? item.product_name.trim() : '';
+      const packageType = typeof item.package_type === 'string' ? item.package_type.trim() : '';
+      return (!productId && !productName && !packageType) || !Number.isFinite(quantity) || quantity <= 0;
     });
 
     if (hasInvalidItem) {

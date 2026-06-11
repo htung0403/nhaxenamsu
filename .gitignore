@@ -80,3 +80,14 @@ desktop-payment-page.png
 .git-rewrite/
 .codex/config.toml
 .pnpm-store
+server/tmp/cloudinary-migration/cleanup-updates.json
+vietmap-agent-docs.zip
+server/tmp/cloudinary-migration/db-updates.json
+server/tmp/cloudinary-migration/inventory.json
+server/tmp/cloudinary-migration/mapping.json
+vietmap-agent-docs/console.txt
+vietmap-agent-docs/data-tools.txt
+vietmap-agent-docs/logistics.txt
+vietmap-agent-docs/map-display.txt
+vietmap-agent-docs/routing.txt
+vietmap-agent-docs/search-geocoding.txt
