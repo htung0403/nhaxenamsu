@@ -110,6 +110,9 @@ export class ImportOrderService {
         }
       }
       if (filters.customer_id) q = q.eq('customer_id', filters.customer_id);
+      if (filters.admin_confirmation_status === 'pending_customer') {
+        q = q.is('admin_confirmed_at', null);
+      }
       
       // Apply search filter using .or() for order_code, sender_name, receiver_name, selected_alias
       if (search) {
@@ -177,6 +180,27 @@ export class ImportOrderService {
       return { ...order, total_order_amount: Number(order.total_amount) || 0 };
     });
 
+    const isCustomerSubmittedOrder = (order: any) => {
+      const profile = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
+      return profile?.role === 'customer';
+    };
+
+    if (filters.admin_confirmation_status === 'pending_customer') {
+      mapped = mapped.filter((order: any) =>
+        order.order_category === 'standard' && isCustomerSubmittedOrder(order) && Boolean(order.sender_id) && !order.admin_confirmed_at,
+      );
+    }
+
+    if (filters.admin_confirmation_status === 'return_to_sg') {
+      mapped = mapped.filter((order: any) =>
+        order.order_category === 'standard' && isCustomerSubmittedOrder(order) && Boolean(order.customer_id),
+      );
+    }
+
+    if (filters.admin_confirmation_status === 'official') {
+      mapped = mapped.filter((order: any) => !isCustomerSubmittedOrder(order) || Boolean(order.admin_confirmed_at));
+    }
+
     assignVegetableTaiRanksByDate(mapped);
 
     if (actor && !goodsScopeFullAccess(actor.role)) {
@@ -194,7 +218,7 @@ export class ImportOrderService {
     // Return paginated response with metadata
     return {
       data: mapped,
-      total,
+      total: filters.admin_confirmation_status ? mapped.length : total,
       page,
       pageSize,
     };
@@ -508,11 +532,12 @@ export class ImportOrderService {
         .update({
           admin_confirmed_at: new Date().toISOString(),
           admin_confirmed_by: confirmedBy,
+          received_by: confirmedBy,
         })
         .eq('id', id)
         .is('deleted_at', null)
         .is('admin_confirmed_at', null)
-        .select('id, order_code, status, admin_confirmed_at, admin_confirmed_by')
+        .select('id, order_code, status, admin_confirmed_at, admin_confirmed_by, received_by')
         .maybeSingle();
 
       if (error) throw error;

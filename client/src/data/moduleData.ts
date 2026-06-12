@@ -3,7 +3,7 @@ import {
   Warehouse, Download, Upload, Truck as DeliveryIcon,
   Banknote, Car, CalendarDays, ClipboardList, ClipboardCheck, DollarSign, FileText, Settings, Settings2, MapPin,
   Send, Store, Receipt, History, Heart,
-  CirclePlus,
+  CirclePlus, CheckCircle2,
 } from 'lucide-react';
 import type { ModuleCardProps } from '../components/ui/ModuleCard';
 
@@ -19,6 +19,8 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
       items: [
         { icon: Warehouse, title: 'Tồn kho thực tế', description: 'Quản lý sản phẩm còn tồn kho chờ giao.', colorScheme: 'teal', path: '/hang-hoa/kho' },
         { icon: Upload, title: 'Xuất hàng', description: 'Quản lý phiếu xuất kho.', colorScheme: 'red', path: '/hang-hoa/xuat-hang' },
+        { icon: CheckCircle2, title: 'Xác nhận hàng gửi', description: 'Duyệt đơn tạp hóa khách hàng gửi trước khi nhập chính thức.', colorScheme: 'emerald', path: '/hang-hoa/xac-nhan-hang-gui' },
+        { icon: Send, title: 'Hàng gửi SG', description: 'Theo dõi đơn trả hàng do khách nhận tạp hóa tạo.', colorScheme: 'blue', path: '/hang-hoa/hang-gui-sg' },
         { icon: Download, title: 'Nhập hàng', description: 'Quản lý phiếu nhập kho.', colorScheme: 'green', path: '/hang-hoa/nhap-hang' },
         { icon: History, title: 'Lịch sử nhập hàng', description: 'Xem toàn bộ lịch sử đơn nhập hàng tạp hóa.', colorScheme: 'slate', path: '/hang-hoa/nhap-hang/lich-su' },
         { icon: DeliveryIcon, title: 'Hàng cần giao', description: 'Danh sách các đơn hàng cần giao.', colorScheme: 'orange', path: '/hang-hoa/giao-hang' },

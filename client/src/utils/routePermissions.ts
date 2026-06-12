@@ -51,6 +51,8 @@ const LEGACY_ALLOWED_PATHS_BY_ROLE: Record<string, string[]> = {
     '/ho-so',
     '/hang-hoa',
     '/hang-hoa/nhap-hang',
+    '/hang-hoa/xac-nhan-hang-gui',
+    '/hang-hoa/hang-gui-sg',
     '/hang-hoa/nhap-hang-rau',
     '/hang-hoa/hang-rau',
     '/hang-hoa/giao-hang-rau',

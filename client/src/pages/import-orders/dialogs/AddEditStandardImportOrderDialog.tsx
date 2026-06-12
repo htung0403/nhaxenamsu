@@ -80,9 +80,10 @@ type ImportOrderFormValues = Omit<
   items: ImportOrderItemFormValue[];
   total_amount: number | string;
 };
-type ImportOrderSubmitPayload = Omit<Partial<ImportOrderCreatePayload>, 'items'> & {
+type ImportOrderSubmitPayload = Omit<Partial<ImportOrderCreatePayload>, 'items' | 'sender_name' | 'sender_id' | 'customer_id' | 'receiver_name' | 'selected_alias'> & {
   sender_name?: string | null;
   sender_id?: string | null;
+  customer_id?: string | null;
   receiver_name?: string | null;
   selected_alias?: string | null;
   payment_status?: 'paid' | 'unpaid';
@@ -90,10 +91,28 @@ type ImportOrderSubmitPayload = Omit<Partial<ImportOrderCreatePayload>, 'items'>
   receipt_image_url?: string | null;
   receipt_image_urls?: string[];
   is_custom_amount?: boolean;
-  items?: Array<Omit<ImportOrderItemFormValue, 'unit_price'> & {
+  items?: Array<Omit<ImportOrderItemFormValue, 'unit_price' | 'product_id' | 'package_type'> & {
+    product_id?: string | null;
+    package_type?: string | null;
     unit_price?: number | null;
     payment_status: 'paid' | 'unpaid';
   }>;
+};
+
+const PACKAGE_ONLY_PREFIX = 'package-only:';
+const RECEIVER_ONLY_PREFIX = 'receiver-only__';
+
+const toPackageOnlyValue = (name?: string | null) => `${PACKAGE_ONLY_PREFIX}${name || ''}`;
+const isPackageOnlyValue = (value?: string | null) => Boolean(value?.startsWith(PACKAGE_ONLY_PREFIX));
+const fromPackageOnlyValue = (value?: string | null) => isPackageOnlyValue(value) ? value!.slice(PACKAGE_ONLY_PREFIX.length) : '';
+const toReceiverOnlyValue = (name?: string | null) => `${RECEIVER_ONLY_PREFIX}${name || ''}`;
+const isReceiverOnlyValue = (value?: string | null) => Boolean(value?.startsWith(RECEIVER_ONLY_PREFIX));
+const fromReceiverOnlyValue = (value?: string | null) => isReceiverOnlyValue(value) ? value!.slice(RECEIVER_ONLY_PREFIX.length) : '';
+const normalizePhone = (phone?: string | null) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('84')) return `0${digits.slice(2)}`;
+  return digits;
 };
 type MutationResponseWithData<T> = T | { data?: T };
 
@@ -188,6 +207,12 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
     return list;
   }, [products, defaultCategory, editingOrder]);
 
+  const productOptions = React.useMemo(() => filteredProducts.map((product) => ({
+    value: product.id,
+    label: product.name,
+    matchKey: product.name,
+  })), [filteredProducts]);
+
   const filteredCustomers = React.useMemo(() => {
     const list: CustomerLike[] = customers?.filter((customer) =>
       defaultCategory === 'vegetable'
@@ -201,14 +226,25 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
     return list;
   }, [customers, defaultCategory, editingOrder]);
 
+  const receiverCustomerMatchedByPhone = React.useMemo(() => {
+    const receiverPhone = normalizePhone(editingOrder?.receiver_phone);
+    if (!receiverPhone || editingOrder?.customer_id) return undefined;
+    return filteredCustomers.find((customer) => normalizePhone(customer.phone) === receiverPhone);
+  }, [editingOrder?.customer_id, editingOrder?.receiver_phone, filteredCustomers]);
+
   const customerOptions = React.useMemo(() => {
     const options: SelectOption[] = [];
     filteredCustomers.forEach((c) => {
       // Main option
+      const isPhoneMatchedReceiver = receiverCustomerMatchedByPhone?.id === c.id;
+      const selectedLabel = isPhoneMatchedReceiver && editingOrder?.receiver_name && editingOrder.receiver_name !== c.name
+        ? `${c.name}${c.phone ? ` (${c.phone})` : ''} (${editingOrder.receiver_name})`
+        : c.phone ? `${c.name} (${c.phone})` : c.name;
+
       options.push({
         value: c.id,
         label: c.name,
-        selectedLabel: c.phone ? `${c.name} (${c.phone})` : c.name,
+        selectedLabel,
         searchText: [c.name, c.phone, ...(c.aliases || [])].filter(Boolean).join(' ')
       });
       // Alias options
@@ -223,8 +259,19 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         });
       }
     });
+
+    if (editingOrder?.receiver_name && !editingOrder.customer_id && !receiverCustomerMatchedByPhone) {
+      const receiverValue = toReceiverOnlyValue(editingOrder.receiver_name);
+      options.push({
+        value: receiverValue,
+        label: editingOrder.receiver_name,
+        selectedLabel: editingOrder.receiver_name,
+        searchText: editingOrder.receiver_name,
+      });
+    }
+
     return options;
-  }, [filteredCustomers]);
+  }, [filteredCustomers, editingOrder, receiverCustomerMatchedByPhone]);
 
   const filteredSenders = React.useMemo(() => {
     const list: CustomerLike[] = customers?.filter((customer) =>
@@ -349,6 +396,20 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
   const watchReceivedBy = watch('received_by');
   const watchPaymentStatus = watch('payment_status');
   const watchSelectedAlias = watch('selected_alias');
+
+  const getProductOptionsForItem = React.useCallback((index: number) => {
+    const currentValue = watch(`items.${index}.product_id` as const);
+    if (!isPackageOnlyValue(currentValue)) return productOptions;
+
+    const packageName = fromPackageOnlyValue(currentValue);
+    if (!packageName) return productOptions;
+
+    return [
+      ...productOptions,
+      { value: currentValue, label: packageName, matchKey: packageName },
+    ];
+  }, [productOptions, watch]);
+
   useEffect(() => {
     if (editingOrder) {
       let receiptUrls = [...(editingOrder.receipt_image_urls || [])];
@@ -356,11 +417,13 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         receiptUrls = editingOrder.receipt_image_url.includes(',') ? editingOrder.receipt_image_url.split(',').map((u: string) => u.trim()) : [editingOrder.receipt_image_url];
       }
 
+      const matchedReceiverId = editingOrder.customer_id || receiverCustomerMatchedByPhone?.id || '';
+
       reset({
         order_date: editingOrder.order_date,
         order_time: editingOrder.order_time,
         received_by: editingOrder.received_by || '',
-        customer_id: editingOrder.customer_id || '',
+        customer_id: matchedReceiverId || (editingOrder.receiver_name ? toReceiverOnlyValue(editingOrder.receiver_name) : ''),
         sender_name: editingOrder.sender_name || '',
         sender_id: editingOrder.sender_id || '',
         receiver_name: editingOrder.receiver_name || '',
@@ -372,7 +435,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
             urls = item.image_url.includes(',') ? item.image_url.split(',').map((u: string) => u.trim()) : [item.image_url];
           }
           return {
-            product_id: item.product_id,
+            product_id: item.product_id || (item.package_type ? toPackageOnlyValue(item.package_type) : ''),
             package_type: item.package_type,
             weight_kg: item.weight_kg,
             quantity: item.quantity,
@@ -405,7 +468,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingOrder, reset, isOpen, user?.id]);
+  }, [editingOrder, reset, isOpen, user?.id, receiverCustomerMatchedByPhone]);
 
   const watchTotalAmountInput = watch('total_amount');
   const [uploadingItemIndex, setUploadingItemIndex] = React.useState<number | null>(null);
@@ -471,12 +534,22 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       console.log('--- FORM SUBMIT DATA BEGIN ---', data);
       const { items, ...formPayload } = data;
       const payload: ImportOrderSubmitPayload = { ...formPayload };
+      const receiverOnlyName = fromReceiverOnlyValue(payload.customer_id);
+      if (receiverOnlyName) {
+        payload.customer_id = null;
+        payload.receiver_name = receiverOnlyName;
+        payload.selected_alias = null;
+      }
+
       if (items) {
         payload.items = items.map((item, index) => {
           const price = Number(item.unit_price) || 0;
           const realPrice = price > 0 && price < 100000 ? price * 1000 : price;
+          const packageOnlyName = fromPackageOnlyValue(item.product_id);
           return {
             ...item,
+            product_id: packageOnlyName ? null : item.product_id,
+            package_type: packageOnlyName || item.package_type || null,
             unit_price: realPrice > 0 ? realPrice : null,
             payment_status: payload.payment_status || 'unpaid',
             image_urls: getValues(`items.${index}.image_urls`) || [],
@@ -701,12 +774,18 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                           options={customerOptions}
                           value={watchSelectedAlias ? `${watchCustomerId}:${watchSelectedAlias}` : watchCustomerId}
                           onValueChange={(val) => {
-                            if (val.includes(':')) {
+                            const receiverOnlyName = fromReceiverOnlyValue(val);
+                            if (receiverOnlyName) {
+                              setValue('customer_id', val, { shouldValidate: true });
+                              setValue('receiver_name', receiverOnlyName, { shouldValidate: true });
+                              setValue('selected_alias', '', { shouldValidate: true });
+                            } else if (val.includes(':')) {
                               const [id, alias] = val.split(':');
                               setValue('customer_id', id, { shouldValidate: true });
                               setValue('selected_alias', alias, { shouldValidate: true });
                             } else {
                               setValue('customer_id', val, { shouldValidate: true });
+                              setValue('receiver_name', customerOptions.find((option) => option.value === val)?.label || '', { shouldValidate: true });
                               setValue('selected_alias', '', { shouldValidate: true });
                             }
                           }}
@@ -957,12 +1036,18 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                           options={customerOptions}
                           value={watchSelectedAlias ? `${watchCustomerId}:${watchSelectedAlias}` : watchCustomerId}
                           onValueChange={(val) => {
-                            if (val.includes(':')) {
+                            const receiverOnlyName = fromReceiverOnlyValue(val);
+                            if (receiverOnlyName) {
+                              setValue('customer_id', val, { shouldValidate: true });
+                              setValue('receiver_name', receiverOnlyName, { shouldValidate: true });
+                              setValue('selected_alias', '', { shouldValidate: true });
+                            } else if (val.includes(':')) {
                               const [id, alias] = val.split(':');
                               setValue('customer_id', id, { shouldValidate: true });
                               setValue('selected_alias', alias, { shouldValidate: true });
                             } else {
                               setValue('customer_id', val, { shouldValidate: true });
+                              setValue('receiver_name', customerOptions.find((option) => option.value === val)?.label || '', { shouldValidate: true });
                               setValue('selected_alias', '', { shouldValidate: true });
                             }
                           }}
@@ -1175,11 +1260,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                 {/* Col 2: Tên hàng */}
                                 <div className="hidden md:flex flex-col justify-center relative">
                                   <CreatableSearchableSelect
-                                    options={filteredProducts.map((product) => ({
-                                      value: product.id,
-                                      label: product.name,
-                                      matchKey: product.name,
-                                    }))}
+                                    options={getProductOptionsForItem(index)}
                                     value={watch(`items.${index}.product_id` as const)}
                                     onValueChange={(val) => setValue(`items.${index}.product_id`, val, { shouldValidate: true })}
                                     onCreate={(name) => handleCreateProduct(index, name)}
@@ -1230,11 +1311,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                   <div className="flex-1 flex flex-col space-y-1 relative">
                                     <label className="text-[11px] font-bold text-muted-foreground uppercase">Tên hàng</label>
                                     <CreatableSearchableSelect
-                                      options={filteredProducts.map((product) => ({
-                                        value: product.id,
-                                        label: product.name,
-                                        matchKey: product.name,
-                                      }))}
+                                      options={getProductOptionsForItem(index)}
                                       value={watch(`items.${index}.product_id` as const)}
                                       onValueChange={(val) => setValue(`items.${index}.product_id`, val, { shouldValidate: true })}
                                       onCreate={(name) => handleCreateProduct(index, name)}
@@ -1306,11 +1383,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                   <div className="flex-1 flex flex-col justify-center space-y-1 md:space-y-0 relative">
                                     <label className="text-[11px] font-bold text-muted-foreground md:hidden uppercase">Mặt hàng</label>
                                     <CreatableSearchableSelect
-                                      options={filteredProducts.map((product) => ({
-                                        value: product.id,
-                                        label: product.name,
-                                        matchKey: product.name,
-                                      }))}
+                                      options={getProductOptionsForItem(index)}
                                       value={watch(`items.${index}.product_id` as const)}
                                       onValueChange={(val) => setValue(`items.${index}.product_id`, val, { shouldValidate: true })}
                                       onCreate={(name) => handleCreateProduct(index, name)}

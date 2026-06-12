@@ -345,17 +345,19 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
   const isSenderCustomer = orderPolicy?.binding === 'sender';
   const orderCategory = orderPolicy?.orderCategory || 'standard';
   const isVegetableOrder = orderCategory === 'vegetable';
+  const isGrocerySenderPage = effectiveCustomerType === 'grocery_sender';
   const { data: deliveryOrders, isLoading, isError, refetch } = useMyDeliveryOrders(!!user?.id);
   const { data: deliveryVehicles } = useMyDeliveryVehicles(!!user?.id);
   const canSelfCreate = (myPermissions?.page_paths || []).includes(CUSTOMER_ORDER_CREATE_PATH);
+  const customerId = customer?.id;
 
   const sortedOrders = useMemo(() => {
-    if (!deliveryOrders || !customer?.id || !orderPolicy) return [];
+    if (!deliveryOrders || !customerId || !orderPolicy) return [];
     const customerOrders = deliveryOrders.filter((order) => {
       const sourceOrder = getDeliverySourceOrder(order);
       if (!sourceOrder) return false;
-      if (isSenderCustomer) return sourceOrder.sender_id === customer.id;
-      return sourceOrder.customer_id === customer.id;
+      if (isSenderCustomer) return sourceOrder.sender_id === customerId;
+      return sourceOrder.customer_id === customerId;
     });
 
     return groupCustomerDeliveryOrders(customerOrders).sort(
@@ -367,7 +369,7 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
         );
       },
     );
-  }, [customer?.id, deliveryOrders, isSenderCustomer, orderPolicy]);
+  }, [customerId, deliveryOrders, isSenderCustomer, orderPolicy]);
 
   const dateFilteredOrders = useMemo(() => {
     return sortedOrders.filter((order) => isOrderInDateRange(order, startDate, endDate));
@@ -564,6 +566,7 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
 
   const isSubmitting = createOrderMutation.isPending || updateOrderMutation.isPending;
   const isInSgTab = statusFilter === 'in_sg';
+  const showExcessColumn = effectiveCustomerType === 'grocery_receiver' && statusFilter === 'delivered';
 
   if (loadingCustomer || isLoading) {
     return (
@@ -579,7 +582,7 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
   }
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
+    <div className={`animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col min-h-0 ${isGrocerySenderPage ? 'bg-slate-50/60 -m-4 p-4 md:-m-6 md:p-6' : '-mt-2'}`}>
       <PageHeader
         title="Đơn trả hàng về SG"
         description="Tạo phiếu trả hàng lỗi về SG và theo dõi trạng thái cước"
@@ -587,12 +590,12 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
       />
 
       <div className="space-y-3 flex-1 min-h-0 flex flex-col">
-        <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2.5 overflow-x-auto custom-scrollbar">
+        <div className={`bg-card flex flex-row w-full gap-2 items-center border border-border overflow-x-auto custom-scrollbar ${isGrocerySenderPage ? 'rounded-3xl shadow-sm p-3' : 'rounded-2xl shadow-sm p-2.5'}`}>
           <button
             type="button"
             onClick={openCreateModal}
             disabled={!canSelfCreate}
-            className="flex items-center gap-2 justify-center h-9.5 px-3 shrink-0 border border-primary/20 rounded-xl transition-all bg-primary text-white hover:bg-primary/90 font-bold text-[13px] disabled:opacity-60"
+            className={`flex items-center gap-2 justify-center shrink-0 border border-primary/20 rounded-xl transition-all bg-primary text-white hover:bg-primary/90 font-bold text-[13px] disabled:opacity-60 ${isGrocerySenderPage ? 'h-10 px-4 shadow-sm' : 'h-9.5 px-3'}`}
             title={canSelfCreate ? 'Tạo đơn đổi trả' : 'Bạn chưa có quyền tạo đơn đổi trả'}
           >
             <Plus size={16} />
@@ -603,7 +606,7 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
             <SearchInput
               placeholder="Tìm mã trả hàng, người gửi, người nhận..."
               onSearch={(raw) => setSearchQuery(raw)}
-              className="h-9.5"
+              className={isGrocerySenderPage ? 'h-10 rounded-xl bg-muted/10' : 'h-9.5'}
             />
           </div>
 
@@ -626,15 +629,15 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
 
         </div>
 
-        <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 shrink-0">
+        <div className={`grid grid-cols-2 lg:grid-cols-3 shrink-0 ${isGrocerySenderPage ? 'gap-4' : 'gap-3'}`}>
           <SummaryCard icon={Package} label="Tổng phiếu" value={orderSummary.total.toLocaleString('vi-VN')} tone="text-primary bg-primary/10" />
           <SummaryCard icon={Clock3} label="Đang giao" value={orderSummary.processing.toLocaleString('vi-VN')} tone="text-amber-600 bg-amber-50" />
           <SummaryCard icon={CheckCircle2} label="Đã giao" value={orderSummary.delivered.toLocaleString('vi-VN')} tone="text-emerald-600 bg-emerald-50" />
         </div>
 
-        <div className="bg-card rounded-2xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
-          <div className="flex flex-col shrink-0 border-b border-border bg-muted/50">
-            <div className="grid grid-cols-5 gap-1 px-3 py-2 md:flex md:items-center md:gap-1 md:overflow-x-auto custom-scrollbar">
+        <div className={`bg-card border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden ${isGrocerySenderPage ? 'rounded-3xl' : 'rounded-2xl'}`}>
+          <div className={`flex flex-col shrink-0 border-b border-border ${isGrocerySenderPage ? 'bg-white' : 'bg-muted/50'}`}>
+            <div className={`grid grid-cols-5 gap-1 md:flex md:items-center md:gap-1 md:overflow-x-auto custom-scrollbar ${isGrocerySenderPage ? 'px-4 py-3' : 'px-3 py-2'}`}>
               {(['in_sg', 'processing', 'delivered'] as OrderStatusFilter[]).map((status) => {
                 const isActive = statusFilter === status;
                 const colors = statusFilterClasses[status];
@@ -644,7 +647,7 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
                     key={status}
                     type="button"
                     onClick={() => setStatusFilter(status)}
-                    className={`w-full flex items-center justify-center md:justify-start gap-1 px-1.5 md:px-3 py-1.5 rounded-lg text-[10px] md:text-[12px] font-bold transition-all whitespace-nowrap ${
+                    className={`w-full flex items-center justify-center md:justify-start gap-1 rounded-lg text-[10px] md:text-[12px] font-bold transition-all whitespace-nowrap ${isGrocerySenderPage ? 'px-2 md:px-4 py-2' : 'px-1.5 md:px-3 py-1.5'} ${
                       isActive ? `${colors.active} shadow-sm ring-1 ring-black/5` : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
                     }`}
                   >
@@ -660,11 +663,11 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto custom-scrollbar bg-muted/30 md:bg-transparent relative">
+          <div className={`flex-1 overflow-auto custom-scrollbar relative ${isGrocerySenderPage ? 'bg-white' : 'bg-muted/30 md:bg-transparent'}`}>
             <div className={isInSgTab ? 'block min-w-[760px]' : 'hidden md:block'}>
               <table className="w-full border-collapse bg-card text-[13px]">
                 <thead className="sticky top-0 z-20">
-                  <tr className="bg-card border-b border-border text-muted-foreground">
+                  <tr className={`${isGrocerySenderPage ? 'bg-slate-50' : 'bg-card'} border-b border-border text-muted-foreground`}>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">Ngày</th>
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left border-r border-border">{isSenderCustomer ? 'Người nhận' : 'Người gửi'}</th>
                   {!isVegetableOrder && <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-14 border-r border-border">Ảnh</th>}
@@ -673,6 +676,7 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
                   <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center border-r border-border">Trạng thái</th>
                   {!isInSgTab && <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">SL Tổng</th>}
                   {!isInSgTab && <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Còn lại</th>}
+                  {showExcessColumn && <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Dư</th>}
                   {!isInSgTab && displayedVehicles.map((vehicle) => (
                     <th key={vehicle.id} className="px-1 py-3 text-[10px] font-bold uppercase tracking-tight text-center w-20 border-r border-border last:border-r-0">
                       {vehicle.license_plate}
@@ -688,7 +692,7 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
               <tbody className="divide-y divide-border">
                 {displayedOrders.length === 0 ? (
                   <tr>
-                    <td colSpan={5 + (isVegetableOrder ? 0 : 1) + (isInSgTab ? 0 : 2 + (displayedVehicles.length || FALLBACK_VEHICLE_COLUMNS.length))} className="px-4 py-12 text-center">
+                    <td colSpan={5 + (isVegetableOrder ? 0 : 1) + (isInSgTab ? 0 : 2 + (showExcessColumn ? 1 : 0) + (displayedVehicles.length || FALLBACK_VEHICLE_COLUMNS.length))} className="px-4 py-12 text-center">
                       <EmptyOrdersState canSelfCreate={canSelfCreate} onCreate={openCreateModal} />
                     </td>
                   </tr>
@@ -702,8 +706,10 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
                     const previewImage = getOrderPreviewImage(order);
                     const paymentStatus = getOrderPaymentStatus(order);
                     const totalAssigned = (order.delivery_vehicles || []).reduce((sum, deliveryVehicle) => sum + Number(deliveryVehicle.assigned_quantity || 0), 0);
-                    const remainingQuantity = Number(order.total_quantity || 0) - totalAssigned;
-                    const isPartiallyDelivered = totalAssigned > 0 && totalAssigned < Number(order.total_quantity || 0) && statusLabel === 'delivered';
+                    const totalQuantity = Number(order.total_quantity || 0);
+                    const remainingQuantity = totalQuantity - totalAssigned;
+                    const excessQuantity = Math.max(totalAssigned - totalQuantity, 0);
+                    const isPartiallyDelivered = totalAssigned > 0 && totalAssigned < totalQuantity && statusLabel === 'delivered';
                     return (
                       <tr key={order.id} className="transition-colors hover:bg-muted/30">
                         <td className="px-4 py-3 text-muted-foreground border-r border-border/70">{formatDisplayDate(order.delivery_date || order.created_at)}</td>
@@ -753,6 +759,11 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
                         {!isInSgTab && (
                           <td className="px-2 py-3 text-[13px] font-black text-orange-600 dark:text-orange-500 text-center tabular-nums border-r border-border/70">
                             {formatNumber(remainingQuantity > 0 ? remainingQuantity : 0)}
+                          </td>
+                        )}
+                        {showExcessColumn && (
+                          <td className="px-2 py-3 text-[13px] font-black text-red-600 dark:text-red-500 text-center tabular-nums border-r border-border/70">
+                            {excessQuantity > 0 ? formatNumber(excessQuantity) : '-'}
                           </td>
                         )}
                         {!isInSgTab && displayedVehicles.map((vehicle) => {
@@ -847,7 +858,9 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
                 const previewImage = getOrderPreviewImage(order);
                 const paymentStatus = getOrderPaymentStatus(order);
                 const totalAssigned = (order.delivery_vehicles || []).reduce((sum, deliveryVehicle) => sum + Number(deliveryVehicle.assigned_quantity || 0), 0);
-                const remainingQuantity = Number(order.total_quantity || 0) - totalAssigned;
+                const totalQuantity = Number(order.total_quantity || 0);
+                const remainingQuantity = totalQuantity - totalAssigned;
+                const excessQuantity = Math.max(totalAssigned - totalQuantity, 0);
                 return (
                   <div key={order.id} className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                     <div className="flex items-start justify-between gap-3">
@@ -863,6 +876,7 @@ const MyOrdersPage: React.FC<MyOrdersPageProps> = ({ customerType }) => {
                       <InfoBlock label="Cước SG" value={paymentStatusConfig[paymentStatus].label} strong />
                       <InfoBlock label="SL Tổng" value={formatNumber(Number(order.total_quantity || 0))} strong />
                       <InfoBlock label="Còn lại" value={formatNumber(remainingQuantity > 0 ? remainingQuantity : 0)} strong />
+                      {showExcessColumn && <InfoBlock label="Dư" value={excessQuantity > 0 ? formatNumber(excessQuantity) : '-'} strong />}
                     </div>
                     {!isVegetableOrder && (
                       <button

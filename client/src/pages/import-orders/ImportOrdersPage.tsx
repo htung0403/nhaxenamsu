@@ -19,8 +19,10 @@ import { MultiSearchableSelect } from '../../components/ui/MultiSearchableSelect
 import { SearchInput } from '../../components/ui/SearchInput';
 import { useAuth } from '../../context/AuthContext';
 import { useVehicles } from '../../hooks/queries/useVehicles';
+import { useCustomers } from '../../hooks/queries/useCustomers';
 import { hasFullGoodsModuleAccess, importOrderVisibleToUser } from '../../utils/goodsModuleScope';
 import { cloudinarySmall } from '../../lib/cloudinaryUrl';
+import type { Customer } from '../../types';
 
 const statusLabels: Record<OrderStatus, string> = {
   pending: 'Chờ xử lý',
@@ -51,6 +53,42 @@ const formatCurrency = (value?: number | null) => {
   return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(value);
 };
 
+const getImportOrderItemName = (item: any) => {
+  return item.products?.name || item.product_name || item.package_type || item.item_note || '';
+};
+
+const getImportOrderItemNames = (order: ImportOrder) => {
+  const names = (order.import_order_items || []).map(getImportOrderItemName).filter(Boolean);
+  return names.join(', ') || order.notes || '';
+};
+
+const normalizePhone = (phone?: string | null) => {
+  const digits = String(phone || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('84')) return `0${digits.slice(2)}`;
+  return digits;
+};
+
+const getReceiverDisplayName = (order: ImportOrder, receiverByPhone: Map<string, Customer>) => {
+  const enteredName = order.selected_alias || order.receiver_name || '';
+  const normalizedPhone = normalizePhone(order.receiver_phone);
+  const systemReceiver = normalizedPhone ? receiverByPhone.get(normalizedPhone) : undefined;
+
+  if (systemReceiver) {
+    const phone = systemReceiver.phone || order.receiver_phone;
+    const base = `${systemReceiver.name}${phone ? ` (${phone})` : ''}`;
+    return enteredName && enteredName !== systemReceiver.name ? `${base} (${enteredName})` : base;
+  }
+
+  if (order.customers?.name) {
+    const phone = order.customers.phone || order.receiver_phone;
+    const base = `${order.customers.name}${phone ? ` (${phone})` : ''}`;
+    return enteredName && enteredName !== order.customers.name ? `${base} (${enteredName})` : base;
+  }
+
+  return enteredName || order.receiver_phone || '-';
+};
+
 const defaultColumns: ColumnOption[] = [
   { id: 'image', label: 'Ảnh', isVisible: true },
   { id: 'order_code', label: 'Mã đơn', isVisible: true },
@@ -72,7 +110,15 @@ const getTodayVN = () => {
   return vnTime.toISOString().split('T')[0];
 };
 
-const ImportOrdersPage: React.FC = () => {
+type ImportOrdersPageMode = 'official' | 'confirmation' | 'returnToSg';
+
+interface ImportOrdersPageProps {
+  mode?: ImportOrdersPageMode;
+}
+
+const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }) => {
+  const isConfirmationPage = mode === 'confirmation';
+  const isReturnToSgPage = mode === 'returnToSg';
   const [searchText, setSearchText] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState(getTodayVN());
   const [filterDateTo, setFilterDateTo] = useState(getTodayVN());
@@ -119,11 +165,13 @@ const ImportOrdersPage: React.FC = () => {
   if (filterVehicle.length > 0) filters.license_plate = filterVehicle.join(',');
   if (filterReceiver.length > 0) filters.receiver = filterReceiver.join(',');
   filters.order_category = 'standard';
+  filters.admin_confirmation_status = isConfirmationPage ? 'pending_customer' : isReturnToSgPage ? 'return_to_sg' : 'official';
   filters.page = page;
   filters.pageSize = pageSize;
 
   const { user } = useAuth();
   const { data: vehicles } = useVehicles();
+  const { data: groceryReceivers } = useCustomers('grocery_receiver');
   const { data: apiResponse, isLoading, isError, refetch } = useImportOrders(filters);
   const orders = useMemo(() => {
     const raw = apiResponse?.data || [];
@@ -132,6 +180,16 @@ const ImportOrdersPage: React.FC = () => {
       importOrderVisibleToUser(o, { id: user.id, role: user.role, full_name: user.full_name }, vehicles || [])
     );
   }, [apiResponse?.data, user, vehicles]);
+
+  const receiverByPhone = useMemo(() => {
+    const map = new Map<string, Customer>();
+    (groceryReceivers || []).forEach((customer) => {
+      const phone = normalizePhone(customer.phone);
+      if (phone) map.set(phone, customer);
+    });
+    return map;
+  }, [groceryReceivers]);
+
   const deleteMutation = useDeleteImportOrder();
   const confirmMutation = useConfirmImportOrderByAdmin();
 
@@ -150,7 +208,7 @@ const ImportOrdersPage: React.FC = () => {
         tai.split(', ').forEach((t: string) => taiSet.add(t));
       }
 
-      const receiver = (order as any).profiles?.full_name || order.receiver_name || order.received_by;
+      const receiver = getReceiverDisplayName(order, receiverByPhone);
       if (receiver) receiverSet.add(receiver);
     });
 
@@ -159,7 +217,7 @@ const ImportOrdersPage: React.FC = () => {
       taiOptions: Array.from(taiSet).map(v => ({ label: v, value: v })),
       nguoiNhapOptions: Array.from(receiverSet).map(v => ({ label: v, value: v }))
     };
-  }, [orders]);
+  }, [orders, receiverByPhone]);
 
   const totalItems = apiResponse?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -208,6 +266,8 @@ const ImportOrdersPage: React.FC = () => {
   };
 
   const renderConfirmButton = (order: ImportOrder, size: number) => {
+    if (!isConfirmationPage) return null;
+
     const isCustomerSubmittedOrder = order.profiles?.role === 'customer';
     if (!isCustomerSubmittedOrder) return null;
 
@@ -247,10 +307,10 @@ const ImportOrdersPage: React.FC = () => {
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
         <PageHeader
-          title="Nhập hàng"
-          description="Quản lý danh sách đơn nhập hàng"
+          title={isConfirmationPage ? 'Xác nhận hàng gửi' : isReturnToSgPage ? 'Hàng gửi SG' : 'Nhập hàng'}
+          description={isConfirmationPage ? 'Xác nhận đơn tạp hóa khách hàng tự gửi trước khi vào danh sách nhập hàng chính thức' : isReturnToSgPage ? 'Theo dõi các đơn trả hàng do khách nhận tạp hóa tạo' : 'Quản lý danh sách đơn nhập hàng'}
           backPath="/hang-hoa"
-          actions={
+          actions={!isConfirmationPage && !isReturnToSgPage ? (
             <button
               onClick={openAddDialog}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-[13px] font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
@@ -259,7 +319,7 @@ const ImportOrdersPage: React.FC = () => {
               <span className="hidden sm:inline">Thêm đơn nhập</span>
               <span className="sm:hidden">Thêm</span>
             </button>
-          }
+          ) : undefined}
         />
       </div>
 
@@ -471,8 +531,7 @@ const ImportOrdersPage: React.FC = () => {
                             </td>
                           );
                           case 'item_name': {
-                            const items = order.import_order_items || [];
-                            const itemNames = items.map((i: any) => i.products?.name).filter(Boolean).join(', ');
+                            const itemNames = getImportOrderItemNames(order);
                             return (
                               <td key={col.id} className="px-4 py-3">
                                 <span className="text-[13px] font-medium text-foreground line-clamp-2" title={itemNames}>{itemNames || '-'}</span>
@@ -506,7 +565,7 @@ const ImportOrdersPage: React.FC = () => {
                           );
                           case 'receiver': return (
                             <td key={col.id} className="px-4 py-3">
-                              <span className="text-[13px] font-medium text-foreground">{(order as any).profiles?.full_name || order.selected_alias || order.receiver_name || '-'}</span>
+                              <span className="text-[13px] font-medium text-foreground">{getReceiverDisplayName(order, receiverByPhone)}</span>
                             </td>
                           );
                           case 'status': return (
@@ -530,13 +589,15 @@ const ImportOrdersPage: React.FC = () => {
                                 >
                                   <Edit size={14} />
                                 </button>
-                                <button
-                                  onClick={(e) => { e.stopPropagation(); setDeleteId(order.id); }}
-                                  className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
-                                  title="Xóa"
-                                >
-                                  <Trash2 size={14} />
-                                </button>
+                                {!isConfirmationPage && !isReturnToSgPage && (
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setDeleteId(order.id); }}
+                                    className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+                                    title="Xóa"
+                                  >
+                                    <Trash2 size={14} />
+                                  </button>
+                                )}
                             </td>
                           );
                           default: return null;
@@ -599,9 +660,9 @@ const ImportOrdersPage: React.FC = () => {
                           <span className="text-[11px] font-semibold text-primary">{order.order_code}</span>
                           <span className="text-[10px] text-muted-foreground tabular-nums">{order.order_date}</span>
                         </div>
-                        <div className="text-[12px] text-muted-foreground line-clamp-1" title={order.import_order_items?.map((i: any) => i.products?.name).filter(Boolean).join(', ')}>
+                        <div className="text-[12px] text-muted-foreground line-clamp-1" title={getImportOrderItemNames(order)}>
                           <span className="font-bold text-foreground">
-                            {order.import_order_items?.map((i: any) => i.products?.name).filter(Boolean).join(', ') || 'Chưa có hàng'}
+                            {getImportOrderItemNames(order) || 'Chưa có hàng'}
                           </span>
                           {' • '}
                           <span className="font-medium text-foreground">
@@ -642,12 +703,14 @@ const ImportOrdersPage: React.FC = () => {
                               <Edit size={13} />
                             </button>
                             {renderConfirmButton(order, 13)}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setDeleteId(order.id); }}
-                              className="p-1 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                            {!isConfirmationPage && !isReturnToSgPage && (
+                              <button
+                                onClick={(e) => { e.stopPropagation(); setDeleteId(order.id); }}
+                                className="p-1 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -739,10 +802,12 @@ const ImportOrdersPage: React.FC = () => {
         }}
       />
 
-      <DraggableFAB
-        icon={<Plus size={24} />}
-        onClick={openAddDialog}
-      />
+      {!isConfirmationPage && !isReturnToSgPage && (
+        <DraggableFAB
+          icon={<Plus size={24} />}
+          onClick={openAddDialog}
+        />
+      )}
 
       <MobileFilterSheet
         isOpen={isFilterOpen}

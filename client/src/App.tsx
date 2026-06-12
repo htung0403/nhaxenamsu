@@ -12,6 +12,8 @@ import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/auth/LoginPage';
 import ImportOrdersPage from './pages/import-orders/ImportOrdersPage';
+import ConfirmSenderImportOrdersPage from './pages/import-orders/ConfirmSenderImportOrdersPage';
+import ReturnToSgOrdersPage from './pages/import-orders/ReturnToSgOrdersPage';
 import ExportOrdersPage from './pages/export-orders/ExportOrdersPage';
 import DeliveryPage from './pages/delivery/DeliveryPage';
 import WarehousesPage from './pages/warehouse/WarehousesPage';
@@ -133,6 +135,8 @@ function AppRoutes() {
         {/* Hang hoa module */}
         <Route path="/hang-hoa" element={<ModulePage />} />
         <Route path="/hang-hoa/nhap-hang" element={<ImportOrdersPage />} />
+        <Route path="/hang-hoa/xac-nhan-hang-gui" element={<ConfirmSenderImportOrdersPage />} />
+        <Route path="/hang-hoa/hang-gui-sg" element={<ReturnToSgOrdersPage />} />
         <Route path="/hang-hoa/nhap-hang/lich-su" element={<StandardImportOrderHistoryPage />} />
         <Route path="/hang-hoa/nhap-hang-rau" element={<VegetableImportsPage />} />
         <Route path="/hang-hoa/nhap-hang-rau/lich-su" element={<VegetableImportOrderHistoryPage />} />

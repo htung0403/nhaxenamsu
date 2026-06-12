@@ -646,6 +646,7 @@ export interface ImportOrderFilters {
   customer_id?: string;
   license_plate?: string;
   received_by?: string;
+  admin_confirmation_status?: 'pending_customer' | 'official' | 'return_to_sg';
   search?: string;
   page?: number;
   pageSize?: number;
