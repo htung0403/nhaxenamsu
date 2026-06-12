@@ -54,6 +54,7 @@ export interface SenderSummaryItem {
   licensePlate: string;
   quantity: number;
   productName: string;
+  note?: string;
   supplierName?: string;
   depotName?: string;
 }
@@ -520,6 +521,11 @@ export class DeliveryNoteGenerator {
       });
     };
     const formatNumber = (value: number) => Number(value || 0).toLocaleString('vi-VN');
+    const formatProductName = (item: SenderSummaryItem) => {
+      const productName = item.productName || '';
+      const note = String(item.note || '').trim();
+      return note ? `${productName} (${note})` : productName;
+    };
 
     const xPositions = colWidths.reduce<number[]>((acc, _widthValue, index) => {
       if (index === 0) return [tableX];
@@ -548,7 +554,7 @@ export class DeliveryNoteGenerator {
           <text x="${xPositions[3] + colWidths[3] / 2}" y="${y + rowHeight / 2 + 6}" font-family="'Times New Roman', serif" font-size="${fontSize}" text-anchor="middle">${item.quantity || 0}</text>
 
           <rect x="${xPositions[4]}" y="${y}" width="${colWidths[4]}" height="${rowHeight}" fill="white" stroke="black" />
-          <text x="${xPositions[4] + 8}" y="${y + rowHeight / 2 + 6}" font-family="'Times New Roman', serif" font-size="${fontSize}">${escapeXml(item.productName || '')}</text>
+          <text x="${xPositions[4] + 8}" y="${y + rowHeight / 2 + 6}" font-family="'Times New Roman', serif" font-size="${fontSize}">${escapeXml(formatProductName(item))}</text>
         </g>
       `;
     });

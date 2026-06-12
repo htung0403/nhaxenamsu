@@ -1792,6 +1792,7 @@ export class ZaloService {
           licensePlate: item.licensePlate || '-',
           quantity: Number(item.quantity || 0),
           productName: item.productName || 'Hàng hóa',
+          note: item.note || '',
           supplierName: item.supplierName || item.depotName || 'Vựa',
           depotName: item.depotName || item.supplierName || 'Vựa',
         })),
@@ -2989,7 +2990,7 @@ export class ZaloService {
         profiles:profiles!received_by(full_name, role),
         sender_customers:customers!vegetable_orders_sender_id_fkey(id, name, phone),
         customers:customers!vegetable_orders_customer_id_fkey(id, name),
-        vegetable_order_items(quantity, package_type, products(name)),
+        vegetable_order_items(quantity, package_type, item_note, products(name)),
         delivery_orders(delivery_vehicles(driver_id, vehicles(license_plate), profiles!driver_id(full_name)))
       `)
       .eq('order_date', date)
@@ -3013,16 +3014,23 @@ export class ZaloService {
       return order.delivery_orders?.[0]?.delivery_vehicles?.[0]?.vehicles?.license_plate || '-';
     };
 
+    const normalizeNote = (value: unknown): string => {
+      const note = String(value || '').trim();
+      return note === '-' ? '' : note;
+    };
+
     sortedSenderOrders.forEach((order) => {
       const taiRank = getVegetableTaiRank(order, dailyDriverRankMap);
       const licensePlate = resolveLicensePlate(order);
 
       (order.vegetable_order_items || []).forEach((item: any) => {
+        const note = normalizeNote(item.item_note);
         items.push({
           taiRank,
           licensePlate,
           quantity: item.quantity || 0,
           productName: item.products?.name || item.package_type || 'Hàng hóa',
+          note,
           supplierName: order.customers?.name || '-',
         });
       });
@@ -3030,7 +3038,7 @@ export class ZaloService {
 
     const mergedMap = new Map<string, any>();
     items.forEach((item) => {
-      const rowKey = `${item.supplierName}||${item.taiRank}||${item.licensePlate}||${item.productName}`;
+      const rowKey = `${item.supplierName}||${item.taiRank}||${item.licensePlate}||${item.productName}||${item.note || ''}`;
       const existing = mergedMap.get(rowKey);
       if (!existing) {
         mergedMap.set(rowKey, { ...item });
