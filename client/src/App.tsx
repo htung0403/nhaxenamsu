@@ -50,6 +50,7 @@ import RolePermissionsPage from './pages/hr/RolePermissionsPage';
 import SystemSettingsPage from './pages/admin/SystemSettingsPage';
 import CustomerDetailPage from './pages/customers/CustomerDetailPage';
 import MyOrdersByCustomerTypePage from './pages/customers/MyOrdersByCustomerTypePage';
+import GroceryOrderCreatePage from './pages/customers/GroceryOrderCreatePage';
 import CustomerDebtPage from './pages/customers/CustomerDebtPage';
 import RevenueReportPage from './pages/customers/RevenueReportPage';
 import SgCashCollectionsPage from './pages/accounting/SgCashCollectionsPage';
@@ -130,7 +131,10 @@ function AppRoutes() {
         <Route path="/ho-so" element={<ProfilePage />} />
         <Route path="/ho-so/:id" element={<ProfilePage />} />
         <Route path="/tai-khoan/don-hang" element={<Navigate to="/don-hang-cua-toi" replace />} />
+        <Route path="/tai-khoan/don-hang/tao-don" element={<Navigate to="/don-hang-cua-toi/tao-don-gui" replace />} />
         <Route path="/don-hang-cua-toi" element={<MyOrdersByCustomerTypePage />} />
+        <Route path="/don-hang-cua-toi/tao-don-gui" element={<GroceryOrderCreatePage mode="sender" />} />
+        <Route path="/don-hang-cua-toi/tao-don-doi-tra" element={<GroceryOrderCreatePage mode="receiver" />} />
 
         {/* Hang hoa module */}
         <Route path="/hang-hoa" element={<ModulePage />} />

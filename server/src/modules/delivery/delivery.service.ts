@@ -1006,59 +1006,15 @@ export class DeliveryService {
     return { success: true };
   }
 
-  static async deleteOrders(ids: string[]) {
-    const { data: deliveryOrders, error: fetchError } = await supabaseService
-      .from('delivery_orders')
-      .select('id, import_order_id, vegetable_order_id')
-      .in('id', ids);
+  static async deleteOrders(ids: string[], cancelledBy?: string) {
+    if (!ids || ids.length === 0) return { cancelled_deliveries: 0, cancelled_payments: 0, reversed_entries: 0 };
 
-    if (fetchError) throw fetchError;
-
-    await supabaseService
-      .from('payment_collections')
-      .delete()
-      .in('delivery_order_id', ids);
-
-    await supabaseService
-      .from('export_orders')
-      .delete()
-      .in('product_id', ids);
-
-    await supabaseService
-      .from('delivery_vehicles')
-      .delete()
-      .in('delivery_order_id', ids);
-
-    const { data, error } = await supabaseService
-      .from('delivery_orders')
-      .delete()
-      .in('id', ids)
-      .select();
+    const { data, error } = await supabaseService.rpc('cancel_invoice_cascade_by_delivery_ids', {
+      p_delivery_order_ids: ids,
+      p_cancelled_by: cancelledBy || null,
+    });
 
     if (error) throw error;
-
-    if (deliveryOrders && deliveryOrders.length > 0) {
-      const importOrderIds = deliveryOrders.map(d => d.import_order_id).filter(Boolean);
-      const vegOrderIds = deliveryOrders.map(d => d.vegetable_order_id).filter(Boolean);
-      const deletedAt = new Date().toISOString();
-
-      if (importOrderIds.length > 0) {
-        await supabaseService
-          .from('import_orders')
-          .update({ deleted_at: deletedAt })
-          .in('id', importOrderIds)
-          .is('deleted_at', null);
-      }
-
-      if (vegOrderIds.length > 0) {
-        await supabaseService
-          .from('vegetable_orders')
-          .update({ deleted_at: deletedAt })
-          .in('id', vegOrderIds)
-          .is('deleted_at', null);
-      }
-    }
-
     return data;
   }
 
@@ -1175,3 +1131,5 @@ export class DeliveryService {
     };
   }
 }
+
+

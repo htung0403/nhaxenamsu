@@ -179,7 +179,7 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
 
   const pendingCount = collections?.filter(c => c.status === 'submitted').length || 0;
   const confirmedCount = collections?.filter(c => c.status === 'confirmed' || c.status === 'self_confirmed').length || 0;
-  const missingAmount = collections?.filter(c => (c.difference || 0) < 0 && c.status !== 'draft').reduce((sum, c) => sum + Math.abs(c.difference || 0), 0) || 0;
+  const missingAmount = collections?.filter(c => (c.difference || 0) < 0 && c.status !== 'draft' && status !== 'cancelled').reduce((sum, c) => sum + Math.abs(c.difference || 0), 0) || 0;
 
   const hasActiveFilters = filterDate || filterStatus || filterDriverId || filterVehicleId;
 
@@ -273,7 +273,8 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
               { value: 'draft', label: 'Chưa Nộp' },
               { value: 'submitted', label: 'Chờ Xác Nhận' },
               { value: 'confirmed', label: 'Đã Xác Nhận' },
-              { value: 'self_confirmed', label: 'Tự Xác Nhận' }
+              { value: 'self_confirmed', label: 'Tự Xác Nhận' },
+    { value: 'cancelled', label: 'Đã Huỷ' }
             ]}
             className="bg-white h-[38px]"
           />
@@ -395,7 +396,8 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
           { value: 'draft', label: 'Chưa Nộp' },
           { value: 'submitted', label: 'Chờ Xác Nhận' },
           { value: 'confirmed', label: 'Đã Xác Nhận' },
-          { value: 'self_confirmed', label: 'Tự Xác Nhận' }
+          { value: 'self_confirmed', label: 'Tự Xác Nhận' },
+    { value: 'cancelled', label: 'Đã Huỷ' }
         ]}
         dateLabel="Lọc theo ngày thu"
       >
@@ -670,3 +672,4 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
 };
 
 export default DriverPaymentTab;
+

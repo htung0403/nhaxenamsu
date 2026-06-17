@@ -78,7 +78,7 @@ desktop-payment-page.png
 .sisyphus/notepads/date-filter-bug/issues.md
 .sisyphus/notepads/payment-collections-grouping/learnings.md
 .git-rewrite/
-.codex/config.toml
+.codex/
 .pnpm-store
 server/tmp/cloudinary-migration/cleanup-updates.json
 vietmap-agent-docs.zip
@@ -91,3 +91,4 @@ vietmap-agent-docs/logistics.txt
 vietmap-agent-docs/map-display.txt
 vietmap-agent-docs/routing.txt
 vietmap-agent-docs/search-geocoding.txt
+.

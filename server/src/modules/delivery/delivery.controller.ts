@@ -233,8 +233,8 @@ export class DeliveryController {
   static async deleteOrders(req: Request, res: Response) {
     try {
       const { ids } = z.object({ ids: z.array(z.string().uuid()) }).parse(req.body);
-      const data = await DeliveryService.deleteOrders(ids);
-      return res.status(200).json(successResponse(data, 'Đã xóa đơn giao hàng'));
+      const data = await DeliveryService.deleteOrders(ids, req.user?.id);
+      return res.status(200).json(successResponse(data, 'Đã huỷ hóa đơn và phiếu liên quan'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
     }
@@ -250,3 +250,4 @@ export class DeliveryController {
     }
   }
 }
+

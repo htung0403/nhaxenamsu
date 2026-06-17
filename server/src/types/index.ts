@@ -27,7 +27,7 @@ export interface ApiResponse<T = any> {
 }
 
 // --- Payment Collections ---
-export type PaymentCollectionStatus = 'draft' | 'submitted' | 'confirmed' | 'self_confirmed';
+export type PaymentCollectionStatus = 'draft' | 'submitted' | 'confirmed' | 'self_confirmed' | 'cancelled';
 export type PaymentReceiverType = 'staff' | 'manager';
 
 export interface PaymentCollection {
@@ -76,3 +76,4 @@ export interface ConfirmPaymentDto {
   confirmedAt: string;
   notes?: string;
 }
+

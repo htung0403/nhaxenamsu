@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock3, Eye, Image as ImageIcon, ImagePlus, Loader2, Package, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/shared/PageHeader';
@@ -20,6 +21,7 @@ import { getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
 import type { Customer, DeliveryOrder, ImportOrder } from '../../types';
 
 const CUSTOMER_ORDER_CREATE_PATH = '/tai-khoan/don-hang/tao-don';
+const GROCERY_RECEIVER_RETURN_CREATE_PATH = '/don-hang-cua-toi/tao-don-doi-tra';
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getCurrentTime = () => new Date().toTimeString().slice(0, 5);
@@ -319,6 +321,7 @@ export type CustomerOrdersPageType = Extract<
 >;
 
 const GroceryReceiverOrdersPage = () => {
+  const navigate = useNavigate();
   const customerType = 'grocery_receiver' as CustomerOrdersPageType;
   const { user } = useAuth();
   const { data: customer, isLoading: loadingCustomer } = useCustomerByUserId(user?.id || '');
@@ -427,6 +430,8 @@ const GroceryReceiverOrdersPage = () => {
   );
 
   const openCreateModal = () => {
+    navigate(GROCERY_RECEIVER_RETURN_CREATE_PATH);
+    return;
     setEditingOrder(null);
     setFormState((() => {
       const initialState = createInitialFormState();
