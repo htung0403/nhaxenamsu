@@ -25,7 +25,7 @@ import { useEmployees } from '../../hooks/queries/useHR';
 import { hasFullGoodsModuleAccess, importOrderVisibleToUser } from '../../utils/goodsModuleScope';
 
 import { removeAccents } from '../../lib/str-utils';
-import { cloudinaryLarge, cloudinarySmall } from '../../lib/cloudinaryUrl';
+import { cloudinaryLarge } from '../../lib/cloudinaryUrl';
 import { buildVegetableDailyTaiRankMap, getVegetableTaiRank } from '../../utils/vegetableTaiRank';
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -754,7 +754,10 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
                             </div>
                             <div className="w-[64px] h-[64px] shrink-0 bg-muted/20 rounded-lg overflow-hidden">
                               {orderImage ? (
-                                <img loading="lazy" decoding="async" src={cloudinarySmall(orderImage)} alt={supplierName} className="w-full h-full object-cover" />
+                                <div className="w-full h-full flex flex-col items-center justify-center text-primary bg-primary/10">
+                                  <Eye size={22} className="mb-0.5" />
+                                  <span className="text-[9px] font-bold">XEM ẢNH</span>
+                                </div>
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center">
                                   <ImageIcon size={22} className="text-muted-foreground/30" />

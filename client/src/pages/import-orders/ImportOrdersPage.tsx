@@ -21,7 +21,6 @@ import { useAuth } from '../../context/AuthContext';
 import { useVehicles } from '../../hooks/queries/useVehicles';
 import { useCustomers } from '../../hooks/queries/useCustomers';
 import { hasFullGoodsModuleAccess, importOrderVisibleToUser } from '../../utils/goodsModuleScope';
-import { cloudinarySmall } from '../../lib/cloudinaryUrl';
 import type { Customer } from '../../types';
 
 const statusLabels: Record<OrderStatus, string> = {
@@ -500,7 +499,9 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
                                   }}
                                 >
                                   {orderImage ? (
-                                    <img loading="lazy" decoding="async" src={cloudinarySmall(orderImage)} alt={order.order_code} className="w-full h-full object-cover" />
+                                    <div className="w-full h-full flex items-center justify-center text-primary bg-primary/10" title="Xem ảnh">
+                                      <Eye size={16} />
+                                    </div>
                                   ) : (
                                     <div className="w-full h-full flex items-center justify-center">
                                       <ImageIcon size={14} className="text-muted-foreground/30" />
@@ -643,7 +644,10 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
                         }}
                       >
                         {orderImage ? (
-                          <img loading="lazy" decoding="async" src={cloudinarySmall(orderImage)} alt={order.order_code} className="w-full h-full object-cover" />
+                          <div className="w-full h-full flex flex-col items-center justify-center text-primary bg-primary/10">
+                            <Eye size={22} className="mb-0.5" />
+                            <span className="text-[9px] font-bold">XEM ẢNH</span>
+                          </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
                             <ImageIcon size={22} className="text-muted-foreground/30" />

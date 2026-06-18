@@ -26,6 +26,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, mustCheckIn, isLoc
 
   const visibleSidebarMenu = sidebarMenu.filter((item) => {
     if ((mustCheckIn || isLocked) && !isPathAllowedBeforeCheckin(item.path)) return false;
+    if (user?.role && item.hiddenForRoles?.includes(user.role)) return false;
 
     const moduleSections = moduleData[item.path];
 

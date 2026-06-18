@@ -33,7 +33,6 @@ import { formatNgayGioGiaoVI } from '../../lib/deliveryDisplay';
 import type { DeliveryOrder, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
-import { cloudinarySmall } from '../../lib/cloudinaryUrl';
 import { VehicleCellTooltip } from './components/VehicleCellTooltip';
 
 const formatNumber = (val?: number) => {
@@ -1287,11 +1286,8 @@ const DeliveryPage: React.FC = () => {
                               }
                             }}>
                               {getOrderPreviewImage(o) ? (
-                                <div className="w-8 h-8 rounded-md bg-muted/30 overflow-hidden mx-auto border border-border group relative flex items-center justify-center">
-                                  <img loading="lazy" decoding="async" src={cloudinarySmall(getOrderPreviewImage(o) || undefined)} alt="Receipt" className="w-full h-full object-cover" />
-                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Eye size={12} className="text-white" />
-                                  </div>
+                                <div className="w-8 h-8 rounded-md bg-primary/10 text-primary mx-auto border border-primary/20 group relative flex items-center justify-center hover:bg-primary/15 transition-colors" title="Xem ảnh">
+                                  <Eye size={14} />
                                 </div>
                               ) : (
                                 <div className="w-8 h-8 rounded-md bg-muted/20 flex items-center justify-center text-muted-foreground mx-auto">
@@ -1548,7 +1544,7 @@ const DeliveryPage: React.FC = () => {
                               </div>
                             )}
                             <div className="flex gap-3">
-                              {/* Left: Image Thumbnail */}
+                              {/* Left: Image action */}
                               <div
                                 className="w-16 h-16 shrink-0 bg-muted/20 rounded-lg overflow-hidden border border-border/50 self-center"
                                 onClick={(e) => {
@@ -1560,15 +1556,9 @@ const DeliveryPage: React.FC = () => {
                                 }}
                               >
                                 {getOrderPreviewImage(o) ? (
-                                  <div className="w-full h-full relative group cursor-pointer">
-                                    <img loading="lazy" decoding="async"
-                                      src={cloudinarySmall(getOrderPreviewImage(o) || undefined)}
-                                      alt="Receipt"
-                                      className="w-full h-full object-cover"
-                                    />
-                                    <div className="absolute inset-0 bg-black/20 flex items-center justify-center">
-                                      <Eye size={20} className="text-white drop-shadow-md" />
-                                    </div>
+                                  <div className="w-full h-full flex flex-col items-center justify-center text-primary bg-primary/10 cursor-pointer">
+                                    <Eye size={22} className="mb-0.5" />
+                                    <span className="text-[9px] font-bold">XEM ẢNH</span>
                                   </div>
                                 ) : (
                                   <div className="w-full h-full flex flex-col items-center justify-center text-muted-foreground">

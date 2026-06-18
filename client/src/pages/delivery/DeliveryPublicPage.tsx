@@ -14,9 +14,11 @@ import {
   Calendar, 
   User, 
   CreditCard,
-  Hash
+  Hash,
+  Image as ImageIcon,
+  Eye
 } from 'lucide-react';
-import { cloudinarySmall, cloudinaryLarge } from '../../lib/cloudinaryUrl';
+import { cloudinaryLarge } from '../../lib/cloudinaryUrl';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
@@ -261,7 +263,7 @@ const DeliveryPublicPage: React.FC = () => {
                             style={styles.imageThumb}
                             onClick={() => openLightbox(url)}
                           >
-                    <img src={cloudinarySmall(url)} alt="Giao hàng" style={styles.imageImg} loading="lazy" />
+                            <Eye size={24} color="#2563eb" />
                           </div>
                         ))}
                       </div>
@@ -294,12 +296,7 @@ const DeliveryPublicPage: React.FC = () => {
                   style={styles.imageThumb}
                   onClick={() => openLightbox(url)}
                 >
-                  <img
-                      src={cloudinarySmall(url)}
-                    alt={`Ảnh ${i + 1}`}
-                    style={styles.imageImg}
-                    loading="lazy"
-                  />
+                  <ImageIcon size={24} color="#2563eb" />
                 </div>
               ))}
             </div>
@@ -634,16 +631,14 @@ const styles: Record<string, React.CSSProperties> = {
   imageThumb: {
     aspectRatio: '1',
     borderRadius: 12,
-    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: '#eff6ff',
+    color: '#2563eb',
     cursor: 'pointer',
-    border: '1px solid #e2e8f0',
+    border: '1px solid #bfdbfe',
     transition: 'transform 0.15s, box-shadow 0.15s',
-  },
-  imageImg: {
-    width: '100%',
-    height: '100%',
-    objectFit: 'cover' as const,
-    display: 'block',
   },
   footer: {
     textAlign: 'center' as const,

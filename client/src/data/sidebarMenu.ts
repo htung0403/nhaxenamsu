@@ -18,14 +18,15 @@ export type SidebarItem = {
   icon: React.ElementType;
   label: string;
   path: string;
+  hiddenForRoles?: string[];
 };
 
 export const sidebarMenu: SidebarItem[] = [
   { icon: Home, label: 'Trang chủ', path: '/' },
-  { icon: ClipboardList, label: 'Đơn của tôi', path: '/tai-khoan/don-hang' },
-  { icon: Send, label: 'Tạo đơn gửi', path: '/don-hang-cua-toi/tao-don-gui' },
-  { icon: CirclePlus, label: 'Tạo đơn đổi trả', path: '/don-hang-cua-toi/tao-don-doi-tra' },
-  { icon: Box, label: 'Hàng hóa', path: '/hang-hoa' },
+  { icon: ClipboardList, label: 'Đơn của tôi', path: '/tai-khoan/don-hang', hiddenForRoles: ['admin'] },
+  { icon: Send, label: 'Tạo đơn gửi', path: '/don-hang-cua-toi/tao-don-gui', hiddenForRoles: ['admin'] },
+  { icon: CirclePlus, label: 'Tạo đơn đổi trả', path: '/don-hang-cua-toi/tao-don-doi-tra', hiddenForRoles: ['admin'] },
+  { icon: Box, label: 'Hàng hóa', path: '/hang-hoa', hiddenForRoles: ['admin'] },
   { icon: Contact, label: 'Khách hàng', path: '/khach-hang' },
   { icon: Receipt, label: 'Chi phí', path: '/chi-phi' },
   { icon: Users, label: 'Hành chính nhân sự', path: '/hanh-chinh-nhan-su' },

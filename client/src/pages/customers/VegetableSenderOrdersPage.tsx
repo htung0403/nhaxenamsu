@@ -724,7 +724,7 @@ const VegetableSenderOrdersPage = () => {
                           >
                             {previewImage ? (
                               <div className="w-8 h-8 rounded-md bg-muted/30 overflow-hidden mx-auto border border-border group relative flex items-center justify-center">
-                                <img loading="lazy" decoding="async" src={cloudinarySmall(previewImage)} alt="Ảnh đơn" className="w-full h-full object-cover" />
+                                <div className="w-full h-full flex items-center justify-center text-primary bg-primary/10" title="Xem ảnh"><Eye size={16} /></div>
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                                   <Eye size={12} className="text-white" />
                                 </div>
