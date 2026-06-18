@@ -31,7 +31,7 @@ const assignmentSchema = z.object({
   image_urls: z.array(z.string()).default([]),
   delivery_date: z.string().optional().nullable(),
   delivery_time: z.string().optional().nullable(),
-  export_payment_status: z.enum(['unpaid', 'paid']).default('unpaid'),
+  export_payment_status: z.enum(['unpaid', 'paid']).default('paid'),
 });
 
 const schema = z.object({
@@ -264,7 +264,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
             image_urls: [],
             delivery_date: format(now, 'yyyy-MM-dd'),
             delivery_time: format(now, 'HH:mm'),
-            export_payment_status: 'unpaid',
+            export_payment_status: 'paid',
           });
         }
       } else {
@@ -290,7 +290,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
               image_urls: assignmentImages,
               delivery_date: dv.delivery_date || format(now, 'yyyy-MM-dd'),
               delivery_time: dv.delivery_time || format(now, 'HH:mm'),
-              export_payment_status: dv.export_payment_status || 'unpaid',
+              export_payment_status: dv.export_payment_status || 'paid',
             });
           });
         }
@@ -311,7 +311,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
             image_urls: [],
             delivery_date: format(now, 'yyyy-MM-dd'),
             delivery_time: format(now, 'HH:mm'),
-            export_payment_status: 'unpaid',
+            export_payment_status: 'paid',
           });
         }
       }
@@ -486,7 +486,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
           image_urls: Array.isArray(dv.image_urls) ? dv.image_urls : [],
           delivery_date: dv.delivery_date,
           delivery_time: dv.delivery_time,
-          export_payment_status: dv.export_payment_status || 'unpaid',
+          export_payment_status: dv.export_payment_status || 'paid',
         }));
 
         finalAssignmentsToSubmit.push(...hiddenAssignments);
@@ -842,7 +842,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                             }}
                             className={clsx(
                               'h-9 rounded-lg border text-[11px] font-bold transition-all',
-                              (watchAssignments[index]?.export_payment_status || 'unpaid') === 'unpaid'
+                              (watchAssignments[index]?.export_payment_status || 'paid') === 'unpaid'
                                 ? 'border-red-300 bg-red-50 text-red-700'
                                 : 'border-border bg-card text-muted-foreground hover:bg-muted/40',
                               isRowDisabled && 'opacity-70 cursor-not-allowed'
@@ -896,7 +896,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                     )}
 
                     {/* Ảnh gắn theo từng xe (phiếu thu / chứng từ) */}
-                    <div className="w-full flex-[1_1_100%] border-t border-dashed border-border/70 pt-3 mt-1">
+                    <div className="order-first md:order-none w-full flex-[1_1_100%] border-b md:border-t border-dashed border-border/70 pb-3 md:pb-0 md:pt-3 mb-1 md:mb-0 md:mt-1">
                       <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide mb-1.5">
                         Ảnh theo xe
                         {(() => {
