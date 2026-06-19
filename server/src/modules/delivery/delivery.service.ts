@@ -264,31 +264,43 @@ export class DeliveryService {
       driverScope = await fetchDriverScopeForUser(actor.id);
     }
 
-    let query = supabaseService
-      .from('delivery_orders')
-      .select(
-        '*, import_orders(order_code, created_at, sender_name, sender_id, receiver_name, receiver_phone, customer_id, selected_alias, license_plate, driver_name, received_by, admin_confirmed_at, customers:customers!import_orders_customer_id_fkey(name, phone), sender_customers:customers!import_orders_sender_id_fkey(name, phone), total_amount, payment_status, profiles:profiles!received_by(full_name, role), receipt_image_url, receipt_image_urls, import_order_items(id, image_url, image_urls, products(name)), deleted_at), vegetable_orders(order_code, sender_name, sender_id, receiver_name, receiver_phone, customer_id, selected_alias, license_plate, driver_name, received_by, customers:customers!vegetable_orders_customer_id_fkey(name, phone), sender_customers:customers!vegetable_orders_sender_id_fkey(name, phone), total_amount, payment_status, profiles:profiles!received_by(full_name), receipt_image_url, receipt_image_urls, vegetable_order_items(id, image_url, image_urls, products(name)), deleted_at), delivery_vehicles(*, vehicles(license_plate, in_charge_id)), payment_collections(id, status, vehicle_id, image_url)'
-      )
-      .order('delivery_date', { ascending: false });
+    const selectClause =
+      '*, import_orders(order_code, created_at, sender_name, sender_id, receiver_name, receiver_phone, customer_id, selected_alias, license_plate, driver_name, received_by, admin_confirmed_at, customers:customers!import_orders_customer_id_fkey(name, phone), sender_customers:customers!import_orders_sender_id_fkey(name, phone), total_amount, payment_status, profiles:profiles!received_by(full_name, role), receipt_image_url, receipt_image_urls, import_order_items(id, image_url, image_urls, products(name)), deleted_at), vegetable_orders(order_code, sender_name, sender_id, receiver_name, receiver_phone, customer_id, selected_alias, license_plate, driver_name, received_by, customers:customers!vegetable_orders_customer_id_fkey(name, phone), sender_customers:customers!vegetable_orders_sender_id_fkey(name, phone), total_amount, payment_status, profiles:profiles!received_by(full_name), receipt_image_url, receipt_image_urls, vegetable_order_items(id, image_url, image_urls, products(name)), deleted_at), delivery_vehicles(*, vehicles(license_plate, in_charge_id)), payment_collections(id, status, vehicle_id, image_url)';
 
-    if (orderCategory) query = query.eq('order_category', orderCategory);
+    const pageSize = 1000;
+    const rawData: any[] = [];
 
-    if (startDate) {
-      const startT = `${startDate}T00:00:00.000Z`;
-      const endDateStr = endDate || startDate;
-      const endT = `${endDateStr}T23:59:59.999Z`;
+    for (let from = 0; ; from += pageSize) {
+      let query = supabaseService
+        .from('delivery_orders')
+        .select(selectClause)
+        .order('delivery_date', { ascending: false })
+        .order('created_at', { ascending: false })
+        .range(from, from + pageSize - 1);
 
-      // Filter by (confirmed_at in range) OR (created_at in range)
-      // Note: and() nested in or() is supported in modern PostgREST
-      query = query.or(`and(confirmed_at.gte.${startT},confirmed_at.lte.${endT}),and(created_at.gte.${startT},created_at.lte.${endT})`);
-    } else {
-      const sevenDaysAgo = new Date();
-      sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-      query = query.gte('created_at', sevenDaysAgo.toISOString());
+      if (orderCategory) query = query.eq('order_category', orderCategory);
+
+      if (startDate) {
+        const startT = `${startDate}T00:00:00.000Z`;
+        const endDateStr = endDate || startDate;
+        const endT = `${endDateStr}T23:59:59.999Z`;
+
+        // Filter by (confirmed_at in range) OR (created_at in range)
+        // Note: and() nested in or() is supported in modern PostgREST
+        query = query.or(`and(confirmed_at.gte.${startT},confirmed_at.lte.${endT}),and(created_at.gte.${startT},created_at.lte.${endT})`);
+      } else {
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        query = query.gte('created_at', sevenDaysAgo.toISOString());
+      }
+
+      const { data: pageData, error } = await query;
+      if (error) throw error;
+
+      rawData.push(...(pageData || []));
+      if (!pageData || pageData.length < pageSize) break;
     }
 
-    const { data: rawData, error } = await query;
-    if (error) throw error;
     let data = (rawData || []).filter((row: any) => !this.deliverySourceIsSoftDeleted(row));
     data = data.filter((row: any) => {
       if ((row.order_category || 'standard') !== 'standard') return true;
@@ -1131,5 +1143,13 @@ export class DeliveryService {
     };
   }
 }
+
+
+
+
+
+
+
+
 
 

@@ -29,7 +29,6 @@ import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { matchesSearch } from '../../lib/str-utils';
 import { getDeliveryAnchorDateString } from '../../lib/deliveryDayAnchor';
 import { isOldOrderForAgeRule, getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
-import { formatNgayGioGiaoVI } from '../../lib/deliveryDisplay';
 import type { DeliveryOrder, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
@@ -82,6 +81,27 @@ const isPaidCollectionStatus = (status?: string) => status === 'confirmed' || st
 const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'vegetable') => {
   if (!vehicle.goods_categories || vehicle.goods_categories.length === 0) return true;
   return vehicle.goods_categories.includes(category);
+};
+
+const getOrderCreatedAt = (order: DeliveryOrder) => {
+  const createdAt = new Date(order.created_at);
+  return Number.isNaN(createdAt.getTime()) ? null : createdAt;
+};
+
+const getOrderCreatedDateKey = (order: DeliveryOrder) => {
+  const createdAt = getOrderCreatedAt(order);
+  return createdAt ? format(createdAt, 'yyyy-MM-dd') : 'N/A';
+};
+
+const getOrderCreatedDateTimeVI = (order: DeliveryOrder) => {
+  const createdAt = getOrderCreatedAt(order);
+  return createdAt ? format(createdAt, 'd/M/yyyy · HH:mm') : '-';
+};
+
+const compareOrderCreatedDesc = (a: DeliveryOrder, b: DeliveryOrder) => {
+  const timeA = getOrderCreatedAt(a)?.getTime() ?? 0;
+  const timeB = getOrderCreatedAt(b)?.getTime() ?? 0;
+  return timeB - timeA;
 };
 
 const getImportOrderShortDate = (order: DeliveryOrder) => {
@@ -295,9 +315,9 @@ const getTodayString = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const getOneWeekAgoString = () => {
+const getThirtyDaysAgoString = () => {
   const d = new Date();
-  d.setDate(d.getDate() - 6); // 7 days including today
+  d.setDate(d.getDate() - 29); // 30 days including today
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -310,8 +330,8 @@ const isAgeFilterValue = (value: string): value is 'all' | 'new' | 'old' =>
 const DeliveryPage: React.FC = () => {
   const navigate = useNavigate();
   const today = getTodayString();
-  const oneWeekAgo = getOneWeekAgoString();
-  const [startDate, setStartDate] = useState<string>(oneWeekAgo);
+  const thirtyDaysAgo = getThirtyDaysAgoString();
+  const [startDate, setStartDate] = useState<string>(thirtyDaysAgo);
   const [endDate, setEndDate] = useState<string>(today);
   const [statusFilter, setStatusFilter] = useState<'all' | 'can_giao' | 'hang_o_sg' | 'da_giao'>('can_giao');
   const [ageFilter, setAgeFilter] = useState<'all' | 'new' | 'old'>('all');
@@ -546,6 +566,10 @@ const DeliveryPage: React.FC = () => {
     setEditingOrder(order);
   };
 
+  const openImageViewer = (order: DeliveryOrder) => {
+    setViewingImageOrder(order);
+  };
+
   const closeEdit = () => {
     setIsEditClosing(true);
     setTimeout(() => {
@@ -673,56 +697,6 @@ const DeliveryPage: React.FC = () => {
     setCallDialog(null);
   };
 
-  let filteredOrders = groupedOrdersView || [];
-
-  const anchorStr = getDeliveryAnchorDateString();
-  if (ageFilter === 'new') {
-    filteredOrders = filteredOrders.filter((o) => !isOldOrderForAgeRule(o, anchorStr));
-  } else if (ageFilter === 'old') {
-    filteredOrders = filteredOrders.filter((o) => isOldOrderForAgeRule(o, anchorStr));
-  }
-
-  // Text & Select Filters logic
-  filteredOrders = filteredOrders.filter(o => {
-    const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
-    const rName = o.import_orders?.customers?.name || o.import_orders?.receiver_name?.trim() || o.import_orders?.profiles?.full_name;
-
-    if (searchQuery) {
-      if (!matchesSearch(rName || '', searchQuery)) {
-        return false;
-      }
-    }
-    if (filterCustomer.length > 0 && cName && !filterCustomer.includes(cName)) return false;
-    if (filterReceiver.length > 0 && rName && !filterReceiver.includes(rName)) return false;
-    if (filterDeliveryDate) {
-      const vehicleDateMatch = (o.delivery_vehicles || []).some(
-        (dv) => (dv.assigned_quantity || 0) > 0 && dv.delivery_date === filterDeliveryDate
-      );
-      if (!vehicleDateMatch) return false;
-    }
-
-    if (filterVehicleIds.length > 0) {
-      const assignedToSelected = (o.delivery_vehicles || []).some(
-        (dv) =>
-          dv.vehicle_id &&
-          filterVehicleIds.includes(dv.vehicle_id) &&
-          (dv.assigned_quantity || 0) > 0
-      );
-      if (!assignedToSelected) return false;
-    }
-
-    if (filterHasExcess) {
-      const totalAssigned = (o.delivery_vehicles || []).reduce(
-        (sum, dv) => sum + (dv.assigned_quantity || 0),
-        0
-      );
-      const remainingQty = o.total_quantity - totalAssigned;
-      if (remainingQty >= 0) return false;
-    }
-
-    return true;
-  });
-
   const getTotalAssignedQuantity = (order: DeliveryOrder) =>
     (order.delivery_vehicles || []).reduce((sum, dv) => sum + (dv.assigned_quantity || 0), 0);
 
@@ -748,7 +722,52 @@ const DeliveryPage: React.FC = () => {
   const isAdminCanGiaoOrder = (order: DeliveryOrder) =>
     adminCanGiaoGroupKeySet.has(getDeliveryViewGroupKey(order));
 
-  const statusCounts = !filteredOrders ? { all: 0, hang_o_sg: 0, can_giao: 0, da_giao: 0 } : {
+  const anchorStr = getDeliveryAnchorDateString();
+
+  const filteredOrders = React.useMemo(() => {
+    let next = groupedOrdersView || [];
+
+    if (ageFilter === 'new') {
+      next = next.filter((o) => !isOldOrderForAgeRule(o, anchorStr));
+    } else if (ageFilter === 'old') {
+      next = next.filter((o) => isOldOrderForAgeRule(o, anchorStr));
+    }
+
+    return next.filter(o => {
+      const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
+      const rName = o.import_orders?.customers?.name || o.import_orders?.receiver_name?.trim() || o.import_orders?.profiles?.full_name;
+
+      if (searchQuery && !matchesSearch(rName || '', searchQuery)) return false;
+      if (filterCustomer.length > 0 && cName && !filterCustomer.includes(cName)) return false;
+      if (filterReceiver.length > 0 && rName && !filterReceiver.includes(rName)) return false;
+      if (filterDeliveryDate) {
+        const vehicleDateMatch = (o.delivery_vehicles || []).some(
+          (dv) => (dv.assigned_quantity || 0) > 0 && dv.delivery_date === filterDeliveryDate
+        );
+        if (!vehicleDateMatch) return false;
+      }
+
+      if (filterVehicleIds.length > 0) {
+        const assignedToSelected = (o.delivery_vehicles || []).some(
+          (dv) =>
+            dv.vehicle_id &&
+            filterVehicleIds.includes(dv.vehicle_id) &&
+            (dv.assigned_quantity || 0) > 0
+        );
+        if (!assignedToSelected) return false;
+      }
+
+      if (filterHasExcess) {
+        const totalAssigned = getTotalAssignedQuantity(o);
+        const remainingQty = o.total_quantity - totalAssigned;
+        if (remainingQty >= 0) return false;
+      }
+
+      return true;
+    });
+  }, [groupedOrdersView, ageFilter, anchorStr, searchQuery, filterCustomer, filterReceiver, filterDeliveryDate, filterVehicleIds, filterHasExcess]);
+
+  const statusCounts = React.useMemo(() => ({
     all: filteredOrders.length,
     hang_o_sg: filteredOrders.filter((o) => getEffectiveDeliveryStatus(o) === 'hang_o_sg').length,
     can_giao: filteredOrders.filter((o) => {
@@ -762,7 +781,7 @@ const DeliveryPage: React.FC = () => {
       if (!isDriverOrLoader) return true;
       return hasMyVehicleAssignment(o);
     }).length,
-  };
+  }), [filteredOrders, isDriverOrLoader, adminCanGiaoGroupKeySet, myVehicleIdSet]);
 
   const { customerOptions, receiverOptions } = React.useMemo(() => {
     if (!groupedOrdersView) return { customerOptions: [], receiverOptions: [] };
@@ -792,33 +811,32 @@ const DeliveryPage: React.FC = () => {
     [eligibleVehicles]
   );
 
-  let displayedOrders = filteredOrders;
-  if (statusFilter !== 'all') {
-    displayedOrders = displayedOrders.filter((o) => {
-      const eff = getEffectiveDeliveryStatus(o);
-      if (statusFilter === 'hang_o_sg') return eff === 'hang_o_sg';
-      if (statusFilter === 'can_giao') {
-        if (eff !== 'can_giao') return false;
-        if (isDriverOrLoader && !isAdminCanGiaoOrder(o)) return false;
-        return true;
-      }
-      if (statusFilter === 'da_giao') {
-        if (!isDeliveredTabOrder(o)) return false;
-
-        if (isDriverOrLoader) {
-          return hasMyVehicleAssignment(o);
+  const displayedOrders = React.useMemo(() => {
+    const statusFiltered = statusFilter === 'all'
+      ? filteredOrders
+      : filteredOrders.filter((o) => {
+        const eff = getEffectiveDeliveryStatus(o);
+        if (statusFilter === 'hang_o_sg') return eff === 'hang_o_sg';
+        if (statusFilter === 'can_giao') {
+          if (eff !== 'can_giao') return false;
+          if (isDriverOrLoader && !isAdminCanGiaoOrder(o)) return false;
+          return true;
         }
+        if (statusFilter === 'da_giao') {
+          if (!isDeliveredTabOrder(o)) return false;
 
+          if (isDriverOrLoader) {
+            return hasMyVehicleAssignment(o);
+          }
+
+          return true;
+        }
         return true;
-      }
-      return true;
-    });
-  }
+      });
 
-  // Sort orders by customer name from A-Z
-  displayedOrders.sort((a, b) => getReceiverDisplayName(a).localeCompare(getReceiverDisplayName(b), 'vi'));
+    return [...statusFiltered].sort(compareOrderCreatedDesc);
+  }, [filteredOrders, statusFilter, isDriverOrLoader, adminCanGiaoGroupKeySet, myVehicleIdSet]);
 
-  // Selection helpers (admin only)
   const isAllSelected = displayedOrders.length > 0 && displayedOrders.every(o => selectedIds.has(o.id));
   const isSomeSelected = !isAllSelected && displayedOrders.some(o => selectedIds.has(o.id));
   const toggleSelectAll = () => {
@@ -828,24 +846,30 @@ const DeliveryPage: React.FC = () => {
       setSelectedIds(new Set(displayedOrders.map(o => o.id)));
     }
   };
-
   const isPaginatedTab = statusFilter === 'da_giao' || statusFilter === 'all';
   const totalItems = displayedOrders.length;
   const totalPages = isPaginatedTab ? Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE)) : 1;
-  const paginatedOrders = isPaginatedTab
-    ? displayedOrders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-    : displayedOrders;
+  const paginatedOrders = React.useMemo(
+    () => isPaginatedTab
+      ? displayedOrders.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+      : displayedOrders,
+    [isPaginatedTab, displayedOrders, currentPage]
+  );
 
-  // Grouping logic: Date -> [Orders]
-  const groupedOrders = (paginatedOrders || []).reduce<Record<string, DeliveryOrder[]>>((acc, order) => {
-    const date = order.delivery_date || 'N/A';
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(order);
-    return acc;
-  }, {});
+  const groupedOrders = React.useMemo(
+    () => (paginatedOrders || []).reduce<Record<string, DeliveryOrder[]>>((acc, order) => {
+      const date = getOrderCreatedDateKey(order);
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(order);
+      return acc;
+    }, {}),
+    [paginatedOrders]
+  );
 
-  const sortedDates = Object.keys(groupedOrders).sort((a, b) => b.localeCompare(a)); // Newest first
-
+  const sortedDates = React.useMemo(
+    () => Object.keys(groupedOrders).sort((a, b) => b.localeCompare(a)),
+    [groupedOrders]
+  );
   const selectedSourceOrderIds = React.useMemo(
     () => expandGroupedIds(Array.from(selectedIds)),
     [selectedIds, expandGroupedIds]
@@ -962,9 +986,9 @@ const DeliveryPage: React.FC = () => {
               }
             }}
           />
-          {(startDate !== oneWeekAgo || endDate !== today) && (
+          {(startDate !== thirtyDaysAgo || endDate !== today) && (
             <button
-              onClick={() => { setStartDate(oneWeekAgo); setEndDate(today); }}
+              onClick={() => { setStartDate(thirtyDaysAgo); setEndDate(today); }}
               className="h-9.5 px-2.5 shrink-0 border border-border/80 rounded-xl text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-all whitespace-nowrap"
               title="Về một tuần qua"
             >
@@ -1092,7 +1116,7 @@ const DeliveryPage: React.FC = () => {
                       <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-24 border-r border-border">Thao tác</th>
                     )}
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Loại</th>
-                    <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-32 border-r border-border whitespace-nowrap">Ngày giờ giao</th>
+                    <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-32 border-r border-border whitespace-nowrap">Ngày tạo đơn</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left min-w-20 border-r border-border">Người nhận</th>
                     <th className="px-3 py-3 text-[11px] font-bold uppercase tracking-tight text-left min-w-24 max-w-32 border-r border-border leading-tight">
                       NV nhận hàng
@@ -1154,7 +1178,7 @@ const DeliveryPage: React.FC = () => {
                             <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary">
                               <Calendar size={14} />
                             </div>
-                            <span className="text-[13px] font-black text-foreground uppercase tracking-wider">Ngày nhận đơn: {new Date(date).toLocaleDateString('vi-VN')}</span>
+                            <span className="text-[13px] font-black text-foreground uppercase tracking-wider">Ngày tạo đơn: {new Date(date).toLocaleDateString('vi-VN')}</span>
                           </div>
                         </td>
                       </tr>
@@ -1268,7 +1292,7 @@ const DeliveryPage: React.FC = () => {
                               </div>
                             </td>
                             <td className="px-2 py-3 border-r border-border text-center text-[12px] text-muted-foreground tabular-nums whitespace-nowrap">
-                              {formatNgayGioGiaoVI(o.delivery_date, o.delivery_time, o.created_at, o.driver_delivered_at)}
+                              {getOrderCreatedDateTimeVI(o)}
                             </td>
                             <td className="px-4 py-3 text-[12px] font-bold text-foreground border-r border-border">
                               {getReceiverDisplayName(o)}
@@ -1282,7 +1306,7 @@ const DeliveryPage: React.FC = () => {
                               const previewImage = getOrderPreviewImage(o);
                               if (previewImage) {
                                 e.stopPropagation();
-                                setViewingImageOrder(o);
+                                openImageViewer(o);
                               }
                             }}>
                               {getOrderPreviewImage(o) ? (
@@ -1504,7 +1528,7 @@ const DeliveryPage: React.FC = () => {
                       <Calendar size={14} />
                     </div>
                     <span className="text-[13px] font-black text-foreground uppercase tracking-wider">
-                      Ngày nhận đơn: {new Date(date).toLocaleDateString('vi-VN')}
+                      Ngày tạo đơn: {new Date(date).toLocaleDateString('vi-VN')}
                     </span>
                   </div>
 
@@ -1551,7 +1575,7 @@ const DeliveryPage: React.FC = () => {
                                   const previewImage = getOrderPreviewImage(o);
                                   if (previewImage) {
                                     e.stopPropagation();
-                                    setViewingImageOrder(o);
+                                    openImageViewer(o);
                                   }
                                 }}
                               >
@@ -1594,7 +1618,7 @@ const DeliveryPage: React.FC = () => {
                                     <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-muted text-muted-foreground uppercase shrink-0">Cũ</span>
                                   )}
                                   <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
-                                    {formatNgayGioGiaoVI(o.delivery_date, o.delivery_time, o.created_at, o.driver_delivered_at)}
+                                    {getOrderCreatedDateTimeVI(o)}
                                   </span>
                                   <span className={clsx("inline-flex items-center justify-center px-2 py-0.5 rounded-md text-[10px] font-bold border shrink-0", paymentConfig.className)}>
                                     {paymentConfig.label}
@@ -2054,3 +2078,13 @@ const DeliveryPage: React.FC = () => {
 };
 
 export default DeliveryPage;
+
+
+
+
+
+
+
+
+
+

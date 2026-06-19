@@ -53,6 +53,22 @@ const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'v
   return vehicle.goods_categories.includes(category);
 };
 
+const getOrderCreatedAt = (order: DeliveryOrder) => {
+  const createdAt = new Date(order.created_at);
+  return Number.isNaN(createdAt.getTime()) ? null : createdAt;
+};
+
+const getOrderCreatedDateKey = (order: DeliveryOrder) => {
+  const createdAt = getOrderCreatedAt(order);
+  return createdAt ? format(createdAt, 'yyyy-MM-dd') : 'N/A';
+};
+
+const compareOrderCreatedDesc = (a: DeliveryOrder, b: DeliveryOrder) => {
+  const timeA = getOrderCreatedAt(a)?.getTime() ?? 0;
+  const timeB = getOrderCreatedAt(b)?.getTime() ?? 0;
+  return timeB - timeA;
+};
+
 const getDisplayProductName = (order: DeliveryOrder) =>
   order.product_name.includes(' - ')
     ? order.product_name.split(' - ').slice(1).join(' - ')
@@ -112,9 +128,9 @@ const getTodayString = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const getOneWeekAgoString = () => {
+const getThirtyDaysAgoString = () => {
   const d = new Date();
-  d.setDate(d.getDate() - 6); // 7 days including today
+  d.setDate(d.getDate() - 29); // 30 days including today
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -124,8 +140,8 @@ const getOneWeekAgoString = () => {
 const WarehousesPage: React.FC = () => {
   const { user } = useAuth();
   const today = getTodayString();
-  const oneWeekAgo = getOneWeekAgoString();
-  const [startDate, setStartDate] = useState<string>(oneWeekAgo);
+  const thirtyDaysAgo = getThirtyDaysAgoString();
+  const [startDate, setStartDate] = useState<string>(thirtyDaysAgo);
   const [endDate, setEndDate] = useState<string>(today);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -321,49 +337,46 @@ const WarehousesPage: React.FC = () => {
   // Filter + search
   // ---------------------------------------------------------------------------
 
-  let filteredOrders = inventoryOrders;
+  const filteredOrders = React.useMemo(() => {
+    return inventoryOrders
+      .filter((o) => {
+        const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
+        const rName =
+          o.import_orders?.customers?.name ||
+          o.import_orders?.receiver_name?.trim() ||
+          o.import_orders?.profiles?.full_name;
+        const pName = getDisplayProductName(o);
+        const staffRecv = getImportReceivedByStaffName(o);
 
-  filteredOrders = filteredOrders.filter((o) => {
-    const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
-    const rName =
-      o.import_orders?.customers?.name ||
-      o.import_orders?.receiver_name?.trim() ||
-      o.import_orders?.profiles?.full_name;
-    const pName = getDisplayProductName(o);
-    const staffRecv = getImportReceivedByStaffName(o);
+        if (searchQuery) {
+          if (
+            !matchesSearch(cName || '', searchQuery) &&
+            !matchesSearch(rName || '', searchQuery) &&
+            !matchesSearch(pName || '', searchQuery) &&
+            !matchesSearch(o.import_orders?.order_code || '', searchQuery) &&
+            !matchesSearch(staffRecv === '—' ? '' : staffRecv, searchQuery)
+          ) {
+            return false;
+          }
+        }
+        if (filterCustomer.length > 0 && cName && !filterCustomer.includes(cName)) return false;
+        if (filterReceiver.length > 0 && rName && !filterReceiver.includes(rName)) return false;
+        if (filterProduct.length > 0 && pName && !filterProduct.includes(pName)) return false;
 
-    if (searchQuery) {
-      if (
-        !matchesSearch(cName || '', searchQuery) &&
-        !matchesSearch(rName || '', searchQuery) &&
-        !matchesSearch(pName || '', searchQuery) &&
-        !matchesSearch(o.import_orders?.order_code || '', searchQuery) &&
-        !matchesSearch(staffRecv === '—' ? '' : staffRecv, searchQuery)
-      ) {
-        return false;
-      }
-    }
-    if (filterCustomer.length > 0 && cName && !filterCustomer.includes(cName)) return false;
-    if (filterReceiver.length > 0 && rName && !filterReceiver.includes(rName)) return false;
-    if (filterProduct.length > 0 && pName && !filterProduct.includes(pName)) return false;
+        if (filterVehicleIds.length > 0) {
+          const assignedToSelected = (o.delivery_vehicles || []).some(
+            (dv) =>
+              dv.vehicle_id &&
+              filterVehicleIds.includes(dv.vehicle_id) &&
+              (dv.assigned_quantity || 0) > 0
+          );
+          if (!assignedToSelected) return false;
+        }
 
-    if (filterVehicleIds.length > 0) {
-      const assignedToSelected = (o.delivery_vehicles || []).some(
-        (dv) =>
-          dv.vehicle_id &&
-          filterVehicleIds.includes(dv.vehicle_id) &&
-          (dv.assigned_quantity || 0) > 0
-      );
-      if (!assignedToSelected) return false;
-    }
-
-    return true;
-  });
-
-  // Sort by receiver name A-Z
-  filteredOrders = [...filteredOrders].sort((a, b) =>
-    getReceiverDisplayName(a).localeCompare(getReceiverDisplayName(b), 'vi')
-  );
+        return true;
+      })
+      .sort(compareOrderCreatedDesc);
+  }, [inventoryOrders, searchQuery, filterCustomer, filterReceiver, filterProduct, filterVehicleIds]);
 
   // ---------------------------------------------------------------------------
   // Selection helpers (admin only)
@@ -396,24 +409,32 @@ const WarehousesPage: React.FC = () => {
 
   const totalItems = filteredOrders.length;
   const totalPages = Math.max(1, Math.ceil(totalItems / ITEMS_PER_PAGE));
-  const paginatedOrders = filteredOrders.slice(
-    (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+  const paginatedOrders = React.useMemo(
+    () => filteredOrders.slice(
+      (currentPage - 1) * ITEMS_PER_PAGE,
+      currentPage * ITEMS_PER_PAGE
+    ),
+    [filteredOrders, currentPage]
   );
 
   // ---------------------------------------------------------------------------
   // Date grouping
   // ---------------------------------------------------------------------------
 
-  const groupedOrders = paginatedOrders.reduce<Record<string, DeliveryOrder[]>>((acc, order) => {
-    const date = order.delivery_date || 'N/A';
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(order);
-    return acc;
-  }, {});
+  const groupedOrders = React.useMemo(
+    () => paginatedOrders.reduce<Record<string, DeliveryOrder[]>>((acc, order) => {
+      const date = getOrderCreatedDateKey(order);
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(order);
+      return acc;
+    }, {}),
+    [paginatedOrders]
+  );
 
-  const sortedDates = Object.keys(groupedOrders).sort((a, b) => b.localeCompare(a));
-
+  const sortedDates = React.useMemo(
+    () => Object.keys(groupedOrders).sort((a, b) => b.localeCompare(a)),
+    [groupedOrders]
+  );
   // ---------------------------------------------------------------------------
   // Handlers
   // ---------------------------------------------------------------------------
@@ -556,9 +577,9 @@ const WarehousesPage: React.FC = () => {
               }
             }}
           />
-          {(startDate !== oneWeekAgo || endDate !== today) && (
+          {(startDate !== thirtyDaysAgo || endDate !== today) && (
             <button
-              onClick={() => { setStartDate(oneWeekAgo); setEndDate(today); }}
+              onClick={() => { setStartDate(thirtyDaysAgo); setEndDate(today); }}
               className="h-9.5 px-2.5 shrink-0 border border-border/80 rounded-xl text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-all whitespace-nowrap"
               title="Về một tuần qua"
             >
@@ -686,7 +707,7 @@ const WarehousesPage: React.FC = () => {
                               <Calendar size={14} />
                             </div>
                             <span className="text-[13px] font-black text-foreground uppercase tracking-wider">
-                              Ngày giao: {new Date(date).toLocaleDateString('vi-VN')}
+                              Ngày tạo đơn: {new Date(date).toLocaleDateString('vi-VN')}
                             </span>
                           </div>
                         </td>
@@ -935,7 +956,7 @@ const WarehousesPage: React.FC = () => {
                       <Calendar size={14} />
                     </div>
                     <span className="text-[13px] font-black text-foreground uppercase tracking-wider">
-                      Ngày giao: {new Date(date).toLocaleDateString('vi-VN')}
+                      Ngày tạo đơn: {new Date(date).toLocaleDateString('vi-VN')}
                     </span>
                   </div>
 
@@ -1260,3 +1281,10 @@ const WarehousesPage: React.FC = () => {
 };
 
 export default WarehousesPage;
+
+
+
+
+
+
+
