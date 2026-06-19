@@ -135,9 +135,9 @@ const getTodayString = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const getThirtyDaysAgoString = () => {
+const getOneWeekAgoString = () => {
   const d = new Date();
-  d.setDate(d.getDate() - 29); // 30 days including today
+  d.setDate(d.getDate() - 6); // 7 days including today
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -147,8 +147,8 @@ const getThirtyDaysAgoString = () => {
 const WarehousesPage: React.FC = () => {
   const { user } = useAuth();
   const today = getTodayString();
-  const thirtyDaysAgo = getThirtyDaysAgoString();
-  const [startDate, setStartDate] = useState<string>(thirtyDaysAgo);
+  const oneWeekAgo = getOneWeekAgoString();
+  const [startDate, setStartDate] = useState<string>(oneWeekAgo);
   const [endDate, setEndDate] = useState<string>(today);
 
   const [currentPage, setCurrentPage] = useState(1);
@@ -584,9 +584,9 @@ const WarehousesPage: React.FC = () => {
               }
             }}
           />
-          {(startDate !== thirtyDaysAgo || endDate !== today) && (
+          {(startDate !== oneWeekAgo || endDate !== today) && (
             <button
-              onClick={() => { setStartDate(thirtyDaysAgo); setEndDate(today); }}
+              onClick={() => { setStartDate(oneWeekAgo); setEndDate(today); }}
               className="h-9.5 px-2.5 shrink-0 border border-border/80 rounded-xl text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-all whitespace-nowrap"
               title="Về một tuần qua"
             >
@@ -1288,6 +1288,7 @@ const WarehousesPage: React.FC = () => {
 };
 
 export default WarehousesPage;
+
 
 
 

@@ -322,9 +322,9 @@ const getTodayString = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const getThirtyDaysAgoString = () => {
+const getOneWeekAgoString = () => {
   const d = new Date();
-  d.setDate(d.getDate() - 29); // 30 days including today
+  d.setDate(d.getDate() - 6); // 7 days including today
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
@@ -337,8 +337,8 @@ const isAgeFilterValue = (value: string): value is 'all' | 'new' | 'old' =>
 const DeliveryPage: React.FC = () => {
   const navigate = useNavigate();
   const today = getTodayString();
-  const thirtyDaysAgo = getThirtyDaysAgoString();
-  const [startDate, setStartDate] = useState<string>(thirtyDaysAgo);
+  const oneWeekAgo = getOneWeekAgoString();
+  const [startDate, setStartDate] = useState<string>(oneWeekAgo);
   const [endDate, setEndDate] = useState<string>(today);
   const [statusFilter, setStatusFilter] = useState<'all' | 'can_giao' | 'hang_o_sg' | 'da_giao'>('can_giao');
   const [ageFilter, setAgeFilter] = useState<'all' | 'new' | 'old'>('all');
@@ -993,9 +993,9 @@ const DeliveryPage: React.FC = () => {
               }
             }}
           />
-          {(startDate !== thirtyDaysAgo || endDate !== today) && (
+          {(startDate !== oneWeekAgo || endDate !== today) && (
             <button
-              onClick={() => { setStartDate(thirtyDaysAgo); setEndDate(today); }}
+              onClick={() => { setStartDate(oneWeekAgo); setEndDate(today); }}
               className="h-9.5 px-2.5 shrink-0 border border-border/80 rounded-xl text-[11px] font-bold bg-primary/10 text-primary hover:bg-primary/20 transition-all whitespace-nowrap"
               title="Về một tuần qua"
             >
@@ -2085,6 +2085,7 @@ const DeliveryPage: React.FC = () => {
 };
 
 export default DeliveryPage;
+
 
 
 
