@@ -99,6 +99,13 @@ const getOrderCreatedDateTimeVI = (order: DeliveryOrder) => {
 };
 
 const compareOrderCreatedDesc = (a: DeliveryOrder, b: DeliveryOrder) => {
+  const dateA = getOrderCreatedDateKey(a);
+  const dateB = getOrderCreatedDateKey(b);
+  if (dateA !== dateB) return dateB.localeCompare(dateA);
+
+  const receiverCompare = getReceiverDisplayName(a).localeCompare(getReceiverDisplayName(b), 'vi');
+  if (receiverCompare !== 0) return receiverCompare;
+
   const timeA = getOrderCreatedAt(a)?.getTime() ?? 0;
   const timeB = getOrderCreatedAt(b)?.getTime() ?? 0;
   return timeB - timeA;
@@ -2078,6 +2085,9 @@ const DeliveryPage: React.FC = () => {
 };
 
 export default DeliveryPage;
+
+
+
 
 
 
