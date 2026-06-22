@@ -6,7 +6,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { moduleData } from '../data/moduleData';
 import { sidebarMenu } from '../data/sidebarMenu';
 import { useAuth } from '../context/AuthContext';
-import { buildAllowedRouteSet, canAccessRoute } from '../utils/routePermissions';
+import { buildAllowedRouteSet, buildAllowedRouteSetFromPagePaths, canAccessRoute } from '../utils/routePermissions';
 import { useMyPermissions } from '../hooks/queries/useRoles';
 import { useAttendanceGate, isPathAllowedBeforeCheckin } from '../hooks/useAttendanceGate';
 import { SearchInput } from '../components/ui/SearchInput';
@@ -24,7 +24,7 @@ const ModulePage: React.FC = () => {
   const data = moduleData[location.pathname] || [];
   const currentItem = sidebarMenu.find(item => item.path === location.pathname);
   const allowedPaths = permissionsReady
-    ? new Set(myPermissionsData?.page_paths || [])
+    ? buildAllowedRouteSetFromPagePaths(myPermissionsData?.page_paths)
     : buildAllowedRouteSet(user?.role);
 
   return (

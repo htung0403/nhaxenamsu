@@ -36,7 +36,7 @@ export const PAGE_POLICIES = {
     '/hang-hoa/giao-hang',
     '/hang-hoa/giao-hang-rau',
   ],
-  VEHICLES_PAYMENT_COLLECTIONS: ['/quan-ly-xe/thu-tien'],
+  VEHICLES_PAYMENT_COLLECTIONS: ['/app/ke-toan/thu-tien-hang', '/ke-toan/thu-tien-hang', '/app/quan-ly-xe/thu-tien', '/quan-ly-xe/thu-tien'],
 
   HR_PERMISSIONS_MANAGE: ['/hanh-chinh-nhan-su/phan-quyen'],
   HR_EMPLOYEES_VIEW: ['/hanh-chinh-nhan-su/nhan-su', '/hang-hoa/nhap-hang', '/hang-hoa/nhap-hang-rau'],

@@ -7,7 +7,7 @@ import { clsx } from 'clsx';
 import { moduleData } from '../data/moduleData';
 import { ModuleCard } from '../components/ui/ModuleCard';
 import ZaloLogo from '../assets/zalo-seeklogo.svg';
-import { buildAllowedRouteSet, canAccessModuleRoute, canAccessRoute } from '../utils/routePermissions';
+import { buildAllowedRouteSet, buildAllowedRouteSetFromPagePaths, canAccessModuleRoute, canAccessRoute } from '../utils/routePermissions';
 import { useMyPermissions } from '../hooks/queries/useRoles';
 import { useAttendanceGate, getVietnamCurrentHour } from '../hooks/useAttendanceGate';
 import { Link } from 'react-router-dom';
@@ -76,7 +76,7 @@ const Dashboard: React.FC = () => {
 
   const allSections = Object.values(moduleData).flat();
   const allowedPaths = permissionsReady
-    ? new Set(myPermissionsData?.page_paths || [])
+    ? buildAllowedRouteSetFromPagePaths(myPermissionsData?.page_paths)
     : buildAllowedRouteSet(user?.role);
   const visibleDashboardModules = dashboardModules.filter((item) => {
     if (!item.href || item.href.startsWith('http')) return true;

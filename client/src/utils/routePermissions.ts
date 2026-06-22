@@ -1,5 +1,31 @@
 type UserRole = 'admin' | 'manager' | 'staff' | 'driver' | 'customer' | string | undefined;
 
+const PAYMENT_COLLECTIONS_LEGACY_PATHS = new Set([
+  '/quan-ly-xe/thu-tien',
+  '/app/quan-ly-xe/thu-tien',
+]);
+
+const PAYMENT_COLLECTIONS_CURRENT_PATH = '/app/ke-toan/thu-tien-hang';
+
+const expandPermissionPath = (path: string): string[] => {
+  const normalizedPath = path.replace(/\/+$/, '') || '/';
+  const paths = new Set([normalizedPath]);
+
+  if (normalizedPath !== '/' && !normalizedPath.startsWith('/app/')) {
+    paths.add(`/app${normalizedPath}`);
+  }
+
+  if (PAYMENT_COLLECTIONS_LEGACY_PATHS.has(normalizedPath)) {
+    paths.add(PAYMENT_COLLECTIONS_CURRENT_PATH);
+  }
+
+  return Array.from(paths);
+};
+
+export const buildAllowedRouteSetFromPagePaths = (pagePaths: string[] | undefined): Set<string> => {
+  return new Set((pagePaths || []).flatMap(expandPermissionPath));
+};
+
 const DRIVER_LIKE_LEGACY_PATHS: string[] = [
   '/',
   '/app/ho-so',

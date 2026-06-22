@@ -21,6 +21,20 @@ const normalizePagePath = (rawPath?: string): string => {
   }
 };
 
+const expandPagePathCandidates = (pagePath: string): string[] => {
+  const normalizedPath = normalizePagePath(pagePath);
+  if (!normalizedPath) return [];
+
+  const candidates = new Set([normalizedPath]);
+  if (normalizedPath.startsWith('/app/')) {
+    candidates.add(normalizedPath.replace(/^\/app/, ''));
+  } else if (normalizedPath !== '/') {
+    candidates.add(`/app${normalizedPath}`);
+  }
+
+  return Array.from(candidates);
+};
+
 const hasPagePermission = async (userId: string, pagePath: string): Promise<boolean> => {
   const { data: userRoles, error: userRolesError } = await supabaseService
     .from('app_user_roles')
@@ -32,11 +46,14 @@ const hasPagePermission = async (userId: string, pagePath: string): Promise<bool
   const roleIds = userRoles.map((item) => item.role_id).filter(Boolean);
   if (!roleIds.length) return false;
 
+  const pagePathCandidates = expandPagePathCandidates(pagePath);
+  if (!pagePathCandidates.length) return false;
+
   const { data: rolePermissions, error: rolePermissionsError } = await supabaseService
     .from('app_role_permissions')
     .select('role_id, app_permissions!inner(page_path)')
     .in('role_id', roleIds)
-    .eq('app_permissions.page_path', pagePath)
+    .in('app_permissions.page_path', pagePathCandidates)
     .limit(1);
 
   if (rolePermissionsError) return false;
@@ -56,11 +73,14 @@ const hasAnyPagePermission = async (userId: string, pagePaths: string[]): Promis
   const roleIds = userRoles.map((item) => item.role_id).filter(Boolean);
   if (!roleIds.length) return false;
 
+  const pagePathCandidates = Array.from(new Set(pagePaths.flatMap(expandPagePathCandidates)));
+  if (!pagePathCandidates.length) return false;
+
   const { data: rolePermissions, error: rolePermissionsError } = await supabaseService
     .from('app_role_permissions')
     .select('role_id, app_permissions!inner(page_path)')
     .in('role_id', roleIds)
-    .in('app_permissions.page_path', pagePaths)
+    .in('app_permissions.page_path', pagePathCandidates)
     .limit(1);
 
   if (rolePermissionsError) return false;
@@ -80,11 +100,14 @@ const hasAnyPagePermissionByRoleKey = async (roleKey: Role, pagePaths: string[])
 
   if (roleError || !role?.id) return false;
 
+  const pagePathCandidates = Array.from(new Set(pagePaths.flatMap(expandPagePathCandidates)));
+  if (!pagePathCandidates.length) return false;
+
   const { data: rolePermissions, error: rolePermissionsError } = await supabaseService
     .from('app_role_permissions')
     .select('role_id, app_permissions!inner(page_path)')
     .eq('role_id', role.id)
-    .in('app_permissions.page_path', pagePaths)
+    .in('app_permissions.page_path', pagePathCandidates)
     .limit(1);
 
   if (rolePermissionsError) return false;

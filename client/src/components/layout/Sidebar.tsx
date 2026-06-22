@@ -6,7 +6,7 @@ import { clsx } from 'clsx';
 import { Truck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { moduleData } from '../../data/moduleData';
-import { buildAllowedRouteSet, canAccessModuleRoute, canAccessRoute } from '../../utils/routePermissions';
+import { buildAllowedRouteSet, buildAllowedRouteSetFromPagePaths, canAccessModuleRoute, canAccessRoute } from '../../utils/routePermissions';
 import { useMyPermissions } from '../../hooks/queries/useRoles';
 import { isPathAllowedBeforeCheckin } from '../../hooks/useAttendanceGate';
 
@@ -21,7 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, mustCheckIn, isLoc
   const { user } = useAuth();
   const { data: myPermissionsData, isSuccess: permissionsReady } = useMyPermissions(!!user);
   const allowedPaths = permissionsReady
-    ? new Set(myPermissionsData?.page_paths || [])
+    ? buildAllowedRouteSetFromPagePaths(myPermissionsData?.page_paths)
     : buildAllowedRouteSet(user?.role);
 
   const visibleSidebarMenu = sidebarMenu.filter((item) => {

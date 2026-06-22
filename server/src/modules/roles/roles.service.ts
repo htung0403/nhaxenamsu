@@ -164,7 +164,8 @@ export class RolesService {
       const newPermissions = missingPaths.map((pagePath) => {
         const permKey = 'page.view.' + pagePath.replace(/^\//g, '').replace(/\//g, '.');
         // Derive module from path prefix
-        const segment = pagePath.split('/')[1] || 'other';
+        const pathSegments = pagePath.split('/').filter(Boolean);
+        const segment = pathSegments[0] === 'app' ? pathSegments[1] || 'other' : pathSegments[0] || 'other';
         const moduleMap: Record<string, { key: string; name: string }> = {
           'hang-hoa': { key: 'products', name: 'Hàng hóa' },
           'hanh-chinh-nhan-su': { key: 'hr', name: 'Hành chính nhân sự' },

@@ -4,6 +4,7 @@ import PageHeader from '../../components/shared/PageHeader';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import ErrorState from '../../components/shared/ErrorState';
 import { moduleData } from '../../data/moduleData';
+import { buildAllowedRouteSetFromPagePaths } from '../../utils/routePermissions';
 import {
   useAppRoles,
   useCreateAppRole,
@@ -56,6 +57,7 @@ const RolePermissionsPage: React.FC = () => {
 
   const effectiveRoleId = selectedRoleId || roles?.[0]?.id || '';
   const currentRole = useMemo(() => (roles || []).find((role) => role.id === effectiveRoleId), [roles, effectiveRoleId]);
+  const selectedAllowedPaths = useMemo(() => buildAllowedRouteSetFromPagePaths(selectedPagePaths), [selectedPagePaths]);
 
   useEffect(() => {
     if (!effectiveRoleId) {
@@ -73,17 +75,20 @@ const RolePermissionsPage: React.FC = () => {
   };
 
   const handleTogglePath = (path: string) => {
-    setSelectedPagePaths((prev) =>
-      prev.includes(path)
-        ? prev.filter((p) => p !== path)
-        : [...prev, path]
-    );
+    setSelectedPagePaths((prev) => {
+      const selectedSet = buildAllowedRouteSetFromPagePaths(prev);
+      if (selectedSet.has(path)) {
+        return prev.filter((p) => !buildAllowedRouteSetFromPagePaths([p]).has(path));
+      }
+
+      return [...prev, path];
+    });
   };
 
   const handleToggleSection = (sectionPaths: string[]) => {
-    const allChecked = sectionPaths.every((p) => selectedPagePaths.includes(p));
+    const allChecked = sectionPaths.every((p) => selectedAllowedPaths.has(p));
     if (allChecked) {
-      setSelectedPagePaths((prev) => prev.filter((p) => !sectionPaths.includes(p)));
+      setSelectedPagePaths((prev) => prev.filter((p) => !sectionPaths.some((sectionPath) => buildAllowedRouteSetFromPagePaths([p]).has(sectionPath))));
     } else {
       setSelectedPagePaths((prev) => Array.from(new Set([...prev, ...sectionPaths])));
     }
@@ -218,8 +223,8 @@ const RolePermissionsPage: React.FC = () => {
               <div className="space-y-4">
                 {allModuleSections.map((section) => {
                   const sectionPaths = section.items.filter((i) => i.path).map((i) => i.path!);
-                  const allChecked = sectionPaths.length > 0 && sectionPaths.every((p) => selectedPagePaths.includes(p));
-                  const someChecked = sectionPaths.some((p) => selectedPagePaths.includes(p));
+                  const allChecked = sectionPaths.length > 0 && sectionPaths.every((p) => selectedAllowedPaths.has(p));
+                  const someChecked = sectionPaths.some((p) => selectedAllowedPaths.has(p));
 
                   return (
                     <div key={section.section} className="rounded-xl border border-border/80 overflow-hidden">
@@ -239,7 +244,7 @@ const RolePermissionsPage: React.FC = () => {
                       <div className="divide-y divide-border/60">
                         {section.items.map((item) => {
                           if (!item.path) return null;
-                          const checked = selectedPagePaths.includes(item.path);
+                          const checked = selectedAllowedPaths.has(item.path);
                           const Icon = item.icon || FileText;
                           const colorClass = iconColorMap[item.colorScheme || 'slate'] || iconColorMap.slate;
                           return (
