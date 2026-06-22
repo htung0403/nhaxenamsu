@@ -104,8 +104,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, setIsOpen, mustCheckIn, isLoc
 };
 
 function isSidebarItemActive(pathname: string, itemPath: string): boolean {
-  if (itemPath === '/hanh-chinh-nhan-su') {
-    return pathname === '/hanh-chinh-nhan-su' || pathname.startsWith('/hanh-chinh-nhan-su/');
+  if (itemPath === '/app') return pathname === '/app';
+  if (itemPath === '/app/hanh-chinh-nhan-su') {
+    return pathname === '/app/hanh-chinh-nhan-su' || pathname.startsWith('/app/hanh-chinh-nhan-su/');
   }
   if (itemPath === '/') return pathname === '/';
   return pathname === itemPath || pathname.startsWith(`${itemPath}/`);

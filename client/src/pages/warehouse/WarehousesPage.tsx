@@ -508,7 +508,7 @@ const WarehousesPage: React.FC = () => {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
-        <PageHeader title="Tồn kho" description="Đơn hàng cũ chờ xác nhận tồn kho" backPath="/hang-hoa" />
+        <PageHeader title="Tồn kho" description="Đơn hàng cũ chờ xác nhận tồn kho" backPath="/app/hang-hoa" />
       </div>
 
       {/* Search / filter bar */}

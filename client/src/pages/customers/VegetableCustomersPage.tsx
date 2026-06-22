@@ -154,7 +154,7 @@ const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) 
         <PageHeader
           title="Danh sách KH Rau"
           description="Quản lý khách hàng rau"
-          backPath="/khach-hang"
+          backPath="/app/khach-hang"
           actions={
             <div className="flex items-center gap-3">
               <SearchInput

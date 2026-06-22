@@ -6,7 +6,7 @@ const InvoiceGroceryPage: React.FC = () => (
     category="standard"
     title="Hóa đơn tạp hóa"
     description="Quản lý xuất hóa đơn cho đơn hàng tạp hóa."
-    backPath="/ke-toan"
+    backPath="/app/ke-toan"
   />
 );
 

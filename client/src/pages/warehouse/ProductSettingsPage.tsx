@@ -279,7 +279,7 @@ const ProductSettingsPage: React.FC = () => {
       <PageHeader
         title="Cài đặt hàng tạp hóa"
         description="Quản lý danh sách từ điển hàng tạp hóa trong hệ thống"
-        backPath="/hang-hoa"
+        backPath="/app/hang-hoa"
         actions={<div />}
       />
 

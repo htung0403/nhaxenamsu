@@ -261,7 +261,7 @@ const StandardImportOrderHistoryPage: React.FC = () => {
         <PageHeader
           title="Lịch sử nhập hàng tạp hóa"
           description="Xem toàn bộ lịch sử đơn nhập hàng tạp hóa"
-          backPath="/hang-hoa"
+          backPath="/app/hang-hoa"
           actions={
             <button
               onClick={openAddDialog}

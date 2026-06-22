@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../../../context/AuthContext';
 import { clsx } from 'clsx';
 import { isDriverLikeRoleKey } from '../../../utils/routePermissions';
-import { usePaymentCollections } from '../../../hooks/queries/usePaymentCollections';
+import { useConfirmPaymentCollection, usePaymentCollections } from '../../../hooks/queries/usePaymentCollections';
 import { useEmployees } from '../../../hooks/queries/useHR';
 import { useVehicles } from '../../../hooks/queries/useVehicles';
 import { CheckCircle, ChevronDown, ChevronRight } from 'lucide-react';
@@ -72,22 +72,88 @@ const StaffConfirmationTab: React.FC = () => {
   
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [selectedPC, setSelectedPC] = useState<PaymentCollection | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const headerCheckboxRef = useRef<HTMLInputElement>(null);
+  const { mutateAsync: confirmPayment, isPending: isBulkConfirming } = useConfirmPaymentCollection();
 
   // Lọc chỉ lấy những phiếu đang ở trạng thái submitted (chờ xác nhận)
   // Trong thực tế có thể lọc thêm c.receiverId === user.id
-  let filtered = collections?.filter(c => c.status === 'submitted') || [];
+  const filtered = useMemo(() => {
+    let result = collections?.filter(c => c.status === 'submitted') || [];
+    if (!filterSearch) return result;
 
-  if (filterSearch) {
-    filtered = filtered.filter(c => 
+    result = result.filter(c => 
       matchesSearch(c.deliveryOrderCode, filterSearch) ||
       matchesSearch(c.driverName || '', filterSearch) ||
       matchesSearch(c.customerName || '', filterSearch)
     );
-  }
+    return result;
+  }, [collections, filterSearch]);
+
+  const selectedPayments = useMemo(
+    () => filtered.filter((pc) => selectedIds.has(pc.id)),
+    [filtered, selectedIds]
+  );
+
+  useEffect(() => {
+    const el = headerCheckboxRef.current;
+    if (!el) return;
+    const all = filtered.length > 0 && filtered.every((pc) => selectedIds.has(pc.id));
+    const some = filtered.some((pc) => selectedIds.has(pc.id));
+    el.indeterminate = some && !all;
+  }, [filtered, selectedIds]);
 
   const handleConfirm = (pc: PaymentCollection) => {
     setSelectedPC(pc);
     setIsConfirmOpen(true);
+  };
+
+  const toggleSelectOne = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const toggleHeaderCheckbox = () => {
+    const all = filtered.length > 0 && filtered.every((pc) => selectedIds.has(pc.id));
+    if (all) clearSelection();
+    else setSelectedIds(new Set(filtered.map((pc) => pc.id)));
+  };
+
+  const toggleDatePayments = (dateKey: string) => {
+    const dateIds = (groupedCollections[dateKey] || []).map((pc) => pc.id);
+    if (dateIds.length === 0) return;
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = dateIds.every((id) => next.has(id));
+      dateIds.forEach((id) => {
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
+  };
+
+  const handleBulkConfirm = async () => {
+    if (selectedPayments.length === 0 || isBulkConfirming) return;
+    if (!confirm(`Xác nhận nhận tiền ${selectedPayments.length} phiếu đã chọn?`)) return;
+
+    const confirmedAt = new Date().toISOString();
+    await Promise.all(
+      selectedPayments.map((pc) =>
+        confirmPayment({
+          id: pc.id,
+          data: { confirmedAt },
+        })
+      )
+    );
+    clearSelection();
   };
 
   const hasActiveFilters = filterDate || filterDriverId || filterVehicleId;
@@ -159,6 +225,28 @@ const StaffConfirmationTab: React.FC = () => {
         </div>
       </div>
 
+      {selectedPayments.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={handleBulkConfirm}
+            disabled={isBulkConfirming}
+            className="px-4 py-2 bg-green-600 text-white text-[13px] font-bold rounded-lg hover:bg-green-700 disabled:opacity-60 flex items-center gap-2 shadow-sm"
+          >
+            <CheckCircle size={16} />
+            Xác nhận đã chọn ({selectedPayments.length})
+          </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            disabled={isBulkConfirming}
+            className="px-3 py-2 rounded-lg border border-slate-200 bg-white text-slate-600 text-[12px] font-semibold hover:bg-slate-50 disabled:opacity-60"
+          >
+            Bỏ chọn
+          </button>
+        </div>
+      )}
+
       <MobileFilterSheet
         isOpen={isFilterOpen}
         isClosing={isFilterClosing}
@@ -214,6 +302,8 @@ const StaffConfirmationTab: React.FC = () => {
               <div className="md:hidden flex flex-col gap-6 pb-6">
                 {sortedDates.map(dateKey => {
                   const isCollapsed = collapsedDates[dateKey];
+                  const datePayments = groupedCollections[dateKey];
+                  const areAllDatePaymentsSelected = datePayments.length > 0 && datePayments.every((pc) => selectedIds.has(pc.id));
                   return (
                   <div key={dateKey} className="space-y-3">
                     <div 
@@ -221,6 +311,14 @@ const StaffConfirmationTab: React.FC = () => {
                       onClick={() => toggleDate(dateKey)}
                     >
                       <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          className="w-4 h-4 rounded border-slate-300"
+                          checked={areAllDatePaymentsSelected}
+                          onChange={() => toggleDatePayments(dateKey)}
+                          onClick={(e) => e.stopPropagation()}
+                          aria-label={`Chọn tất cả phiếu ngày ${formatDate(dateKey)}`}
+                        />
                         {isCollapsed ? <ChevronRight size={18} className="text-slate-500" /> : <ChevronDown size={18} className="text-slate-500" />}
                         <h3 className="font-bold text-slate-800">{formatDate(dateKey)}</h3>
                       </div>
@@ -233,11 +331,19 @@ const StaffConfirmationTab: React.FC = () => {
                       {groupedCollections[dateKey].map(pc => (
                         <div key={pc.id} className="bg-white rounded-xl border border-yellow-200/50 p-4 shadow-sm relative overflow-hidden">
                           <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-yellow-500" />
-                          
+                           
                           <div className="flex justify-between items-start mb-3 pl-2">
-                            <div>
+                            <div className="flex items-start gap-2">
+                              <input
+                                type="checkbox"
+                                className="mt-0.5 w-4 h-4 rounded border-slate-300"
+                                checked={selectedIds.has(pc.id)}
+                                onChange={() => toggleSelectOne(pc.id)}
+                              />
+                              <div>
                               <h3 className="font-bold text-slate-800 text-[14px]">{pc.deliveryOrderCode}</h3>
                               <p className="text-[12px] text-slate-500">{pc.customerName}</p>
+                              </div>
                             </div>
                             <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold">Chờ XN</span>
                           </div>
@@ -281,6 +387,16 @@ const StaffConfirmationTab: React.FC = () => {
                 <table className="w-full text-left border-collapse">
                 <thead>
                 <tr className="bg-slate-50/50 border-b border-slate-200 text-[12px] font-bold text-slate-600 uppercase tracking-wider">
+                  <th className="w-11 px-2 py-3 text-center">
+                    <input
+                      ref={headerCheckboxRef}
+                      type="checkbox"
+                      title="Chọn tất cả phiếu đang chờ xác nhận"
+                      checked={filtered.length > 0 && filtered.every((pc) => selectedIds.has(pc.id))}
+                      onChange={toggleHeaderCheckbox}
+                      className="w-4 h-4 rounded border-slate-300"
+                    />
+                  </th>
                   <th className="px-4 py-3">Phiếu / Khách Hàng</th>
                   <th className="px-4 py-3">Tài Xế</th>
                   <th className="px-4 py-3">Biển Số Xe</th>
@@ -293,15 +409,25 @@ const StaffConfirmationTab: React.FC = () => {
               <tbody className="divide-y divide-slate-100">
                 {sortedDates.map(dateKey => {
                   const isCollapsed = collapsedDates[dateKey];
+                  const datePayments = groupedCollections[dateKey];
+                  const areAllDatePaymentsSelected = datePayments.length > 0 && datePayments.every((pc) => selectedIds.has(pc.id));
                   return (
                   <React.Fragment key={dateKey}>
                     <tr 
                       className="bg-slate-100/50 cursor-pointer select-none hover:bg-slate-200/50 transition-colors"
                       onClick={() => toggleDate(dateKey)}
                     >
-                      <td colSpan={7} className="px-4 py-2 text-[13px] font-bold text-slate-700">
+                      <td colSpan={8} className="px-4 py-2 text-[13px] font-bold text-slate-700">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 rounded border-slate-300"
+                              checked={areAllDatePaymentsSelected}
+                              onChange={() => toggleDatePayments(dateKey)}
+                              onClick={(e) => e.stopPropagation()}
+                              aria-label={`Chọn tất cả phiếu ngày ${formatDate(dateKey)}`}
+                            />
                             {isCollapsed ? <ChevronRight size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
                             <span>{formatDate(dateKey)}</span>
                           </div>
@@ -313,6 +439,14 @@ const StaffConfirmationTab: React.FC = () => {
                     </tr>
                     {!isCollapsed && groupedCollections[dateKey].map(pc => (
                       <tr key={pc.id} className="hover:bg-slate-50/50">
+                        <td className="px-2 py-3 text-center align-middle">
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-300"
+                            checked={selectedIds.has(pc.id)}
+                            onChange={() => toggleSelectOne(pc.id)}
+                          />
+                        </td>
                         <td className="px-4 py-3 text-[13px]">
                           <div className="font-bold text-slate-800">{pc.deliveryOrderCode}</div>
                           <div className="text-slate-500">{pc.customerName}</div>

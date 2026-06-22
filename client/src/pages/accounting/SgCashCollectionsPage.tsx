@@ -262,10 +262,10 @@ const SgCashCollectionsPage: React.FC = () => {
         <PageHeader
           title="Thu tiền SG"
           description="Phiếu nhập tạp hóa đã trả tiền tại SG — theo dõi và xác nhận NV đã nộp tiền về."
-          backPath="/ke-toan"
+          backPath="/app/ke-toan"
           actions={
             <button
-              onClick={() => navigate('/ke-toan/in-thu-tien-sg')}
+              onClick={() => navigate('/app/ke-toan/in-thu-tien-sg')}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-card border border-border text-foreground text-[13px] font-bold hover:bg-muted transition-colors shadow-sm"
             >
               <Printer size={16} />

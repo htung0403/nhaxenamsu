@@ -455,7 +455,7 @@ const RevenueReportPage: React.FC = () => {
         <PageHeader
           title="Báo cáo doanh thu"
           description="Tổng quan hoạt động kinh doanh"
-          backPath="/ke-toan"
+          backPath="/app/ke-toan"
         />
       </div>
 
@@ -639,14 +639,14 @@ const RevenueReportPage: React.FC = () => {
               icon={FileText}
               activities={exportActivities}
               accentColor="text-blue-500"
-              viewPath="/hang-hoa/xuat-hang"
+              viewPath="/app/hang-hoa/xuat-hang"
             />
             <ActivityTable
               title="Phiếu nhập"
               icon={FileText}
               activities={importActivities}
               accentColor="text-orange-500"
-              viewPath="/hang-hoa/nhap-hang"
+              viewPath="/app/hang-hoa/nhap-hang"
             />
           </div>
         </div>

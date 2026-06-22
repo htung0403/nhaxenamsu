@@ -46,7 +46,7 @@ const LeaveRequestsPage: React.FC = () => {
         <PageHeader
           title="Nghỉ phép"
           description="Quản lý đơn nghỉ phép"
-          backPath="/hanh-chinh-nhan-su"
+          backPath="/app/hanh-chinh-nhan-su"
           actions={
             <button
               onClick={() => setIsAddOpen(true)}

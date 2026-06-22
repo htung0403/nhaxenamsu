@@ -15,7 +15,7 @@ const SystemSettingsPage: React.FC = () => {
         <PageHeader
           title="Cài đặt hệ thống"
           description="Quản lý các thiết lập hệ thống như khung giờ truy cập, quy tắc chuyển hàng, và cấu hình Zalo."
-          backPath="/hanh-chinh-nhan-su"
+          backPath="/app/hanh-chinh-nhan-su"
         />
       </div>
 
@@ -45,21 +45,21 @@ const SystemSettingsPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <Link
-              to="/cai-dat-he-thong/zalo-tong-ket-tap-hoa"
+              to="/app/cai-dat-he-thong/zalo-tong-ket-tap-hoa"
               className="rounded-xl border border-border bg-background hover:bg-muted/40 transition p-3 flex items-center justify-between"
             >
               <span className="text-[13px] font-semibold text-foreground">Khách tạp hóa</span>
               <ExternalLink size={15} className="text-muted-foreground" />
             </Link>
             <Link
-              to="/cai-dat-he-thong/zalo-tong-ket-vua-rau"
+              to="/app/cai-dat-he-thong/zalo-tong-ket-vua-rau"
               className="rounded-xl border border-border bg-background hover:bg-muted/40 transition p-3 flex items-center justify-between"
             >
               <span className="text-[13px] font-semibold text-foreground">Vựa rau</span>
               <ExternalLink size={15} className="text-muted-foreground" />
             </Link>
             <Link
-              to="/cai-dat-he-thong/zalo-tong-ket-nguoi-gui-rau"
+              to="/app/cai-dat-he-thong/zalo-tong-ket-nguoi-gui-rau"
               className="rounded-xl border border-border bg-background hover:bg-muted/40 transition p-3 flex items-center justify-between"
             >
               <span className="text-[13px] font-semibold text-foreground">Người gửi rau</span>

@@ -176,7 +176,7 @@ const DriverDeliveriesPage: React.FC = () => {
     if (!ids.length) return;
     await startTrip.mutateAsync(ids);
     setSelectedIds(new Set());
-    navigate('/quan-ly-xe/dang-giao');
+    navigate('/app/quan-ly-xe/dang-giao');
   };
 
   const handleUploadComplete = async (assignment: DriverDeliveryAssignment, files: FileList | null) => {

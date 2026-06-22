@@ -56,7 +56,7 @@ const SummaryStatCard: React.FC<{ label: string; value: number; colorClass?: str
   </div>
 );
 
-const ZaloSummaryDispatchPage: React.FC<Props> = ({ type, title, description, backPath = '/cai-dat-he-thong' }) => {
+const ZaloSummaryDispatchPage: React.FC<Props> = ({ type, title, description, backPath = '/app/cai-dat-he-thong' }) => {
   const [date, setDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'success' | 'failed' | 'skipped'>('all');

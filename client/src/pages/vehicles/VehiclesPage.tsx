@@ -107,7 +107,7 @@ const VehiclesPage: React.FC = () => {
         <PageHeader
           title="Danh sách xe"
           description="Quản lý thông tin xe theo loại"
-          backPath="/quan-ly-xe"
+          backPath="/app/quan-ly-xe"
           actions={
             <button
               onClick={() => openAddEdit()}

@@ -154,7 +154,7 @@ const WholesaleCustomersPage: React.FC<Props> = ({ type = 'vegetable_receiver' }
         <PageHeader
           title="Danh sách Vựa"
           description="Quản lý danh sách vựa"
-          backPath="/khach-hang"
+          backPath="/app/khach-hang"
           actions={
             <div className="flex items-center gap-3">
               <SearchInput

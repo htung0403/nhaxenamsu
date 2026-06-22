@@ -11,14 +11,14 @@ const MainLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { mustCheckIn, isLocked } = useAttendanceGate();
   const location = useLocation();
-  const isFullscreenContent = location.pathname === '/quan-ly-xe/dang-giao';
+  const isFullscreenContent = location.pathname === '/app/quan-ly-xe/dang-giao';
 
   useEffect(() => {
     authApi.getMe().catch(() => undefined);
   }, []);
 
   if ((mustCheckIn || isLocked) && !isPathAllowedBeforeCheckin(location.pathname)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/app" replace />;
   }
 
   return (
@@ -56,3 +56,4 @@ const MainLayout: React.FC = () => {
 };
 
 export default MainLayout;
+

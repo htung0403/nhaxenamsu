@@ -176,7 +176,7 @@ const VegetableWarehousePage: React.FC = () => {
         <PageHeader
           title="Hàng trên Xe Tải lớn"
           description="Hàng rau tồn kho chờ giao hàng (Còn lại > 0)"
-          backPath="/hang-hoa"
+          backPath="/app/hang-hoa"
         />
       </div>
 

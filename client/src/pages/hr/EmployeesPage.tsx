@@ -370,7 +370,7 @@ const EmployeesPage: React.FC = () => {
         <PageHeader 
           title="Nhân sự" 
           description="Danh sách nhân viên" 
-          backPath="/hanh-chinh-nhan-su" 
+          backPath="/app/hanh-chinh-nhan-su" 
           actions={
             <button
               onClick={handleOpenAdd}
@@ -465,7 +465,7 @@ const EmployeesPage: React.FC = () => {
                     return (
                     <div
                       key={e.id}
-                      onClick={isAdmin ? () => navigate(`/hanh-chinh-nhan-su/nhan-su/${e.id}`) : undefined}
+                      onClick={isAdmin ? () => navigate(`/app/hanh-chinh-nhan-su/nhan-su/${e.id}`) : undefined}
                       className={`${isAdmin ? 'cursor-pointer hover:shadow-md hover:border-primary/30' : 'cursor-default'} bg-card rounded-2xl border border-border shadow-sm transition-all duration-300 overflow-hidden flex flex-col md:flex-row items-center group relative p-4 pl-6`}
                     >
                   {/* Left accent line */}
@@ -524,7 +524,7 @@ const EmployeesPage: React.FC = () => {
                       <button
                           onClick={(ev) => {
                             ev.stopPropagation();
-                            navigate(`/hanh-chinh-nhan-su/nhan-su/${e.id}`);
+                            navigate(`/app/hanh-chinh-nhan-su/nhan-su/${e.id}`);
                           }}
                           aria-label="Cập nhật hồ sơ"
                           title="Cập nhật hồ sơ"

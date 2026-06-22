@@ -11,6 +11,7 @@ import CopyrightPage from './pages/CopyrightPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/auth/LoginPage';
+import LandingPage from './pages/public/LandingPage';
 import ImportOrdersPage from './pages/import-orders/ImportOrdersPage';
 import ConfirmSenderImportOrdersPage from './pages/import-orders/ConfirmSenderImportOrdersPage';
 import ReturnToSgOrdersPage from './pages/import-orders/ReturnToSgOrdersPage';
@@ -114,6 +115,7 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/don-giao/:id" element={<DeliveryPublicPage />} />
       <Route path="/public/summary/:type/:id/:date/:token" element={<SummaryPublicPage />} />
@@ -127,58 +129,58 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       >
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/ho-so" element={<ProfilePage />} />
-        <Route path="/ho-so/:id" element={<ProfilePage />} />
-        <Route path="/tai-khoan/don-hang" element={<Navigate to="/don-hang-cua-toi" replace />} />
-        <Route path="/tai-khoan/don-hang/tao-don" element={<Navigate to="/don-hang-cua-toi/tao-don-gui" replace />} />
-        <Route path="/don-hang-cua-toi" element={<MyOrdersByCustomerTypePage />} />
-        <Route path="/don-hang-cua-toi/tao-don-gui" element={<GroceryOrderCreatePage mode="sender" />} />
-        <Route path="/don-hang-cua-toi/tao-don-doi-tra" element={<GroceryOrderCreatePage mode="receiver" />} />
+        <Route path="/app" element={<Dashboard />} />
+        <Route path="/app/ho-so" element={<ProfilePage />} />
+        <Route path="/app/ho-so/:id" element={<ProfilePage />} />
+        <Route path="/app/tai-khoan/don-hang" element={<Navigate to="/app/don-hang-cua-toi" replace />} />
+        <Route path="/app/tai-khoan/don-hang/tao-don" element={<Navigate to="/app/don-hang-cua-toi/tao-don-gui" replace />} />
+        <Route path="/app/don-hang-cua-toi" element={<MyOrdersByCustomerTypePage />} />
+        <Route path="/app/don-hang-cua-toi/tao-don-gui" element={<GroceryOrderCreatePage mode="sender" />} />
+        <Route path="/app/don-hang-cua-toi/tao-don-doi-tra" element={<GroceryOrderCreatePage mode="receiver" />} />
 
         {/* Hang hoa module */}
-        <Route path="/hang-hoa" element={<ModulePage />} />
-        <Route path="/hang-hoa/nhap-hang" element={<ImportOrdersPage />} />
-        <Route path="/hang-hoa/xac-nhan-hang-gui" element={<ConfirmSenderImportOrdersPage />} />
-        <Route path="/hang-hoa/hang-gui-sg" element={<ReturnToSgOrdersPage />} />
-        <Route path="/hang-hoa/nhap-hang/lich-su" element={<StandardImportOrderHistoryPage />} />
-        <Route path="/hang-hoa/nhap-hang-rau" element={<VegetableImportsPage />} />
-        <Route path="/hang-hoa/nhap-hang-rau/lich-su" element={<VegetableImportOrderHistoryPage />} />
-        <Route path="/hang-hoa/hang-rau" element={<VegetablesPage />} />
-        <Route path="/hang-hoa/in-phieu-rau" element={<PrintVegetableOrdersPage />} />
-        <Route path="/hang-hoa/giao-hang-rau" element={<VegetableDeliveryPage />} />
-        <Route path="/hang-hoa/kho-rau" element={<VegetableWarehousePage />} />
-        <Route path="/hang-hoa/xuat-hang" element={<ExportOrdersPage />} />
-        <Route path="/hang-hoa/giao-hang" element={<DeliveryPage />} />
-        <Route path="/hang-hoa/in-phieu-giao" element={<PrintDeliveryPage />} />
-        <Route path="/hang-hoa/kho" element={<WarehousesPage />} />
-        <Route path="/hang-hoa/cai-dat" element={<ProductSettingsPage />} />
-        <Route path="/hang-hoa/cai-dat-rau" element={<VegetableProductSettingsPage />} />
-        <Route path="/hang-hoa/bao-tai-rau" element={<ZaloVegetableArrivalManagePage />} />
+        <Route path="/app/hang-hoa" element={<ModulePage />} />
+        <Route path="/app/hang-hoa/nhap-hang" element={<ImportOrdersPage />} />
+        <Route path="/app/hang-hoa/xac-nhan-hang-gui" element={<ConfirmSenderImportOrdersPage />} />
+        <Route path="/app/hang-hoa/hang-gui-sg" element={<ReturnToSgOrdersPage />} />
+        <Route path="/app/hang-hoa/nhap-hang/lich-su" element={<StandardImportOrderHistoryPage />} />
+        <Route path="/app/hang-hoa/nhap-hang-rau" element={<VegetableImportsPage />} />
+        <Route path="/app/hang-hoa/nhap-hang-rau/lich-su" element={<VegetableImportOrderHistoryPage />} />
+        <Route path="/app/hang-hoa/hang-rau" element={<VegetablesPage />} />
+        <Route path="/app/hang-hoa/in-phieu-rau" element={<PrintVegetableOrdersPage />} />
+        <Route path="/app/hang-hoa/giao-hang-rau" element={<VegetableDeliveryPage />} />
+        <Route path="/app/hang-hoa/kho-rau" element={<VegetableWarehousePage />} />
+        <Route path="/app/hang-hoa/xuat-hang" element={<ExportOrdersPage />} />
+        <Route path="/app/hang-hoa/giao-hang" element={<DeliveryPage />} />
+        <Route path="/app/hang-hoa/in-phieu-giao" element={<PrintDeliveryPage />} />
+        <Route path="/app/hang-hoa/kho" element={<WarehousesPage />} />
+        <Route path="/app/hang-hoa/cai-dat" element={<ProductSettingsPage />} />
+        <Route path="/app/hang-hoa/cai-dat-rau" element={<VegetableProductSettingsPage />} />
+        <Route path="/app/hang-hoa/bao-tai-rau" element={<ZaloVegetableArrivalManagePage />} />
 
-        <Route path="/hanh-chinh-nhan-su" element={<ModulePage />} />
-        <Route path="/hanh-chinh-nhan-su/nhan-su" element={<EmployeesPage />} />
-        <Route path="/hanh-chinh-nhan-su/nhan-su/:id" element={<ProfilePage />} />
-        <Route path="/hanh-chinh-nhan-su/nghi-phep" element={<LeaveRequestsPage />} />
-        <Route path="/hanh-chinh-nhan-su/cham-cong" element={<AttendancePage />} />
-        <Route path="/hanh-chinh-nhan-su/cau-hinh-cham-cong" element={<AttendanceLocationsPage />} />
-        <Route path="/hanh-chinh-nhan-su/luong" element={<PayrollPage />} />
-        <Route path="/hanh-chinh-nhan-su/cai-dat-luong" element={<SalarySettingsPage />} />
-        <Route path="/hanh-chinh-nhan-su/ung-luong" element={<SalaryAdvancesPage />} />
-        <Route path="/hanh-chinh-nhan-su/duyet-don" element={<ApprovalsPage />} />
-        <Route path="/hanh-chinh-nhan-su/phan-quyen" element={<RolePermissionsPage />} />
-        <Route path="/cai-dat-he-thong" element={<SystemSettingsPage />} />
-        <Route path="/cai-dat-he-thong/zalo-tong-ket-tap-hoa" element={<ZaloGrocerySummaryManagePage />} />
-        <Route path="/cai-dat-he-thong/zalo-tong-ket-vua-rau" element={<ZaloSupplierSummaryManagePage />} />
-        <Route path="/cai-dat-he-thong/zalo-tong-ket-nguoi-gui-rau" element={<ZaloSenderSummaryManagePage />} />
-        <Route path="/hanh-chinh-nhan-su/chi-phi" element={<Navigate to="/chi-phi/phieu" replace />} />
+        <Route path="/app/hanh-chinh-nhan-su" element={<ModulePage />} />
+        <Route path="/app/hanh-chinh-nhan-su/nhan-su" element={<EmployeesPage />} />
+        <Route path="/app/hanh-chinh-nhan-su/nhan-su/:id" element={<ProfilePage />} />
+        <Route path="/app/hanh-chinh-nhan-su/nghi-phep" element={<LeaveRequestsPage />} />
+        <Route path="/app/hanh-chinh-nhan-su/cham-cong" element={<AttendancePage />} />
+        <Route path="/app/hanh-chinh-nhan-su/cau-hinh-cham-cong" element={<AttendanceLocationsPage />} />
+        <Route path="/app/hanh-chinh-nhan-su/luong" element={<PayrollPage />} />
+        <Route path="/app/hanh-chinh-nhan-su/cai-dat-luong" element={<SalarySettingsPage />} />
+        <Route path="/app/hanh-chinh-nhan-su/ung-luong" element={<SalaryAdvancesPage />} />
+        <Route path="/app/hanh-chinh-nhan-su/duyet-don" element={<ApprovalsPage />} />
+        <Route path="/app/hanh-chinh-nhan-su/phan-quyen" element={<RolePermissionsPage />} />
+        <Route path="/app/cai-dat-he-thong" element={<SystemSettingsPage />} />
+        <Route path="/app/cai-dat-he-thong/zalo-tong-ket-tap-hoa" element={<ZaloGrocerySummaryManagePage />} />
+        <Route path="/app/cai-dat-he-thong/zalo-tong-ket-vua-rau" element={<ZaloSupplierSummaryManagePage />} />
+        <Route path="/app/cai-dat-he-thong/zalo-tong-ket-nguoi-gui-rau" element={<ZaloSenderSummaryManagePage />} />
+        <Route path="/app/hanh-chinh-nhan-su/chi-phi" element={<Navigate to="/app/chi-phi/phieu" replace />} />
 
-        <Route path="/chi-phi" element={<ModulePage />} />
-        <Route path="/chi-phi/phieu" element={<ExpensesPage />} />
-        <Route path="/chi-phi/lich-su" element={<ExpenseHistoryPage />} />
-        <Route path="/chi-phi/in-chi-phi" element={<PrintExpensesPage />} />
+        <Route path="/app/chi-phi" element={<ModulePage />} />
+        <Route path="/app/chi-phi/phieu" element={<ExpensesPage />} />
+        <Route path="/app/chi-phi/lich-su" element={<ExpenseHistoryPage />} />
+        <Route path="/app/chi-phi/in-chi-phi" element={<PrintExpensesPage />} />
 
-        <Route path="/khach-hang">
+        <Route path="/app/khach-hang">
           <Route index element={<ModulePage />} />
           <Route path="nguoi-gui-rau">
             <Route index element={<VegetableCustomersPage type="vegetable_sender" />} />
@@ -203,7 +205,7 @@ function AppRoutes() {
         </Route>
 
         {/* Ke toan module */}
-        <Route path="/ke-toan">
+        <Route path="/app/ke-toan">
           <Route index element={<ModulePage />} />
           <Route path="khach-hang-tap-hoa">
             <Route index element={<GroceryCustomersPage type="grocery_sender" />} />
@@ -219,6 +221,7 @@ function AppRoutes() {
           </Route>
           <Route path="cong-no" element={<CustomerDebtPage />} />
           <Route path="thu-tien-sg" element={<SgCashCollectionsPage />} />
+          <Route path="thu-tien-hang" element={<PaymentCollectionsPage />} />
           <Route path="in-thu-tien-sg" element={<PrintSgCashCollectionsPage />} />
           <Route path="doanh-thu" element={<RevenueReportPage />} />
           <Route path="hoa-don-tap-hoa" element={<InvoiceGroceryPage />} />
@@ -226,19 +229,19 @@ function AppRoutes() {
         </Route>
 
         {/* Quan ly xe module */}
-        <Route path="/quan-ly-xe">
+        <Route path="/app/quan-ly-xe">
           <Route index element={<ModulePage />} />
           <Route path="danh-sach" element={<VehiclesPage />} />
           <Route path="ban-do-tai-xe" element={<DriverMapPage />} />
           <Route path="chuyen-giao-cua-toi" element={<DriverDeliveriesPage />} />
           <Route path="dang-giao" element={<DriverActiveTripPage />} />
           <Route path="check-in" element={<DriverCheckinPage />} />
-          <Route path="thu-tien" element={<PaymentCollectionsPage />} />
+          <Route path="thu-tien" element={<Navigate to="/app/ke-toan/thu-tien-hang" replace />} />
         </Route>
 
         {/* Utility */}
-        <Route path="/ban-quyen" element={<CopyrightPage />} />
-        <Route path="/cai-dat" element={<SettingsPage />} />
+        <Route path="/app/ban-quyen" element={<CopyrightPage />} />
+        <Route path="/app/cai-dat" element={<SettingsPage />} />
 
         {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -286,4 +289,8 @@ function App() {
 }
 
 export default App;
+
+
+
+
 

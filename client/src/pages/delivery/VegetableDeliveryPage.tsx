@@ -496,7 +496,7 @@ const VegetableDeliveryPage: React.FC = () => {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
-        <PageHeader title="Giao hàng rau" description="Danh sách đơn hàng rau cần giao" backPath="/hang-hoa" />
+        <PageHeader title="Giao hàng rau" description="Danh sách đơn hàng rau cần giao" backPath="/app/hang-hoa" />
       </div>
 
       <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2.5 md:mb-6 mb-3 overflow-x-auto custom-scrollbar">

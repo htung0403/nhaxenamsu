@@ -150,7 +150,7 @@ const LoyalCustomersPage: React.FC = () => {
         <PageHeader
           title="Khách hàng thân thiết"
           description="Quản lý khách hàng thân thiết"
-          backPath="/khach-hang"
+          backPath="/app/khach-hang"
           actions={
             <div className="flex items-center gap-3">
               <SearchInput

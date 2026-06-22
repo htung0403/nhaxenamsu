@@ -300,7 +300,7 @@ const ZaloVegetableArrivalManagePage: React.FC = () => {
       <PageHeader
         title="Báo tài rau"
         description="Gửi Zalo thông báo tài đã tới chợ cho các vựa rau theo từng tài trong ngày."
-        backPath="/hang-hoa/nhap-hang-rau"
+        backPath="/app/hang-hoa/nhap-hang-rau"
       />
 
       <div className="bg-card rounded-2xl border border-border shadow-sm flex flex-col flex-1 min-h-0 p-4 gap-4">

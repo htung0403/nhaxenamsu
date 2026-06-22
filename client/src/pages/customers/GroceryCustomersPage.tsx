@@ -171,7 +171,7 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
         <PageHeader
           title={pageTitle}
           description="Quản lý khách hàng tạp hóa"
-          backPath="/khach-hang"
+          backPath="/app/khach-hang"
           actions={
             <div className="flex items-center gap-3">
               <SearchInput

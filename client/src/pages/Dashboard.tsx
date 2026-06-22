@@ -19,35 +19,35 @@ const dashboardModules: ActionCardProps[] = [
     icon: Box,
     title: 'Hàng hóa',
     description: 'Kho, nhập hàng, xuất hàng, tồn kho.',
-    href: '/hang-hoa',
+    href: '/app/hang-hoa',
     colorScheme: 'teal'
   },
   {
     icon: Users,
     title: 'Hành chính nhân sự',
     description: 'Quản lý nhân sự và các thủ tục hành chính.',
-    href: '/hanh-chinh-nhan-su',
+    href: '/app/hanh-chinh-nhan-su',
     colorScheme: 'emerald'
   },
   {
     icon: Wallet,
     title: 'Kế toán',
     description: 'Công nợ, danh sách khách hàng.',
-    href: '/ke-toan',
+    href: '/app/ke-toan',
     colorScheme: 'blue'
   },
   {
     icon: Car,
     title: 'Quản lý xe',
     description: 'Theo dõi và quản lý phương tiện.',
-    href: '/quan-ly-xe',
+    href: '/app/quan-ly-xe',
     colorScheme: 'orange'
   },
   {
     icon: Copyright,
     title: 'Thông tin bản quyền',
     description: 'Quản lý sở hữu trí tuệ.',
-    href: '/ban-quyen',
+    href: '/app/ban-quyen',
     colorScheme: 'blue'
   },
   {
@@ -146,7 +146,7 @@ const Dashboard: React.FC = () => {
               </p>
             </div>
             <Link
-              to="/hanh-chinh-nhan-su/cham-cong"
+              to="/app/hanh-chinh-nhan-su/cham-cong"
               className="inline-flex items-center gap-2 px-6 py-3 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-[14px] font-bold shadow-lg shadow-amber-500/20 transition-all active:scale-95"
             >
               <ClipboardList size={18} />

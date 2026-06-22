@@ -70,7 +70,7 @@ const SalaryAdvancesPage = () => {
         <PageHeader
           title="Ứng lương"
           description="Đơn ứng lương sẽ được trừ vào phiếu lương ở tuần tương ứng"
-          backPath="/hanh-chinh-nhan-su"
+          backPath="/app/hanh-chinh-nhan-su"
           actions={
             <button
               onClick={() => setIsDialogOpen(true)}

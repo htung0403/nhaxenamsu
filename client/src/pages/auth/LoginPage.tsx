@@ -61,7 +61,7 @@ const LoginPage: React.FC = () => {
       }
 
       await login(data.phone.trim(), data.password);
-      navigate('/', { replace: true });
+      navigate('/app', { replace: true });
     } catch (err: any) {
       setServerError(err?.response?.data?.message || err?.message || 'Đăng nhập thất bại. Vui lòng thử lại.');
     } finally {
@@ -188,3 +188,4 @@ const LoginPage: React.FC = () => {
 };
 
 export default LoginPage;
+

@@ -38,7 +38,7 @@ const PaymentCollectionsPage: React.FC = () => {
         <PageHeader
           title="Quản lý thu tiền hàng"
           description="Quản lý phiếu thu tiền, nộp tiền, và xác nhận công nợ"
-          backPath="/quan-ly-xe"
+          backPath="/app/ke-toan"
         />
       </div>
 

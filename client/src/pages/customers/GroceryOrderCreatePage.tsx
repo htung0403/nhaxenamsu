@@ -14,8 +14,8 @@ import { uploadApi } from '../../api/uploadApi';
 import { cloudinarySmall } from '../../lib/cloudinaryUrl';
 import type { Customer } from '../../types';
 
-const CUSTOMER_ORDER_CREATE_PATH = '/tai-khoan/don-hang/tao-don';
-const LIST_PATH = '/don-hang-cua-toi';
+const CUSTOMER_ORDER_CREATE_PATH = '/app/tai-khoan/don-hang/tao-don';
+const LIST_PATH = '/app/don-hang-cua-toi';
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getCurrentTime = () => new Date().toTimeString().slice(0, 5);

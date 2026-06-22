@@ -527,12 +527,12 @@ const VegetableImportsPage: React.FC = () => {
         <PageHeader
           title="Nhập hàng rau"
           description="Quản lý danh sách đơn nhập hàng rau"
-          backPath="/hang-hoa"
+          backPath="/app/hang-hoa"
           actions={
             <div className="flex items-center gap-2 flex-wrap justify-end">
               {user?.role === 'admin' && (
                 <button
-                  onClick={() => navigate('/hang-hoa/bao-tai-rau')}
+                  onClick={() => navigate('/app/hang-hoa/bao-tai-rau')}
                   className="flex items-center gap-2 px-4 py-2 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 text-[13px] font-bold hover:bg-emerald-500/15 transition-all"
                 >
                   <Send size={16} />
@@ -540,7 +540,7 @@ const VegetableImportsPage: React.FC = () => {
                 </button>
               )}
               <button
-                onClick={() => navigate('/hang-hoa/in-phieu-rau')}
+                onClick={() => navigate('/app/hang-hoa/in-phieu-rau')}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 text-primary text-[13px] font-bold hover:bg-primary/10 transition-all"
               >
                 <Printer size={16} />
@@ -587,7 +587,7 @@ const VegetableImportsPage: React.FC = () => {
             </button>
 
             <button
-               onClick={() => navigate('/hang-hoa/in-phieu-rau')}
+               onClick={() => navigate('/app/hang-hoa/in-phieu-rau')}
                className="md:hidden flex items-center justify-center w-[38px] shrink-0 border border-primary/30 bg-primary/10 text-primary rounded-xl transition-all hover:bg-primary/20"
             >
                <Printer size={18} />
@@ -595,7 +595,7 @@ const VegetableImportsPage: React.FC = () => {
 
             {user?.role === 'admin' && (
               <button
-                onClick={() => navigate('/hang-hoa/bao-tai-rau')}
+                onClick={() => navigate('/app/hang-hoa/bao-tai-rau')}
                 className="md:hidden flex items-center justify-center w-[38px] shrink-0 border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 rounded-xl transition-all hover:bg-emerald-500/20"
                 title="Báo tài"
               >

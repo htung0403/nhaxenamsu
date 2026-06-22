@@ -98,7 +98,7 @@ const DriverCheckinPage: React.FC = () => {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
-      <PageHeader title="Check-in GPS" description="Ghi nhận vị trí của tài xế" backPath="/quan-ly-xe" />
+      <PageHeader title="Check-in GPS" description="Ghi nhận vị trí của tài xế" backPath="/app/quan-ly-xe" />
 
       {/* Checkin Action Card */}
       {user?.role === 'driver' && (

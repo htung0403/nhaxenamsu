@@ -89,7 +89,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
     }
 
     // Check sidebar and extra menu items
-    const menuItems = [...sidebarMenu, ...extraMenuItems, { path: '/ho-so', label: 'Hồ sơ cá nhân' }];
+    const menuItems = [...sidebarMenu, ...extraMenuItems, { path: '/app/ho-so', label: 'Hồ sơ cá nhân' }];
     const staticFound = menuItems.find(item => item.path === path);
     if (staticFound) return staticFound.label;
 
@@ -113,6 +113,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       'ke-toan': 'Kế toán',
       'hang-hoa': 'Hàng hóa',
       'quan-ly-xe': 'Quản lý xe',
+      'thu-tien-hang': 'Thu tiền hàng',
       'dang-giao': 'Đang giao',
       'chi-phi': 'Chi phí',
       'khach-hang-than-thiet': 'KH thân thiết',
@@ -236,7 +237,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
         </button>
 
         <div className="hidden sm:flex items-center gap-2 lg:gap-2.5">
-          <Link to="/" className="text-muted-foreground hover:text-primary transition-colors">
+          <Link to="/app" className="text-muted-foreground hover:text-primary transition-colors">
             <Home size={14} strokeWidth={2} />
           </Link>
 
@@ -246,7 +247,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
             </svg>
           </span>
 
-          <Link to="/" className="text-muted-foreground text-[13px] font-medium hover:text-primary transition-colors">
+          <Link to="/app" className="text-muted-foreground text-[13px] font-medium hover:text-primary transition-colors">
             Trang chủ
           </Link>
 
@@ -446,7 +447,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
               <div className="p-1.5 space-y-0.5">
                 <button
                   onClick={() => {
-                    navigate('/ho-so');
+                    navigate('/app/ho-so');
                     setShowUserDropdown(false);
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
@@ -459,7 +460,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
 
                 <button
                   onClick={() => {
-                    navigate('/cai-dat');
+                    navigate('/app/cai-dat');
                     setShowUserDropdown(false);
                   }}
                   className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-muted-foreground hover:bg-muted hover:text-foreground transition-all duration-200"
@@ -491,3 +492,4 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
 };
 
 export default Topbar;
+

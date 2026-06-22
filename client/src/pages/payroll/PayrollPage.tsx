@@ -156,7 +156,7 @@ const PayrollPage: React.FC = () => {
         <PageHeader
           title="Bảng lương"
           description="Tính lương và chốt lương nhân viên theo tuần"
-          backPath="/hanh-chinh-nhan-su"
+          backPath="/app/hanh-chinh-nhan-su"
           actions={payrollActions}
         />
       </div>

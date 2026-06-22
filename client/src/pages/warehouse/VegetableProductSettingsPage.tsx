@@ -378,7 +378,7 @@ const VegetableProductSettingsPage: React.FC = () => {
       <PageHeader
         title="Cài đặt hàng vựa rau"
         description="Quản lý danh sách từ điển hàng vựa rau trong hệ thống"
-        backPath="/hang-hoa"
+        backPath="/app/hang-hoa"
         actions={<div />}
       />
 

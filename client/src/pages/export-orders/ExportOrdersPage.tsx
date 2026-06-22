@@ -94,7 +94,7 @@ const ExportOrdersPage: React.FC = () => {
         <PageHeader
           title="Xuất hàng"
           description="Quản lý phiếu xuất kho"
-          backPath="/hang-hoa"
+          backPath="/app/hang-hoa"
           actions={
             <button
               onClick={() => setIsAddOpen(true)}

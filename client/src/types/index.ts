@@ -505,6 +505,9 @@ export interface CreatePaymentCollectionDto {
 export interface UpdatePaymentCollectionDto {
   collectedAmount?: number;
   collectedAt?: string;
+  expectedAmount?: number;
+  pricePerPackage?: number;
+  totalPackages?: number;
   notes?: string;
   imageUrl?: string | null;
 }

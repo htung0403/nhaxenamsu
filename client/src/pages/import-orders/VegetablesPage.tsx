@@ -355,7 +355,7 @@ const VegetablesPage: React.FC = () => {
         <PageHeader
           title="Bảng Hàng Rau"
           description="Xem danh sách chi tiết các mặt hàng rau nhập trong ngày"
-          backPath="/hang-hoa"
+          backPath="/app/hang-hoa"
         />
       </div>
 

@@ -14,6 +14,9 @@ const createSchema = z.object({
 const updateSchema = z.object({
   collectedAmount: z.number().min(0).optional(),
   collectedAt: z.string().optional(),
+  expectedAmount: z.number().min(0).optional(),
+  pricePerPackage: z.number().min(0).optional(),
+  totalPackages: z.number().min(0).optional(),
   notes: z.string().optional(),
   imageUrl: z.string().nullable().optional()
 });
@@ -83,7 +86,7 @@ export class PaymentCollectionsController {
   static async update(req: Request, res: Response) {
     try {
       const validated = updateSchema.parse(req.body);
-      const data = await PaymentCollectionsService.updatePaymentCollection(req.params.id as string, validated, req.user!.id);
+      const data = await PaymentCollectionsService.updatePaymentCollection(req.params.id as string, validated, req.user!);
       return res.status(200).json(successResponse(data, 'Đã cập nhật phiếu thu'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -93,7 +96,7 @@ export class PaymentCollectionsController {
   static async submit(req: Request, res: Response) {
     try {
       const validated = submitSchema.parse(req.body) as any;
-      const data = await PaymentCollectionsService.submitPaymentCollection(req.params.id as string, validated, req.user!.id);
+      const data = await PaymentCollectionsService.submitPaymentCollection(req.params.id as string, validated, req.user!);
       return res.status(200).json(successResponse(data, 'Đã nộp tiền thành công'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));

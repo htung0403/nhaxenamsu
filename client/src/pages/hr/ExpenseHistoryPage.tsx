@@ -103,10 +103,10 @@ const ExpenseHistoryPage = () => {
         <PageHeader
           title="Lịch sử chi phí"
           description="Danh sách phiếu theo thời điểm cập nhật gần nhất (hệ thống)."
-          backPath="/chi-phi"
+          backPath="/app/chi-phi"
           actions={
             <Link
-              to="/chi-phi/in-chi-phi"
+              to="/app/chi-phi/in-chi-phi"
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-[13px] font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
             >
               <Printer size={16} />

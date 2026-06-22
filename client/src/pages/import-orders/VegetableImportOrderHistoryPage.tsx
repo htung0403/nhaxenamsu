@@ -401,11 +401,11 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
         <PageHeader
           title="Lịch sử nhập hàng rau"
           description="Xem toàn bộ lịch sử đơn nhập hàng rau"
-          backPath="/hang-hoa"
+          backPath="/app/hang-hoa"
           actions={
             <div className="flex items-center gap-2">
               <button
-                onClick={() => navigate('/hang-hoa/in-phieu-rau')}
+                onClick={() => navigate('/app/hang-hoa/in-phieu-rau')}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl border border-primary/30 bg-primary/5 text-primary text-[13px] font-bold hover:bg-primary/10 transition-all"
               >
                 <Printer size={16} />
@@ -452,7 +452,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
             </button>
 
             <button
-               onClick={() => navigate('/hang-hoa/in-phieu-rau')}
+               onClick={() => navigate('/app/hang-hoa/in-phieu-rau')}
                className="md:hidden flex items-center justify-center w-[38px] shrink-0 border border-primary/30 bg-primary/10 text-primary rounded-xl transition-all hover:bg-primary/20"
             >
                <Printer size={18} />

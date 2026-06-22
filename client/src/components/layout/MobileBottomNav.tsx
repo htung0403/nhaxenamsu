@@ -20,14 +20,14 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ mustCheckIn, isLocked
     refreshNotifications();
   }, [refreshNotifications]);
 
-  const isHome = location.pathname === '/';
-  const isAttendancePage = location.pathname === '/hanh-chinh-nhan-su/cham-cong';
+  const isHome = location.pathname === '/app';
+  const isAttendancePage = location.pathname === '/app/hanh-chinh-nhan-su/cham-cong';
 
   if (isLocked) {
     return (
       <div className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-slate-900 border-t border-slate-800 z-40 px-6 flex items-center justify-center pb-safe shadow-2xl">
         <button 
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/app')}
           className={clsx(
             "p-3 rounded-full transition-all",
             isHome ? "bg-primary text-white" : "text-slate-400 hover:text-white"
@@ -43,7 +43,7 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ mustCheckIn, isLocked
     return (
       <div className="lg:hidden fixed bottom-0 left-0 right-0 h-16 bg-card border-t border-border z-40 px-6 flex items-center justify-between pb-safe">
         <button 
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/app')}
           className={clsx(
             "p-2 transition-colors",
             isHome ? "text-primary" : "text-muted-foreground hover:text-foreground"
@@ -53,7 +53,7 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ mustCheckIn, isLocked
         </button>
 
         <button
-          onClick={() => navigate('/hanh-chinh-nhan-su/cham-cong')}
+          onClick={() => navigate('/app/hanh-chinh-nhan-su/cham-cong')}
           className={clsx(
             "w-12 h-12 rounded-full flex items-center justify-center -translate-y-4 shadow-lg transition-transform hover:scale-105 active:scale-95",
             isAttendancePage ? "bg-primary text-white" : "bg-amber-500 text-white animate-pulse"
@@ -77,7 +77,7 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ mustCheckIn, isLocked
       </button>
 
       <button
-        onClick={() => navigate('/')}
+        onClick={() => navigate('/app')}
         className={clsx(
           "w-12 h-12 rounded-full flex items-center justify-center -translate-y-4 shadow-lg transition-transform hover:scale-105 active:scale-95",
           isHome ? "bg-primary text-white" : "bg-card text-muted-foreground border border-border"
@@ -107,3 +107,5 @@ const MobileBottomNav: React.FC<MobileBottomNavProps> = ({ mustCheckIn, isLocked
 };
 
 export default MobileBottomNav;
+
+

@@ -227,7 +227,7 @@ const CustomerDebtPage: React.FC = () => {
           <PageHeader
             title="Chi tiết Sổ Cái Bù Trừ Nhập Xuất"
             description="Sổ chi tiết các hóa đơn chưa hoàn tất thanh toán của Xuất/Nhập hàng"
-            backPath="/ke-toan"
+            backPath="/app/ke-toan"
           />
         </div>
 

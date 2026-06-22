@@ -5,7 +5,7 @@ import { isDriverLikeRoleKey } from '../../../utils/routePermissions';
 import { usePaymentCollections, useRevertPaymentCollection } from '../../../hooks/queries/usePaymentCollections';
 import { useEmployees } from '../../../hooks/queries/useHR';
 import { useVehicles } from '../../../hooks/queries/useVehicles';
-import { Plus, Download, CheckCircle, AlertCircle, RefreshCw, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Download, CheckCircle, AlertCircle, RefreshCw, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 
 import EmptyState from '../../../components/shared/EmptyState';
 import ErrorState from '../../../components/shared/ErrorState';
@@ -28,6 +28,8 @@ interface Props {
   readonly?: boolean;
 }
 
+const PAGE_SIZE = 50;
+
 const getLocalDateKey = (value: string) => {
   const date = new Date(value);
   if (isNaN(date.getTime())) return value;
@@ -48,6 +50,7 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
   const [filterSearch, setFilterSearch] = useState('');
   const [filterDriverId, setFilterDriverId] = useState('');
   const [filterVehicleId, setFilterVehicleId] = useState('');
+  const [page, setPage] = useState(1);
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isFilterClosing, setIsFilterClosing] = useState(false);
@@ -94,7 +97,7 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
 
   const { mutate: revert } = useRevertPaymentCollection();
 
-  const filtered = collections?.filter(c => {
+  const filtered = useMemo(() => collections?.filter(c => {
     if (filterSearch) {
       return (
         matchesSearch(c.deliveryOrderCode, filterSearch) ||
@@ -104,7 +107,15 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
       );
     }
     return true;
-  }) || [];
+  }) || [], [collections, filterSearch]);
+
+  const totalItems = filtered.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const paginatedCollections = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  );
 
   const draftItems = useMemo(() => filtered.filter((c) => c.status === 'draft'), [filtered]);
 
@@ -117,14 +128,6 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
     () => selectedDrafts.reduce((s, c) => s + (c.collectedAmount || 0), 0),
     [selectedDrafts]
   );
-
-  useEffect(() => {
-    const allowed = new Set(draftItems.map((d) => d.id));
-    setSelectedIds((prev) => {
-      const next = new Set([...prev].filter((id) => allowed.has(id)));
-      return next.size === prev.size && [...next].every((id) => prev.has(id)) ? prev : next;
-    });
-  }, [draftItems]);
 
   useEffect(() => {
     const el = headerCheckboxRef.current;
@@ -155,6 +158,23 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
     else selectAllDraftsInView();
   };
 
+  const toggleDateDrafts = (dateKey: string) => {
+    const dateDraftIds = (groupedCollections[dateKey] || [])
+      .filter((pc) => pc.status === 'draft')
+      .map((pc) => pc.id);
+    if (dateDraftIds.length === 0) return;
+
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      const allSelected = dateDraftIds.every((id) => next.has(id));
+      dateDraftIds.forEach((id) => {
+        if (allSelected) next.delete(id);
+        else next.add(id);
+      });
+      return next;
+    });
+  };
+
   const handleAction = (action: string, pc: PaymentCollection) => {
     setSelectedPC(pc);
     if (action === 'submit') setIsSubmitOpen(true);
@@ -183,7 +203,7 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
 
   const hasActiveFilters = filterDate || filterStatus || filterDriverId || filterVehicleId;
 
-  const groupedCollections = filtered.reduce((acc, pc) => {
+  const groupedCollections = paginatedCollections.reduce((acc, pc) => {
     const dateKey = getLocalDateKey(pc.collectedAt);
     if (!acc[dateKey]) {
       acc[dateKey] = [];
@@ -245,7 +265,10 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
           <div className="flex-1">
             <SearchInput
               placeholder="Tìm mã đơn, khách..."
-              onSearch={(raw) => setFilterSearch(raw)}
+              onSearch={(raw) => {
+                setPage(1);
+                setFilterSearch(raw);
+              }}
             />
           </div>
           <button 
@@ -263,11 +286,17 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
         </div>
 
         <div className="hidden md:grid grid-cols-2 lg:grid-cols-4 gap-3 flex-1 w-full max-w-[800px]">
-          <DatePicker value={filterDate} onChange={setFilterDate} placeholder="Chọn ngày..." className="bg-white h-[38px]" />
+          <DatePicker value={filterDate} onChange={(value) => {
+            setPage(1);
+            setFilterDate(value);
+          }} placeholder="Chọn ngày..." className="bg-white h-[38px]" />
 
           <CustomSelect
             value={filterStatus}
-            onChange={(val: string) => setFilterStatus(val as any)}
+            onChange={(val: string) => {
+              setPage(1);
+              setFilterStatus(val as PaymentCollectionStatus | '');
+            }}
             options={[
               { value: '', label: 'Tất cả trạng thái' },
               { value: 'draft', label: 'Chưa Nộp' },
@@ -282,7 +311,10 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
           {!isDriver && (
             <SearchableSelect
               value={filterDriverId}
-              onValueChange={setFilterDriverId}
+              onValueChange={(value) => {
+                setPage(1);
+                setFilterDriverId(value);
+              }}
               placeholder="Tất cả tài xế"
               options={employees?.filter(e => isDriverLikeRoleKey(e.role)).map(e => ({ value: e.id, label: e.full_name })) || []}
               className="bg-white h-[38px] border-slate-200 rounded-lg"
@@ -291,7 +323,10 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
 
           <SearchableSelect
             value={filterVehicleId}
-            onValueChange={setFilterVehicleId}
+            onValueChange={(value) => {
+              setPage(1);
+              setFilterVehicleId(value);
+            }}
             placeholder="Tất cả xe"
             options={vehicles?.map(v => ({ value: v.id, label: v.license_plate })) || []}
             className="bg-white h-[38px] border-slate-200 rounded-lg"
@@ -308,7 +343,7 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
               >
                 Chọn tất cả chưa nộp
               </button>
-              {selectedIds.size > 0 && (
+              {selectedDrafts.length > 0 && (
                 <button
                   type="button"
                   onClick={clearSelection}
@@ -353,7 +388,7 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
           >
             Chọn tất cả chưa nộp
           </button>
-          {selectedIds.size > 0 && (
+          {selectedDrafts.length > 0 && (
             <button
               type="button"
               onClick={clearSelection}
@@ -379,10 +414,12 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
         isClosing={isFilterClosing}
         onClose={closeFilter}
         onApply={(filters) => {
+          setPage(1);
           setFilterDate(filters.dateFrom);
           setFilterStatus(filters.status);
         }}
         onClear={() => {
+          setPage(1);
           setFilterDate('');
           setFilterStatus('');
           setFilterDriverId('');
@@ -406,7 +443,10 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
             <label className="text-[13px] font-bold text-muted-foreground">Tài xế</label>
             <SearchableSelect
               value={filterDriverId}
-              onValueChange={setFilterDriverId}
+              onValueChange={(value) => {
+                setPage(1);
+                setFilterDriverId(value);
+              }}
               placeholder="Tất cả tài xế"
               options={employees?.filter(e => isDriverLikeRoleKey(e.role)).map(e => ({ value: e.id, label: e.full_name })) || []}
               className="bg-muted/20 border-border/40 h-[44px]"
@@ -417,7 +457,10 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
           <label className="text-[13px] font-bold text-muted-foreground">Biển số xe</label>
           <SearchableSelect
             value={filterVehicleId}
-            onValueChange={setFilterVehicleId}
+            onValueChange={(value) => {
+              setPage(1);
+              setFilterVehicleId(value);
+            }}
             placeholder="Tất cả xe"
             options={vehicles?.map(v => ({ value: v.id, label: v.license_plate })) || []}
             className="bg-muted/20 border-border/40 h-[44px]"
@@ -444,6 +487,8 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
               <div className="md:hidden flex flex-col gap-6 pb-20">
                 {sortedDates.map(dateKey => {
                   const isCollapsed = collapsedDates[dateKey];
+                  const dateDrafts = groupedCollections[dateKey].filter((pc) => pc.status === 'draft');
+                  const areAllDateDraftsSelected = dateDrafts.length > 0 && dateDrafts.every((pc) => selectedIds.has(pc.id));
                   return (
                   <div key={dateKey} className="space-y-3">
                     <div 
@@ -451,6 +496,16 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
                       onClick={() => toggleDate(dateKey)}
                     >
                       <div className="flex items-center gap-2">
+                        {!readonly && dateDrafts.length > 0 && (
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 rounded border-slate-300"
+                            checked={areAllDateDraftsSelected}
+                            onChange={() => toggleDateDrafts(dateKey)}
+                            onClick={(e) => e.stopPropagation()}
+                            aria-label={`Chọn tất cả phiếu chưa nộp ngày ${formatDate(dateKey)}`}
+                          />
+                        )}
                         {isCollapsed ? <ChevronRight size={18} className="text-slate-500" /> : <ChevronDown size={18} className="text-slate-500" />}
                         <h3 className="font-bold text-slate-800">{formatDate(dateKey)}</h3>
                       </div>
@@ -549,7 +604,6 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
                       />
                     ) : null}
                   </th>
-                  <th className="px-4 py-3">Mã Số</th>
                   <th className="px-4 py-3">Khách Hàng</th>
                   <th className="px-4 py-3">Số Lượng Kiện</th>
                   <th className="px-4 py-3">Đơn Giá</th>
@@ -564,15 +618,27 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
               <tbody className="divide-y divide-slate-100">
                 {sortedDates.map(dateKey => {
                   const isCollapsed = collapsedDates[dateKey];
+                  const dateDrafts = groupedCollections[dateKey].filter((pc) => pc.status === 'draft');
+                  const areAllDateDraftsSelected = dateDrafts.length > 0 && dateDrafts.every((pc) => selectedIds.has(pc.id));
                   return (
                   <React.Fragment key={dateKey}>
                     <tr 
                       className="bg-slate-100/50 cursor-pointer select-none hover:bg-slate-200/50 transition-colors"
                       onClick={() => toggleDate(dateKey)}
                     >
-                      <td colSpan={readonly ? 10 : 11} className="px-4 py-2 text-[13px] font-bold text-slate-700">
+                      <td colSpan={readonly ? 9 : 10} className="px-4 py-2 text-[13px] font-bold text-slate-700">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
+                            {!readonly && dateDrafts.length > 0 && (
+                              <input
+                                type="checkbox"
+                                className="w-4 h-4 rounded border-slate-300"
+                                checked={areAllDateDraftsSelected}
+                                onChange={() => toggleDateDrafts(dateKey)}
+                                onClick={(e) => e.stopPropagation()}
+                                aria-label={`Chọn tất cả phiếu chưa nộp ngày ${formatDate(dateKey)}`}
+                              />
+                            )}
                             {isCollapsed ? <ChevronRight size={16} className="text-slate-500" /> : <ChevronDown size={16} className="text-slate-500" />}
                             <span>{formatDate(dateKey)}</span>
                           </div>
@@ -596,9 +662,6 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
                               onChange={() => toggleSelectOne(pc.id)}
                             />
                           ) : null}
-                        </td>
-                        <td className="px-4 py-3 text-[13px] font-bold text-slate-800">
-                          {pc.deliveryOrderCode}
                         </td>
                         <td className="px-4 py-3 text-[13px] text-slate-600">
                           {pc.customerName}
@@ -651,6 +714,51 @@ const DriverPaymentTab: React.FC<Props> = ({ readonly }) => {
               </tbody>
                 </table>
               </div>
+
+              {totalPages > 1 && (
+                <div className="px-4 py-3 border-t border-slate-200 flex items-center justify-between bg-slate-50/60 gap-3">
+                  <span className="text-[12px] text-slate-500 font-medium tabular-nums">
+                    {totalItems > 0 ? `${(currentPage - 1) * PAGE_SIZE + 1}-${Math.min(currentPage * PAGE_SIZE, totalItems)}` : '0'} / Tổng {totalItems}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage <= 1}
+                      className="p-1.5 rounded-lg text-slate-500 hover:bg-white disabled:opacity-20 transition-colors"
+                      aria-label="Trang trước"
+                    >
+                      <ChevronLeft size={15} />
+                    </button>
+                    {Array.from({ length: Math.min(totalPages, 5) }).map((_, i) => {
+                      const startPage = totalPages <= 5 ? 1 : Math.min(Math.max(currentPage - 2, 1), totalPages - 4);
+                      const pageNum = startPage + i;
+                      return (
+                        <button
+                          key={pageNum}
+                          type="button"
+                          onClick={() => setPage(pageNum)}
+                          className={clsx(
+                            'w-7 h-7 rounded-lg flex items-center justify-center text-[11px] font-bold transition-colors tabular-nums',
+                            currentPage === pageNum ? 'bg-primary text-white' : 'text-slate-500 hover:bg-white'
+                          )}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    })}
+                    <button
+                      type="button"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage >= totalPages}
+                      className="p-1.5 rounded-lg text-slate-500 hover:bg-white disabled:opacity-20 transition-colors"
+                      aria-label="Trang sau"
+                    >
+                      <ChevronRight size={15} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </div>

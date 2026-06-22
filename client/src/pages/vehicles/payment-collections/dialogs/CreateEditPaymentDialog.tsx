@@ -62,6 +62,9 @@ const CreateEditPaymentDialog: React.FC<Props> = ({ isOpen, onClose, payment }) 
 
   const [deliveryOrderId, setDeliveryOrderId] = useState('');
   const [collectedAmount, setCollectedAmount] = useState('');
+  const [totalPackages, setTotalPackages] = useState('');
+  const [pricePerPackage, setPricePerPackage] = useState('');
+  const [expectedAmountInput, setExpectedAmountInput] = useState('');
   const [collectedAt, setCollectedAt] = useState('');
   const [notes, setNotes] = useState('');
   const [proofImageUrl, setProofImageUrl] = useState<string | null>(null);
@@ -72,12 +75,18 @@ const CreateEditPaymentDialog: React.FC<Props> = ({ isOpen, onClose, payment }) 
     if (payment) {
       setDeliveryOrderId(payment.deliveryOrderId);
       setCollectedAmount(payment.collectedAmount.toString());
+      setTotalPackages(payment.totalPackages != null ? String(payment.totalPackages) : '');
+      setPricePerPackage(payment.pricePerPackage != null ? String(payment.pricePerPackage) : '');
+      setExpectedAmountInput(payment.expectedAmount.toString());
       setCollectedAt(toLocalDateTimeInputValue(payment.collectedAt));
       setNotes(payment.notes || '');
       setProofImageUrl(payment.imageUrl || null);
     } else {
       setDeliveryOrderId('');
       setCollectedAmount('');
+      setTotalPackages('');
+      setPricePerPackage('');
+      setExpectedAmountInput('');
       setCollectedAt(toLocalDateTimeInputValue());
       setNotes('');
       setProofImageUrl(null);
@@ -111,8 +120,28 @@ const CreateEditPaymentDialog: React.FC<Props> = ({ isOpen, onClose, payment }) 
 
   // Selected order details
   const selectedOrder = pendingOrders.find(o => o.id === deliveryOrderId);
-  const expectedAmount = payment ? payment.expectedAmount : (selectedOrder?.amount || 0);
+  const expectedAmount = payment ? Number(expectedAmountInput || 0) : (selectedOrder?.amount || 0);
   const currentDiff = Number(collectedAmount || 0) - expectedAmount;
+
+  const handleTotalPackagesChange = (value: string) => {
+    const rawValue = value.replace(/[^\d.]/g, '');
+    setTotalPackages(rawValue);
+    const quantity = Number(rawValue || 0);
+    const price = Number(pricePerPackage || 0);
+    if (quantity > 0 && price > 0) {
+      setExpectedAmountInput(String(quantity * price));
+    }
+  };
+
+  const handlePricePerPackageChange = (value: string) => {
+    const rawValue = value.replace(/\D/g, '');
+    setPricePerPackage(rawValue);
+    const quantity = Number(totalPackages || 0);
+    const price = Number(rawValue || 0);
+    if (quantity > 0 && price > 0) {
+      setExpectedAmountInput(String(quantity * price));
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,6 +154,9 @@ const CreateEditPaymentDialog: React.FC<Props> = ({ isOpen, onClose, payment }) 
         data: {
           collectedAmount: Number(collectedAmount),
           collectedAt: new Date(collectedAt).toISOString(),
+          totalPackages: totalPackages ? Number(totalPackages) : undefined,
+          pricePerPackage: pricePerPackage ? Number(pricePerPackage) : undefined,
+          expectedAmount: expectedAmountInput ? Number(expectedAmountInput) : undefined,
           notes,
           imageUrl: proofImageUrl,
         }
@@ -207,6 +239,43 @@ const CreateEditPaymentDialog: React.FC<Props> = ({ isOpen, onClose, payment }) 
                   <p className="text-[13px] text-muted-foreground">Đơn Hàng: <span className="font-bold text-foreground">{payment.deliveryOrderCode}</span></p>
                   <p className="text-[13px] text-muted-foreground">Khách Hàng: <span className="font-bold text-foreground">{payment.customerName}</span></p>
                   <p className="text-[13px] text-muted-foreground">Tiền Theo Phân Xe: <span className="font-bold text-foreground">{formatCurrency(payment.expectedAmount)}</span></p>
+                </div>
+              )}
+
+              {isEdit && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-bold text-foreground">Số Lượng Kiện</label>
+                    <input
+                      type="text"
+                      value={totalPackages}
+                      onChange={(e) => handleTotalPackagesChange(e.target.value)}
+                      className="w-full px-4 py-2 bg-muted/10 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all font-medium"
+                      placeholder="VD: 2"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-bold text-foreground">Đơn Giá (VNĐ)</label>
+                    <input
+                      type="text"
+                      value={pricePerPackage ? new Intl.NumberFormat('vi-VN').format(Number(pricePerPackage)) : ''}
+                      onChange={(e) => handlePricePerPackageChange(e.target.value)}
+                      className="w-full px-4 py-2 bg-muted/10 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all font-medium"
+                      placeholder="VD: 35000"
+                    />
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-[13px] font-bold text-foreground">Tổng Tiền Giao (VNĐ)</label>
+                    <input
+                      type="text"
+                      value={expectedAmountInput ? new Intl.NumberFormat('vi-VN').format(Number(expectedAmountInput)) : ''}
+                      onChange={(e) => setExpectedAmountInput(e.target.value.replace(/\D/g, ''))}
+                      className="w-full px-4 py-2 bg-muted/10 border border-border rounded-xl text-[13px] focus:outline-none focus:ring-2 focus:ring-primary/10 transition-all font-medium"
+                      placeholder="VD: 70000"
+                    />
+                  </div>
                 </div>
               )}
 

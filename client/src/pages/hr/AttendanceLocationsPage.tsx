@@ -201,7 +201,7 @@ const AttendanceLocationsPage: React.FC = () => {
         <PageHeader
           title="Cấu hình chấm công"
           description="Thêm, sửa hoặc xóa điểm — mỗi thao tác được lưu ngay vào hệ thống. Nhân viên chỉ chấm công được trong bán kính ít nhất một điểm đã khai báo."
-          backPath="/hanh-chinh-nhan-su"
+          backPath="/app/hanh-chinh-nhan-su"
         />
       </div>
 

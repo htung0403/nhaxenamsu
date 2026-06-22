@@ -1,5 +1,5 @@
 import { supabaseService } from '../../config/supabase';
-import { CreatePaymentCollectionDto, SubmitPaymentDto, ConfirmPaymentDto, PaymentCollectionStatus } from '../../types';
+import { CreatePaymentCollectionDto, SubmitPaymentDto, ConfirmPaymentDto, PaymentCollectionStatus, UserPayload } from '../../types';
 
 export class PaymentCollectionsService {
   static async getPaymentCollections(filters: { driverId?: string, status?: string, vehicleId?: string, dateFrom?: string, dateTo?: string }) {
@@ -117,13 +117,14 @@ export class PaymentCollectionsService {
     return this.getPaymentCollectionById(pcData.id);
   }
 
-  static async updatePaymentCollection(id: string, data: any, driverId: string) {
+  static async updatePaymentCollection(id: string, data: any, actor: UserPayload) {
     // Validate state
     const pc = await this.getRawById(id);
-    if (pc.driver_id !== driverId) throw new Error('Không có quyền sửa phiếu này');
+    const canEditForDriver = pc.driver_id === actor.id || ['admin', 'manager', 'staff'].includes(actor.role);
+    if (!canEditForDriver) throw new Error('Không có quyền sửa phiếu này');
     if (pc.status !== 'draft') throw new Error('Chỉ được sửa phiếu ở trạng thái draft');
 
-    let expectedAmount = pc.expected_amount;
+    const expectedAmount = data.expectedAmount !== undefined ? Number(data.expectedAmount) : Number(pc.expected_amount);
 
     if (data.collectedAmount !== undefined) {
       if (data.collectedAmount < expectedAmount && (!data.notes || data.notes.trim() === '') && (!pc.notes || pc.notes.trim() === '')) {
@@ -134,8 +135,32 @@ export class PaymentCollectionsService {
     const updatePayload: any = {};
     if (data.collectedAmount !== undefined) updatePayload.collected_amount = data.collectedAmount;
     if (data.collectedAt !== undefined) updatePayload.collected_at = data.collectedAt;
+    if (data.expectedAmount !== undefined) updatePayload.expected_amount = data.expectedAmount;
     if (data.notes !== undefined) updatePayload.notes = data.notes;
     if (data.imageUrl !== undefined) updatePayload.image_url = data.imageUrl;
+
+    if (data.totalPackages !== undefined || data.expectedAmount !== undefined) {
+      const deliveryVehiclePayload: any = {};
+      if (data.totalPackages !== undefined) deliveryVehiclePayload.assigned_quantity = data.totalPackages;
+      if (data.expectedAmount !== undefined) deliveryVehiclePayload.expected_amount = data.expectedAmount;
+
+      const { error: deliveryVehicleError } = await supabaseService
+        .from('delivery_vehicles')
+        .update(deliveryVehiclePayload)
+        .eq('delivery_order_id', pc.delivery_order_id)
+        .eq('vehicle_id', pc.vehicle_id);
+
+      if (deliveryVehicleError) throw deliveryVehicleError;
+    }
+
+    if (data.pricePerPackage !== undefined) {
+      const { error: deliveryOrderError } = await supabaseService
+        .from('delivery_orders')
+        .update({ unit_price: data.pricePerPackage })
+        .eq('id', pc.delivery_order_id);
+
+      if (deliveryOrderError) throw deliveryOrderError;
+    }
 
     const { error } = await supabaseService
       .from('payment_collections')
@@ -146,9 +171,10 @@ export class PaymentCollectionsService {
     return this.getPaymentCollectionById(id);
   }
 
-  static async submitPaymentCollection(id: string, data: SubmitPaymentDto, driverId: string) {
+  static async submitPaymentCollection(id: string, data: SubmitPaymentDto, actor: UserPayload) {
     const pc = await this.getRawById(id);
-    if (pc.driver_id !== driverId) throw new Error('Không có quyền nộp phiếu này');
+    const canSubmitForDriver = pc.driver_id === actor.id || ['admin', 'manager', 'staff'].includes(actor.role);
+    if (!canSubmitForDriver) throw new Error('Không có quyền nộp phiếu này');
     if (pc.status !== 'draft') throw new Error('Phiếu phải ở trạng thái draft để nộp');
 
     const updatePayload = {

@@ -20,8 +20,8 @@ import { cloudinarySmall } from '../../lib/cloudinaryUrl';
 import { getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
 import type { Customer, DeliveryOrder, ImportOrder } from '../../types';
 
-const CUSTOMER_ORDER_CREATE_PATH = '/tai-khoan/don-hang/tao-don';
-const GROCERY_RECEIVER_RETURN_CREATE_PATH = '/don-hang-cua-toi/tao-don-doi-tra';
+const CUSTOMER_ORDER_CREATE_PATH = '/app/tai-khoan/don-hang/tao-don';
+const GROCERY_RECEIVER_RETURN_CREATE_PATH = '/app/don-hang-cua-toi/tao-don-doi-tra';
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getCurrentTime = () => new Date().toTimeString().slice(0, 5);

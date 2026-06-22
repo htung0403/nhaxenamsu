@@ -24,7 +24,7 @@ const ApprovalsPage = () => {
       <PageHeader
         title="Duyệt đơn"
         description="Quản lý và xét duyệt các yêu cầu từ nhân viên"
-        backPath="/hanh-chinh-nhan-su"
+        backPath="/app/hanh-chinh-nhan-su"
       />
 
       <div className="bg-card rounded-2xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden mt-4">

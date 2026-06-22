@@ -122,9 +122,9 @@ function getScheduleRoleAliases(roleKey?: string | null): string[] {
 }
 
 const ALLOWED_PATHS_BEFORE_CHECKIN = new Set([
-  '/hanh-chinh-nhan-su',
-  '/hanh-chinh-nhan-su/cham-cong',
-  '/ho-so',
+  '/app/hanh-chinh-nhan-su',
+  '/app/hanh-chinh-nhan-su/cham-cong',
+  '/app/ho-so',
 ]);
 
 export function useAttendanceGate() {
@@ -176,6 +176,6 @@ export function useAttendanceGate() {
 export function isPathAllowedBeforeCheckin(path: string): boolean {
   if (path === '/') return true;
   if (ALLOWED_PATHS_BEFORE_CHECKIN.has(path)) return true;
-  if (path.startsWith('/ho-so/')) return true;
+  if (path.startsWith('/app/ho-so/')) return true;
   return false;
 }

@@ -167,14 +167,14 @@ const CustomerDetailPage: React.FC = () => {
   };
 
   if (isLoadingCustomer) return <div className="p-6"><LoadingSkeleton rows={5} /></div>;
-  if (isErrorCustomer || !customer) return <ErrorState onRetry={() => navigate('/khach-hang')} />;
+  if (isErrorCustomer || !customer) return <ErrorState onRetry={() => navigate('/app/khach-hang')} />;
 
   const getBackPath = () => {
     const segments = location.pathname.split('/').filter(Boolean);
     if (segments.length > 1) {
       return `/${segments.slice(0, segments.length - 1).join('/')}`;
     }
-    return '/khach-hang';
+    return '/app/khach-hang';
   };
   const backPath = getBackPath();
 

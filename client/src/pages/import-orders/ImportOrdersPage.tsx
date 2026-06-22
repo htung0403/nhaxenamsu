@@ -308,7 +308,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
         <PageHeader
           title={isConfirmationPage ? 'Xác nhận hàng gửi' : isReturnToSgPage ? 'Hàng gửi SG' : 'Nhập hàng'}
           description={isConfirmationPage ? 'Xác nhận đơn tạp hóa khách hàng tự gửi trước khi vào danh sách nhập hàng chính thức' : isReturnToSgPage ? 'Theo dõi các đơn trả hàng do khách nhận tạp hóa tạo' : 'Quản lý danh sách đơn nhập hàng'}
-          backPath="/hang-hoa"
+          backPath="/app/hang-hoa"
           actions={!isConfirmationPage && !isReturnToSgPage ? (
             <button
               onClick={openAddDialog}

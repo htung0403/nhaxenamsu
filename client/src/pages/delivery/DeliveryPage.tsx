@@ -890,7 +890,7 @@ const DeliveryPage: React.FC = () => {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
-        <PageHeader title="Hàng cần giao" description="Danh sách đơn hàng cần giao" backPath="/hang-hoa" />
+        <PageHeader title="Hàng cần giao" description="Danh sách đơn hàng cần giao" backPath="/app/hang-hoa" />
       </div>
 
       <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2.5 md:mb-6 mb-3 overflow-x-auto custom-scrollbar">
@@ -1007,7 +1007,7 @@ const DeliveryPage: React.FC = () => {
         {/* ACTIONS */}
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => navigate(`/hang-hoa/in-phieu-giao?dateFrom=${startDate}&dateTo=${endDate}`)}
+            onClick={() => navigate(`/app/hang-hoa/in-phieu-giao?dateFrom=${startDate}&dateTo=${endDate}`)}
             className="flex items-center gap-2 justify-center h-9.5 px-3 shrink-0 border border-primary/20 rounded-xl transition-all bg-primary/10 text-primary hover:bg-primary/20 font-bold text-[13px]"
             title="In phiếu nhập hàng tạp hóa"
           >

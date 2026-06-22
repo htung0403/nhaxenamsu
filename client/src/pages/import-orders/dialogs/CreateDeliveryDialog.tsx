@@ -113,7 +113,7 @@ const CreateDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, importOrder,
         delivery_time: delivery_time || undefined,
       });
       onClose();
-      navigate('/hang-hoa/giao-hang');
+      navigate('/app/hang-hoa/giao-hang');
     } catch {
       // Error handled by mutation
     }

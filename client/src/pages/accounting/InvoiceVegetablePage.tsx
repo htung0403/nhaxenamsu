@@ -6,7 +6,7 @@ const InvoiceVegetablePage: React.FC = () => (
     category="vegetable"
     title="Hóa đơn rau"
     description="Quản lý xuất hóa đơn cho đơn hàng rau."
-    backPath="/ke-toan"
+    backPath="/app/ke-toan"
   />
 );
 

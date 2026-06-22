@@ -131,7 +131,7 @@ const RolePermissionsPage: React.FC = () => {
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
-      <PageHeader title="Phân quyền" description="Tạo quyền và cấp quyền truy cập + thao tác theo từng trang trong hệ thống" backPath="/hanh-chinh-nhan-su" />
+      <PageHeader title="Phân quyền" description="Tạo quyền và cấp quyền truy cập + thao tác theo từng trang trong hệ thống" backPath="/app/hanh-chinh-nhan-su" />
 
       {rolesLoading ? (
         <div className="bg-white rounded-2xl border border-border shadow-sm p-4 flex-1">

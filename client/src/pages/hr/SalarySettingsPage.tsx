@@ -81,7 +81,7 @@ const SalarySettingsPage: React.FC = () => {
         <PageHeader
           title="Quản lý cấp bậc & Lương"
           description="Cấu hình các vai trò trong hệ thống và mức lương tương ứng"
-          backPath="/hanh-chinh-nhan-su"
+          backPath="/app/hanh-chinh-nhan-su"
           actions={
             <button
               onClick={() => handleOpenDialog()}

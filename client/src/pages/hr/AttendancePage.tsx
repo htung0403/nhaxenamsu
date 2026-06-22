@@ -186,7 +186,7 @@ const AttendancePage: React.FC = () => {
         <PageHeader
           title="Chấm công"
           description="Quản lý lịch làm việc và giờ giấc nhân viên"
-          backPath="/hanh-chinh-nhan-su"
+          backPath="/app/hanh-chinh-nhan-su"
           actions={
             <div className="flex items-center gap-3">
               <div className="flex items-center bg-card border border-border/80 rounded-xl overflow-hidden shadow-sm">
