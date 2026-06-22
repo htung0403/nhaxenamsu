@@ -141,6 +141,7 @@ export class HRService {
       supabaseService.from('payroll').update({ created_by: null }).eq('created_by', id),
       supabaseService.from('payroll').update({ approved_by: null }).eq('approved_by', id),
       supabaseService.from('receipts').update({ created_by: null }).eq('created_by', id),
+      supabaseService.from('customer_debt_ledger').update({ created_by: null }).eq('created_by', id),
     ];
 
     await Promise.all(nullifyTasks);
