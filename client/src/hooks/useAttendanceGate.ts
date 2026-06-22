@@ -122,6 +122,7 @@ function getScheduleRoleAliases(roleKey?: string | null): string[] {
 }
 
 const ALLOWED_PATHS_BEFORE_CHECKIN = new Set([
+  '/app',
   '/app/hanh-chinh-nhan-su',
   '/app/hanh-chinh-nhan-su/cham-cong',
   '/app/ho-so',
