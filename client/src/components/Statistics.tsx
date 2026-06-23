@@ -43,14 +43,14 @@ export function Statistics() {
       <motion.img style={{ y: imageY }} src="https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?auto=format&fit=crop&w=1800&q=88" alt="Hoạt động kho vận và vận chuyển hàng hóa" className="absolute inset-0 h-[120%] w-full object-cover" />
       <div className="absolute inset-0 bg-[#071A3D]/88 mix-blend-multiply" />
       <div className="relative mx-auto max-w-7xl">
-        <span className="rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-black text-red-100">Năng lực vận hành</span>
+        <span className="rounded-full bg-red-600 px-4 py-2 text-sm font-black text-white shadow-[0_10px_24px_rgba(230,57,70,0.28)]">Năng lực vận hành</span>
         <h2 className="font-headline mt-5 max-w-5xl text-4xl font-black tracking-[-0.045em] text-white md:text-6xl">Đều đặn, rõ ràng và đáng tin cậy</h2>
         <p className="text-pretty mt-5 max-w-3xl text-lg leading-8 text-slate-300 md:text-xl">Nhà xe Năm Sự phục vụ nhu cầu vận chuyển hằng ngày cho cửa hàng, gia đình và người gửi hàng địa phương.</p>
         <div className="mt-10 grid grid-cols-2 gap-3 md:mt-12 md:grid-cols-4 md:gap-4">
-          {stats.map((stat) => (
-            <div key={stat.label} className="rounded-[1.5rem] border border-white/15 bg-white/12 p-4 text-white shadow-2xl shadow-black/10 backdrop-blur-md md:rounded-[2rem] md:p-6">
-              <div className="font-headline tabular-nums text-4xl font-black tracking-tight sm:text-5xl md:text-6xl"><Counter value={stat.value} suffix={stat.suffix} /></div>
-              <p className="mt-3 text-sm font-bold leading-snug text-slate-300 sm:text-base md:mt-4">{stat.label}</p>
+          {stats.map((stat, index) => (
+            <div key={stat.label} className={`rounded-[1.5rem] border p-4 text-white shadow-2xl shadow-black/10 backdrop-blur-md md:rounded-[2rem] md:p-6 ${index === 0 ? 'border-red-500/70 bg-red-600/20 shadow-red-950/20' : 'border-white/15 bg-white/12'}`}>
+              <div className="tabular-nums text-4xl font-black tracking-[-0.04em] text-white sm:text-5xl md:text-6xl"><Counter value={stat.value} suffix={stat.suffix} /></div>
+              <p className="mt-3 text-sm font-semibold leading-snug text-white/70 sm:text-base md:mt-4">{stat.label}</p>
             </div>
           ))}
         </div>

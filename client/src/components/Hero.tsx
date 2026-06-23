@@ -1,9 +1,8 @@
 import { motion, type Variants } from 'framer-motion';
-import { MessageCircle, Phone, Truck } from 'lucide-react';
+import { Clock3, Handshake, MapPin, MessageCircle, PackageCheck, Phone, Search, Truck } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { gsap } from 'gsap';
 import { phoneHref, zaloHref } from '../data/site';
-import logoUrl from '../assets/logo-remove-bg.png';
 
 const heroStagger: Variants = {
   hidden: {},
@@ -14,6 +13,12 @@ const heroItem: Variants = {
   hidden: { opacity: 0, y: 34 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: [0.22, 1, 0.36, 1] } },
 };
+
+const trustBadges = [
+  { label: 'Nhận hàng mỗi ngày', icon: Clock3 },
+  { label: 'Giao nhận linh hoạt', icon: Handshake },
+  { label: 'Hỗ trợ bốc xếp', icon: PackageCheck },
+];
 
 export function Hero() {
   const routeRef = useRef<HTMLDivElement>(null);
@@ -31,75 +36,80 @@ export function Hero() {
   }, []);
 
   return (
-    <section id="home" className="logistics-grid relative min-h-screen overflow-hidden bg-[#F8FAFC] px-4 pb-24 pt-32 md:pb-32 md:pt-40">
-      <motion.div className="absolute left-1/2 top-0 h-[42rem] w-[42rem] -translate-x-1/2 rounded-full bg-[#E11D2E]/12 blur-3xl" animate={{ scale: [1, 1.15, 1], opacity: [0.55, 0.8, 0.55] }} transition={{ duration: 7, repeat: Infinity, ease: 'easeInOut' }} />
-      <div className="absolute inset-0 bg-[linear-gradient(115deg,rgba(255,255,255,0.86),rgba(255,255,255,0.55)_44%,rgba(225,29,46,0.08))]" />
+    <section id="home" className="relative min-h-[100svh] overflow-hidden bg-[#0a1432] px-4 pb-14 pt-24 text-white md:pb-20 md:pt-28">
+      <div className="absolute inset-0 bg-[url('https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=2200&q=88')] bg-cover bg-center bg-no-repeat" />
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(10,20,50,0.75),rgba(10,20,50,0.5))]" />
+      <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-[#0a1432] to-transparent" />
 
-      <div className="relative mx-auto grid max-w-7xl items-center gap-12 lg:grid-cols-[0.95fr_1.05fr]">
-        <motion.div initial="hidden" animate="visible" variants={heroStagger}>
-          <motion.span variants={heroItem} className="inline-flex rounded-full border border-[#E11D2E]/15 bg-white/85 px-5 py-2 text-sm font-black text-[#E11D2E] shadow-lg shadow-red-950/[0.04] backdrop-blur">
+      <motion.div className="relative mx-auto flex min-h-[calc(100svh-7rem)] max-w-7xl items-center" initial="hidden" animate="visible" variants={heroStagger}>
+        <div className="w-full max-w-5xl py-8 md:py-10">
+          <motion.span variants={heroItem} className="inline-flex rounded-full border border-white/20 bg-white/10 px-5 py-2 text-sm font-black text-white shadow-2xl shadow-black/15 backdrop-blur-md">
             Tuyến cố định mỗi ngày
           </motion.span>
-          <motion.div variants={heroItem} className="mt-7">
-            <img
-              src={logoUrl}
-              alt="Nhà xe Năm Sự"
-              className="h-auto w-full max-w-[520px] object-contain md:max-w-[680px]"
-            />
-          </motion.div>
-          <motion.h2 variants={heroItem} className="font-headline mt-4 max-w-5xl text-4xl font-black tracking-[-0.045em] text-[#E11D2E] drop-shadow-sm md:text-6xl">
+
+          <motion.h2 variants={heroItem} className="font-headline mt-6 max-w-5xl text-5xl font-black leading-[0.95] tracking-[-0.055em] text-white drop-shadow-2xl sm:text-6xl md:text-8xl">
             Đức Trọng ↔ TP.HCM
           </motion.h2>
-          <motion.p variants={heroItem} className="text-pretty mt-6 max-w-2xl text-lg font-medium leading-8 text-slate-600 md:text-xl md:leading-9">
+
+          <motion.p variants={heroItem} className="text-pretty mt-6 max-w-2xl text-lg font-semibold leading-8 text-white/85 drop-shadow md:text-2xl md:leading-10">
             Nhận hàng tạp hóa, hàng lẻ, hàng ghép, hàng cồng kềnh. Cam kết uy tín – đúng giờ – tận tâm.
           </motion.p>
-          <motion.div variants={heroItem} className="mt-9 flex flex-col gap-4 sm:flex-row">
-            <motion.a href={phoneHref} aria-label="Gọi ngay Nhà xe Năm Sự" className="inline-flex items-center justify-center gap-3 rounded-full bg-[#E11D2E] px-8 py-4 font-black text-white shadow-2xl shadow-red-600/30 ring-1 ring-red-400/30 transition hover:bg-red-700" whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.98 }}>
-              <Phone className="h-5 w-5" /> Gọi ngay
+
+          <motion.div variants={heroItem} className="mt-8 max-w-4xl rounded-[2rem] border border-white/18 bg-white/12 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl md:rounded-full md:p-4">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr_auto] md:items-center">
+              <div className="flex min-w-0 items-center gap-3 rounded-[1.5rem] bg-white px-4 py-4 text-[#1a2f5e] shadow-xl shadow-black/10 md:rounded-full md:px-5">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#1a2f5e] text-white">
+                  <MapPin className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-black uppercase tracking-[0.18em] text-[#e63946]">Nhận hàng</span>
+                  <strong className="block truncate text-base font-black md:text-lg">Đức Trọng, Lâm Đồng</strong>
+                </span>
+              </div>
+
+              <div className="relative hidden h-2 w-24 rounded-full bg-white/20 md:block">
+                <div ref={routeRef} className="absolute inset-y-0 left-0 w-full origin-left rounded-full bg-gradient-to-r from-white via-white/80 to-white" />
+                <div ref={dotRef} className="route-pulse absolute left-[18%] top-1/2 z-10 grid h-10 w-10 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-[#1a2f5e] ring-4 ring-white/30">
+                  <Truck className="h-5 w-5" />
+                </div>
+              </div>
+
+              <div className="flex min-w-0 items-center gap-3 rounded-[1.5rem] bg-white px-4 py-4 text-[#1a2f5e] shadow-xl shadow-black/10 md:rounded-full md:px-5">
+                <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#e63946] text-white">
+                  <MapPin className="h-5 w-5" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-xs font-black uppercase tracking-[0.18em] text-[#e63946]">Giao hàng</span>
+                  <strong className="block truncate text-base font-black md:text-lg">TP.HCM</strong>
+                </span>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 rounded-[1.5rem] bg-[#1a2f5e] px-5 py-4 text-base font-black text-white shadow-2xl shadow-blue-950/35 md:rounded-full md:px-7">
+                <Search className="h-5 w-5" />
+                Tuyến vận chuyển
+              </div>
+            </div>
+          </motion.div>
+
+          <motion.div variants={heroItem} className="mt-7 flex flex-col gap-4 sm:flex-row">
+            <motion.a href={phoneHref} aria-label="Gọi ngay Nhà xe Năm Sự" className="inline-flex items-center justify-center gap-3 rounded-full bg-[#e63946] px-9 py-5 text-lg font-black text-white shadow-2xl shadow-red-950/40 ring-1 ring-white/20 transition hover:bg-red-600" whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.98 }}>
+              <Phone className="h-6 w-6" /> Gọi ngay
             </motion.a>
-            <motion.a href={zaloHref} aria-label="Nhắn Zalo báo giá Nhà xe Năm Sự" className="inline-flex items-center justify-center gap-3 rounded-full border border-[#071A3D]/10 bg-white px-8 py-4 font-black text-[#071A3D] shadow-xl shadow-blue-950/[0.08] transition hover:border-[#071A3D] hover:bg-[#071A3D] hover:text-white" whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.98 }}>
-              <MessageCircle className="h-5 w-5" /> Nhắn Zalo báo giá
+            <motion.a href={zaloHref} aria-label="Nhắn Zalo báo giá Nhà xe Năm Sự" className="inline-flex items-center justify-center gap-3 rounded-full border border-white/25 bg-white px-9 py-5 text-lg font-black text-[#1a2f5e] shadow-2xl shadow-black/20 transition hover:bg-[#1a2f5e] hover:text-white" whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.98 }}>
+              <MessageCircle className="h-6 w-6" /> Nhắn Zalo báo giá
             </motion.a>
           </motion.div>
+
           <motion.div variants={heroItem} className="mt-7 grid gap-3 sm:grid-cols-3">
-            {['Nhận hàng mỗi ngày', 'Giao nhận linh hoạt', 'Hỗ trợ bốc xếp'].map((item) => (
-              <div key={item} className="cargo-card rounded-2xl border border-white/80 bg-white/85 px-4 py-3 text-sm font-black text-[#071A3D] backdrop-blur">
-                {item}
+            {trustBadges.map(({ label, icon: Icon }) => (
+              <div key={label} className="inline-flex items-center justify-center gap-2 rounded-full border border-white/25 bg-white/10 px-5 py-3 text-center text-sm font-black text-white shadow-xl shadow-black/15 backdrop-blur-md">
+                <Icon className="h-4 w-4 shrink-0 text-white" />
+                {label}
               </div>
             ))}
           </motion.div>
-        </motion.div>
-
-        <motion.div className="relative" initial={{ opacity: 0, y: 34 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.9, delay: 0.35 }}>
-          <div className="absolute inset-0 rounded-[3rem] bg-gradient-to-br from-red-500/16 via-white to-blue-900/16 blur-2xl" />
-          <div className="cargo-card relative overflow-hidden rounded-[3rem] border border-white/90 bg-white/82 p-5 shadow-2xl shadow-blue-950/[0.12] backdrop-blur-xl md:p-8">
-            <div className="flex items-center justify-between gap-4">
-              {['Đức Trọng, Lâm Đồng', 'TP.HCM'].map((place) => (
-                <div key={place} className="relative z-20 min-w-0 flex-1 rounded-[2rem] border border-[#071A3D]/10 bg-white p-4 text-center shadow-xl shadow-blue-950/[0.08] md:p-6">
-                  <span className="mx-auto mb-3 grid h-11 w-11 place-items-center rounded-full bg-[#071A3D] text-white ring-8 ring-blue-50">●</span>
-                  <strong className="text-sm font-black leading-tight text-[#071A3D] sm:text-base md:text-xl">{place}</strong>
-                </div>
-              ))}
-            </div>
-
-            <div className="relative mx-auto my-10 h-20 max-w-xl">
-              <div className="absolute left-[18%] right-[18%] top-1/2 h-2 -translate-y-1/2 rounded-full bg-slate-200" />
-              <div ref={routeRef} className="absolute left-[18%] right-[18%] top-1/2 h-2 -translate-y-1/2 rounded-full bg-gradient-to-r from-[#E11D2E] via-[#071A3D] to-[#22C55E] origin-left" />
-              <div ref={dotRef} className="route-pulse absolute left-[18%] top-1/2 z-20 grid h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-white text-[#071A3D] shadow-[0_14px_35px_rgba(7,26,61,0.2)] ring-4 ring-white">
-                <Truck className="h-6 w-6" />
-              </div>
-            </div>
-
-            <img src="https://images.unsplash.com/photo-1601584115197-04ecc0da31d7?auto=format&fit=crop&w=1400&q=88" alt="Xe tải vận chuyển hàng hóa Nhà xe Năm Sự" className="h-64 w-full rounded-[2rem] object-cover shadow-2xl shadow-blue-950/15 saturate-110 md:h-80" />
-          </div>
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </section>
   );
 }
-
-
-
-
-
-

@@ -35,23 +35,23 @@ export function Navbar() {
 
   return (
     <motion.header
-      className="fixed left-0 right-0 top-0 z-50 px-4 pt-4"
+      className="fixed left-0 right-0 top-0 z-50 border-b border-white/10 bg-[#0a1432]/35 px-4 backdrop-blur-xl"
       initial={{ opacity: 0, y: -24 }}
       animate={{ opacity: 1, y: hidden ? -96 : 0 }}
       transition={{ duration: 0.35, ease: 'easeOut' }}
     >
-      <nav className="cargo-card mx-auto flex max-w-7xl items-center justify-between rounded-full border border-white/80 bg-white/88 px-4 py-3 shadow-2xl shadow-blue-950/[0.08] backdrop-blur-2xl md:px-6">
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-0 py-3 md:px-0">
         <a href="#home" onClick={handleAnchorClick('#home')} className="flex items-center gap-3" aria-label="Về trang chủ Nhà xe Năm Sự">
           <img src={logoUrl} alt="Logo Nhà xe Năm Sự" className="h-12 w-12 rounded-full bg-white object-contain p-1 ring-4 ring-red-50" />
           <span className="leading-tight">
-            <span className="font-headline block font-black tracking-tight text-[#071A3D]">Nhà xe Năm Sự</span>
-            <span className="hidden text-xs font-bold text-slate-500 sm:block">Đức Trọng ↔ TP.HCM</span>
+            <span className="font-headline block font-black tracking-tight text-white">Nhà xe Năm Sự</span>
+            <span className="hidden text-xs font-bold text-white/70 sm:block">Đức Trọng ↔ TP.HCM</span>
           </span>
         </a>
 
         <div className="hidden items-center gap-8 lg:flex">
           {navItems.map((item) => (
-            <a key={item.href} href={item.href} onClick={handleAnchorClick(item.href)} className="group relative text-sm font-bold text-slate-600 transition hover:text-[#E11D2E]">
+            <a key={item.href} href={item.href} onClick={handleAnchorClick(item.href)} className="group relative text-sm font-bold text-white/78 transition hover:text-white">
               {item.label}
               <span className="absolute -bottom-2 left-0 h-0.5 w-0 rounded-full bg-[#E11D2E] transition-all duration-300 group-hover:w-full" />
             </a>
@@ -62,7 +62,7 @@ export function Navbar() {
           <motion.a
             href="/login"
             aria-label="Đăng nhập hệ thống Nhà xe Năm Sự"
-            className="hidden items-center gap-2 rounded-full border border-[#071A3D]/10 bg-white px-5 py-3 text-sm font-black text-[#071A3D] shadow-lg shadow-blue-950/[0.06] transition hover:border-[#071A3D] hover:bg-[#071A3D] hover:text-white md:inline-flex"
+            className="hidden items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-black text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-white hover:text-[#1a2f5e] md:inline-flex"
             whileHover={{ scale: 1.04 }}
             whileTap={{ scale: 0.98 }}
           >
@@ -70,7 +70,7 @@ export function Navbar() {
             Đăng nhập
           </motion.a>
 
-          <button type="button" onClick={() => setIsOpen((value) => !value)} className="rounded-full border border-[#071A3D]/10 bg-white p-3 text-[#071A3D] shadow-lg shadow-blue-950/[0.06] lg:hidden" aria-label="Mở menu điều hướng">
+          <button type="button" onClick={() => setIsOpen((value) => !value)} className="rounded-full border border-white/20 bg-white/10 p-3 text-white shadow-lg shadow-black/10 backdrop-blur lg:hidden" aria-label="Mở menu điều hướng">
             {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
@@ -91,6 +91,7 @@ export function Navbar() {
     </motion.header>
   );
 }
+
 
 
 
