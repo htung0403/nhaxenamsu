@@ -55,8 +55,8 @@ export function Hero() {
             Nhận hàng tạp hóa, hàng lẻ, hàng ghép, hàng cồng kềnh. Cam kết uy tín – đúng giờ – tận tâm.
           </motion.p>
 
-          <motion.div variants={heroItem} className="mt-8 max-w-4xl rounded-[2rem] border border-white/18 bg-white/12 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl md:rounded-full md:p-4">
-            <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr_auto] md:items-center">
+          <motion.div variants={heroItem} className="mt-8 max-w-6xl rounded-[2rem] border border-white/18 bg-white/12 p-3 shadow-2xl shadow-black/30 backdrop-blur-xl md:rounded-full md:p-4">
+            <div className="grid gap-3 md:grid-cols-[minmax(0,1.15fr)_auto_minmax(0,1fr)_auto] md:items-center">
               <div className="flex min-w-0 items-center gap-3 rounded-[1.5rem] bg-white px-4 py-4 text-[#1a2f5e] shadow-xl shadow-black/10 md:rounded-full md:px-5">
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#1a2f5e] text-white">
                   <MapPin className="h-5 w-5" />
@@ -84,7 +84,7 @@ export function Hero() {
                 </span>
               </div>
 
-              <div className="flex items-center justify-center gap-2 rounded-[1.5rem] bg-[#1a2f5e] px-5 py-4 text-base font-black text-white shadow-2xl shadow-blue-950/35 md:rounded-full md:px-7">
+              <div className="flex items-center justify-center gap-2 whitespace-nowrap rounded-[1.5rem] bg-[#1a2f5e] px-5 py-4 text-base font-black text-white shadow-2xl shadow-blue-950/35 md:rounded-full md:px-8">
                 <Search className="h-5 w-5" />
                 Tuyến vận chuyển
               </div>

@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Bell, Clock, Calendar, CheckCheck, Trash2, ChevronRight,
   Info, AlertTriangle, CheckCircle2, Home, PanelLeft,
-  PanelLeftClose, User, Settings, LogOut, ChevronDown
+  PanelLeftClose, User, Settings, LogOut, ChevronDown, ExternalLink
 } from 'lucide-react';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
 import { sidebarMenu, extraMenuItems } from '../../data/sidebarMenu';
@@ -130,7 +130,7 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       path,
       label: getLabel(path)
     };
-  });
+  }).filter(crumb => crumb.path !== '/app');
 
   const pageTitle = breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1].label : 'Trang chủ';
 
@@ -277,6 +277,16 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
 
       {/* Right side: Clock, Notifications, User */}
       <div className="flex items-center gap-3 sm:gap-4">
+        <Link
+          to="/"
+          aria-label="Xem trang giới thiệu"
+          title="Xem trang giới thiệu"
+          className="flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2 py-1.5 text-[12px] font-semibold text-primary shadow-sm transition-colors hover:border-primary/30 hover:bg-primary/5"
+        >
+          <ExternalLink size={14} strokeWidth={2} />
+          <span className="hidden lg:inline">Xem trang giới thiệu</span>
+        </Link>
+
         {/* Clock & Date (Hidden on mobile) */}
         <div className="hidden md:flex items-center bg-card border border-border shadow-sm px-4 py-1.5 rounded-full gap-3 text-[13px]">
           <div className="flex items-center gap-2">

@@ -1,11 +1,15 @@
 import { motion } from 'framer-motion';
-import { LogIn, Menu, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, LayoutDashboard, LogIn, LogOut, Menu, User, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { navItems } from '../data/site';
 import logoUrl from '../assets/logo-remove-bg.png';
+import { useAuth } from '../context/AuthContext';
 
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+  const { isAuthenticated, isLoading, logout, user } = useAuth();
 
   const handleAnchorClick = (href: string) => (event: React.MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault();
@@ -31,6 +35,17 @@ export function Navbar() {
 
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   return (
@@ -59,16 +74,87 @@ export function Navbar() {
         </div>
 
         <div className="flex items-center gap-2">
-          <motion.a
-            href="/login"
-            aria-label="Đăng nhập hệ thống Nhà xe Năm Sự"
-            className="hidden items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-black text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-white hover:text-[#1a2f5e] md:inline-flex"
-            whileHover={{ scale: 1.04 }}
-            whileTap={{ scale: 0.98 }}
-          >
-            <LogIn className="h-4 w-4" />
-            Đăng nhập
-          </motion.a>
+          {!isLoading && isAuthenticated ? (
+            <div
+              ref={userMenuRef}
+              className="relative hidden md:block"
+              onMouseEnter={() => setShowUserMenu(true)}
+              onMouseLeave={() => setShowUserMenu(false)}
+              onFocus={() => setShowUserMenu(true)}
+              onBlur={(event) => {
+                if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+                  setShowUserMenu(false);
+                }
+              }}
+            >
+              <motion.button
+                type="button"
+                aria-label="Mở menu tài khoản"
+                aria-expanded={showUserMenu}
+                onClick={() => setShowUserMenu((value) => !value)}
+                className="group inline-flex items-center gap-3 rounded-full border border-emerald-300/40 bg-emerald-400/15 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-white hover:text-[#1a2f5e]"
+                whileHover={{ scale: 1.04 }}
+                whileTap={{ scale: 0.98 }}
+              >
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-400/20 text-emerald-200 ring-1 ring-emerald-200/30 transition group-hover:text-emerald-600">
+                  <CheckCircle2 className="h-4 w-4" />
+                </span>
+                <span className="flex flex-col text-left leading-tight">
+                  <span className="max-w-32 truncate">{user?.full_name || 'Quản trị viên'}</span>
+                  <span className="text-[11px] font-bold text-white/70 group-hover:text-[#1a2f5e]/70">
+                    Quản trị viên
+                  </span>
+                </span>
+                <ChevronDown className={`h-4 w-4 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+              </motion.button>
+
+              {showUserMenu ? (
+                <motion.div
+                  className="absolute right-0 top-full w-56 pt-3"
+                  initial={{ opacity: 0, y: -8, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  <div className="overflow-hidden rounded-3xl border border-white/70 bg-white p-2 text-[#071A3D] shadow-2xl shadow-black/20">
+                    <div className="px-3 py-2">
+                      <p className="text-xs font-bold uppercase tracking-wide text-emerald-600">Đang hoạt động</p>
+                      <p className="truncate text-sm font-black">{user?.full_name || 'Quản trị viên'}</p>
+                    </div>
+                    <a href="/app" className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition hover:bg-emerald-50 hover:text-emerald-700">
+                      <LayoutDashboard className="h-4 w-4" />
+                      Vào trang quản trị
+                    </a>
+                    <a href="/app/ho-so" className="flex items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-bold transition hover:bg-slate-100">
+                      <User className="h-4 w-4" />
+                      Hồ sơ của tôi
+                    </a>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setShowUserMenu(false);
+                        await logout();
+                      }}
+                      className="flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left text-sm font-bold text-red-600 transition hover:bg-red-50"
+                    >
+                      <LogOut className="h-4 w-4" />
+                      Đăng xuất
+                    </button>
+                  </div>
+                </motion.div>
+              ) : null}
+            </div>
+          ) : (
+            <motion.a
+              href="/login"
+              aria-label="Đăng nhập hệ thống Nhà xe Năm Sự"
+              className="hidden items-center gap-2 rounded-full border border-white/20 bg-white/10 px-5 py-3 text-sm font-black text-white shadow-lg shadow-black/10 backdrop-blur transition hover:bg-white hover:text-[#1a2f5e] md:inline-flex"
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.98 }}
+            >
+              <LogIn className="h-4 w-4" />
+              Đăng nhập
+            </motion.a>
+          )}
 
           <button type="button" onClick={() => setIsOpen((value) => !value)} className="rounded-full border border-white/20 bg-white/10 p-3 text-white shadow-lg shadow-black/10 backdrop-blur lg:hidden" aria-label="Mở menu điều hướng">
             {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
@@ -83,14 +169,22 @@ export function Navbar() {
               {item.label}
             </a>
           ))}
-          <a href="/login" className="rounded-2xl border border-slate-200 px-4 py-3 font-bold text-[#071A3D] hover:bg-slate-100">
-            Đăng nhập
-          </a>
+          {!isLoading && isAuthenticated ? (
+            <a href="/app" className="flex items-center justify-between rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 font-bold text-emerald-700 hover:bg-emerald-100">
+              <span>Đã đăng nhập</span>
+              <LayoutDashboard className="h-4 w-4" />
+            </a>
+          ) : (
+            <a href="/login" className="rounded-2xl border border-slate-200 px-4 py-3 font-bold text-[#071A3D] hover:bg-slate-100">
+              Đăng nhập
+            </a>
+          )}
         </motion.div>
       ) : null}
     </motion.header>
   );
 }
+
 
 
 
