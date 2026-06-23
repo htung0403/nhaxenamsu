@@ -14,17 +14,17 @@ const item: Variants = {
 
 export function Services() {
   return (
-    <section id="services" className="bg-white px-4 py-24 md:py-32">
+    <section id="services" className="bg-white px-4 py-28 md:py-40">
       <div className="mx-auto max-w-7xl">
-        <motion.div className="mb-12 max-w-3xl" initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={item}>
-          <span className="rounded-full border border-red-100 bg-red-50 px-4 py-2 text-sm font-black text-[#E11D2E]">Dịch vụ</span>
-          <h2 className="mt-5 text-4xl font-black tracking-[-0.04em] text-[#071A3D] md:text-6xl">Dịch vụ vận chuyển</h2>
-          <p className="mt-5 text-lg leading-8 text-slate-600 md:text-xl">Nhận vận chuyển đa dạng hàng hóa trên tuyến Đức Trọng ↔ TP.HCM.</p>
+        <motion.div className="mb-14 max-w-4xl" initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={item}>
+          <span className="rounded-full border border-[#E11D2E]/15 bg-red-50 px-4 py-2 text-sm font-black text-[#E11D2E]">Dịch vụ</span>
+          <h2 className="font-headline mt-5 text-4xl font-black tracking-[-0.045em] text-[#071A3D] md:text-6xl">Dịch vụ vận chuyển</h2>
+          <p className="text-pretty mt-5 max-w-2xl text-lg leading-8 text-slate-600 md:text-xl">Nhận vận chuyển đa dạng hàng hóa trên tuyến Đức Trọng ↔ TP.HCM.</p>
         </motion.div>
 
         <motion.div className="grid gap-5 md:grid-cols-2 lg:grid-cols-3" initial="hidden" whileInView="visible" viewport={{ once: true, margin: '-100px' }} variants={container}>
           {services.map(({ title, description, icon: Icon }) => (
-            <motion.article key={title} variants={item} whileHover={{ y: -8 }} className="group rounded-[2rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-950/[0.04] transition hover:shadow-2xl hover:shadow-red-950/[0.08]">
+            <motion.article key={title} variants={item} whileHover={{ y: -8 }} className="cargo-card group rounded-[2rem] border border-slate-200/80 bg-white p-6 transition hover:-translate-y-1 hover:border-[#E11D2E]/20 hover:shadow-2xl hover:shadow-red-950/[0.08]">
               <div className="mb-8 grid h-14 w-14 place-items-center rounded-2xl bg-[#071A3D] text-white transition duration-300 group-hover:-translate-y-1 group-hover:bg-[#E11D2E]">
                 <Icon className="h-7 w-7" />
               </div>

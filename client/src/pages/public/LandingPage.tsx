@@ -36,7 +36,7 @@ export default function LandingPage() {
   }, []);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-white text-slate-950 antialiased">
+    <div className="min-h-screen overflow-x-hidden bg-[#F8FAFC] text-slate-950 antialiased selection:bg-[#E11D2E] selection:text-white">
       <Navbar />
       <main>
         <Hero />

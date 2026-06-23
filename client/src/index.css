@@ -1,9 +1,9 @@
-@import url("https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&family=Be+Vietnam+Pro:wght@300;400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap");
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 
 :root {
-  --font-sans: 'Inter', 'Noto Sans', sans-serif;
+  --font-sans: 'Be Vietnam Pro', 'Noto Sans', sans-serif;
   --primary: #3EB489;
   --background: #f8fafc;
   --foreground: #0f172a;
@@ -257,13 +257,44 @@
   --color-v-error: #e26b4e;
   --color-v-inverse-on-surface: #c9cfc8;
 
-  --font-headline: 'Plus Jakarta Sans', sans-serif;
+  --font-headline: 'Space Grotesk', 'Be Vietnam Pro', sans-serif;
   --font-body: 'Be Vietnam Pro', sans-serif;
 
   --shadow-gentle: 0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 15px -3px rgba(0, 0, 0, 0.02);
 }
 
 @layer utilities {
+  .font-headline {
+    font-family: var(--font-headline);
+    text-wrap: balance;
+  }
+
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .logistics-grid {
+    background-image:
+      linear-gradient(rgba(7, 26, 61, 0.055) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(7, 26, 61, 0.055) 1px, transparent 1px),
+      radial-gradient(circle at 18% 12%, rgba(225, 29, 46, 0.1), transparent 28%),
+      radial-gradient(circle at 82% 8%, rgba(7, 26, 61, 0.08), transparent 24%);
+    background-size: 46px 46px, 46px 46px, auto, auto;
+  }
+
+  .route-pulse {
+    box-shadow: 0 0 0 0 rgba(225, 29, 46, 0.42), 0 0 34px rgba(225, 29, 46, 0.8);
+    animation: route-pulse 2.4s ease-out infinite;
+  }
+
+  .cargo-card {
+    box-shadow: 0 18px 55px -28px rgba(7, 26, 61, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.75);
+  }
+
   .pastel-gradient {
     background: linear-gradient(135deg, var(--color-v-primary) 0%, #77ee97 100%);
   }
@@ -274,6 +305,16 @@
 
   .dark .soft-overlay {
     background: linear-gradient(to bottom, rgba(15, 23, 42, 0.2), rgba(15, 23, 42, 0.5));
+  }
+}
+
+@keyframes route-pulse {
+  70% {
+    box-shadow: 0 0 0 18px rgba(225, 29, 46, 0), 0 0 34px rgba(225, 29, 46, 0.55);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(225, 29, 46, 0), 0 0 34px rgba(225, 29, 46, 0.8);
   }
 }
 /* Print styles for loyal customer invoice */
