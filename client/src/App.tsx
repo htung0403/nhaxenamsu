@@ -11,7 +11,6 @@ import CopyrightPage from './pages/CopyrightPage';
 import SettingsPage from './pages/SettingsPage';
 import ProfilePage from './pages/ProfilePage';
 import LoginPage from './pages/auth/LoginPage';
-import LandingPage from './pages/public/LandingPage';
 import ImportOrdersPage from './pages/import-orders/ImportOrdersPage';
 import ConfirmSenderImportOrdersPage from './pages/import-orders/ConfirmSenderImportOrdersPage';
 import ReturnToSgOrdersPage from './pages/import-orders/ReturnToSgOrdersPage';
@@ -115,7 +114,7 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Routes */}
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<Navigate to="/app" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/don-giao/:id" element={<DeliveryPublicPage />} />
       <Route path="/public/summary/:type/:id/:date/:token" element={<SummaryPublicPage />} />
