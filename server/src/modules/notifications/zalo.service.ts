@@ -618,6 +618,7 @@ export class ZaloService {
             productName: this.formatGroceryProductNameWithImportDate(delivery),
             price: dv.unit_price || delivery.unit_price || 0,
             total: dv.expected_amount || 0,
+            payment_status: dv.export_payment_status || 'unpaid',
             deliveryDate:
               dv.delivery_date ||
               delivery.delivery_date ||
@@ -907,6 +908,7 @@ export class ZaloService {
           productName: this.formatGroceryProductNameWithImportDate(order),
           price: dv.unit_price || order.unit_price || 0,
           total: dv.expected_amount || 0,
+          payment_status: dv.export_payment_status || 'unpaid',
         });
       }
 
@@ -1748,6 +1750,7 @@ export class ZaloService {
             productName: item.productName || item.product_name || '-',
             price: Number(item.price || 0),
             total: Number(item.total || 0),
+            payment_status: item.payment_status || item.paymentStatus || 'unpaid',
           })),
         });
 
@@ -2858,6 +2861,7 @@ export class ZaloService {
         productName: this.formatGroceryProductNameWithImportDate(order),
         price: unitPrice,
         total,
+        payment_status: dv.export_payment_status || 'unpaid',
       };
     });
 
