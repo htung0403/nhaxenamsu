@@ -427,7 +427,7 @@ export class DeliveryService {
     // Fetch existing assigned vehicle IDs for this delivery order to handle un-assignments
     const { data: existingDvs } = await supabaseService
       .from('delivery_vehicles')
-      .select('id, vehicle_id, assigned_quantity, driver_id, delivery_time, delivery_date, expected_amount')
+      .select('id, vehicle_id, assigned_quantity, driver_id, delivery_time, delivery_date, expected_amount, export_payment_status')
       .eq('delivery_order_id', deliveryId);
 
     const existingVids = (existingDvs || []).map((dv: any) => dv.vehicle_id).filter(Boolean);
@@ -444,6 +444,7 @@ export class DeliveryService {
         ed.vehicle_id === a.vehicle_id &&
         Number(ed.assigned_quantity) === Number(a.quantity) &&
         Number(ed.expected_amount || 0) === Number(a.expected_amount || 0) &&
+        (ed.export_payment_status || 'unpaid') === (a.export_payment_status || 'unpaid') &&
         ed.driver_id === a.driver_id &&
         ed.delivery_time === (a.delivery_time || delivery_time || null) &&
         ed.delivery_date === (a.delivery_date || delivery_date || null)

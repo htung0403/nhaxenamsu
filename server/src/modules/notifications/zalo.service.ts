@@ -571,7 +571,7 @@ export class ZaloService {
             id, receiver_phone, customer_id, customers:customers!vegetable_orders_customer_id_fkey (id, phone, name), selected_alias
           ),
           delivery_vehicles (
-            id, assigned_quantity, expected_amount, delivery_time, delivery_date, image_urls,
+            id, assigned_quantity, expected_amount, delivery_time, delivery_date, image_urls, export_payment_status,
             profiles (full_name),
             vehicles (license_plate)
           )
