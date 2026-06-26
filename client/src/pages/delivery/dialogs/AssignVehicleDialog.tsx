@@ -436,13 +436,18 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         ), { icon: '⚠️', duration: 3500 });
       }
 
+      const shouldRequirePaidExportAmount = !(
+        (order.order_category ?? 'standard') === 'standard' &&
+        order.import_orders?.payment_status === 'paid'
+      );
+
       for (let i = 0; i < data.assignments.length; i++) {
         const assignment = data.assignments[i];
         const finalQty = (assignmentBaselines[i] ?? 0) + (Number(assignment.quantity) || 0);
         const unitPrice = Number(assignment.unit_price) || 0;
         const orderValue = finalQty * unitPrice * 1000;
 
-        if (assignment.export_payment_status === 'paid' && (finalQty <= 0 || unitPrice <= 0 || orderValue <= 0)) {
+        if (shouldRequirePaidExportAmount && assignment.export_payment_status === 'paid' && (finalQty <= 0 || unitPrice <= 0 || orderValue <= 0)) {
           toast.error('Dòng đã TT cần nhập số lượng, đơn giá và có thành tiền.');
           return;
         }
@@ -477,6 +482,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
               : normalizedAmount > 0
                 ? normalizedAmount
                 : Number(assignment.expected_amount) || 0,
+            export_payment_status: srcImportPaid ? 'paid' : assignment.export_payment_status,
             delivery_date: assignment.delivery_date,
             delivery_time: assignment.delivery_time,
           };
@@ -864,7 +870,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                           <button
                             type="button"
                             onClick={() => {
-                              if (isRowDisabled) return;
+                              if (isRowDisabled || importPaid) return;
                               setValue(`assignments.${index}.export_payment_status` as AssignmentPaymentStatusPath, 'unpaid', { shouldValidate: true });
                             }}
                             className={clsx(
@@ -872,7 +878,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                               (watchAssignments[index]?.export_payment_status || 'paid') === 'unpaid'
                                 ? 'border-red-300 bg-red-50 text-red-700'
                                 : 'border-border bg-card text-muted-foreground hover:bg-muted/40',
-                              isRowDisabled && 'opacity-70 cursor-not-allowed'
+                              (isRowDisabled || importPaid) && 'opacity-70 cursor-not-allowed'
                             )}
                           >
                             Chưa TT
