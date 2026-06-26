@@ -3,12 +3,13 @@ import { createPortal } from 'react-dom';
 import { X, Truck, Package, User, AlertCircle, Trash2, CheckCircle, ImagePlus, Camera } from 'lucide-react';
 import { clsx } from 'clsx';
 import { useForm, useFieldArray, Controller, useWatch } from 'react-hook-form';
+import type { Resolver } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useAssignVehicle } from '../../../hooks/queries/useDelivery';
 import { useVehicles } from '../../../hooks/queries/useVehicles';
 import { useEmployees } from '../../../hooks/queries/useHR';
-import type { DeliveryOrder } from '../../../types';
+import type { DeliveryOrder, DeliveryVehicle } from '../../../types';
 import { SearchableSelect } from '../../../components/ui/SearchableSelect';
 import { useAuth } from '../../../context/AuthContext';
 import { uploadApi } from '../../../api/uploadApi';
@@ -43,6 +44,27 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 type FormValues = z.infer<typeof schema>;
+type AssignmentFormPath = `assignments.${number}.image_urls`;
+type AssignmentPaymentStatusPath = `assignments.${number}.export_payment_status`;
+type AssignmentFormValue = FormValues['assignments'][number];
+type DeliveryVehicleWithPricing = DeliveryVehicle & { unit_price?: number };
+type AssignmentPayload = Omit<AssignmentFormValue, 'delivery_date' | 'delivery_time'> & {
+  quantity: number;
+  driver_id: string;
+  unit_price: number;
+  expected_amount: number;
+  delivery_date?: string | null;
+  delivery_time?: string | null;
+};
+type AssignVehiclePayload = {
+  assignments: AssignmentPayload[];
+  unit_price: number;
+  delivered_at: string;
+  source_order_ids?: string[];
+  append_only?: boolean;
+  image_urls?: string[];
+  image_url?: string | null;
+};
 
 const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'vegetable') => {
   if (!vehicle.goods_categories || vehicle.goods_categories.length === 0) return true;
@@ -113,7 +135,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
     control,
     formState: { errors },
   } = useForm<FormValues>({
-    resolver: zodResolver(schema) as any,
+    resolver: zodResolver(schema) as Resolver<FormValues>,
     defaultValues: {
       assignments: [],
       image_urls: [],
@@ -201,8 +223,9 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         const currentUrls = getValues('image_urls') || [];
         setValue('image_urls', [...currentUrls, ...newUrls], { shouldValidate: true });
       } else {
-        const cur = (getValues(`assignments.${target}.image_urls` as any) || []) as string[];
-        setValue(`assignments.${target}.image_urls` as any, [...cur, ...newUrls], { shouldValidate: true });
+        const imagePath: AssignmentFormPath = `assignments.${target}.image_urls`;
+        const cur = getValues(imagePath) || [];
+        setValue(imagePath, [...cur, ...newUrls], { shouldValidate: true });
       }
       toast.success(`Đã tải lên ${newUrls.length} ảnh thành công!`);
     } catch (error) {
@@ -240,8 +263,8 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         }
       }
 
-      const existingDvs = order.delivery_vehicles || [];
-      const initialAssignments: any[] = [];
+      const existingDvs: DeliveryVehicleWithPricing[] = order.delivery_vehicles || [];
+      const initialAssignments: AssignmentFormValue[] = [];
       const baselines: number[] = [];
       const now = new Date();
 
@@ -256,7 +279,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
           baselines.push(0);
           initialAssignments.push({
             vehicle_id: initialVid,
-            driver_id: vehicle?.driver_id || vehicle?.in_charge_id || (isDriver ? myEmployeeId : ''),
+            driver_id: vehicle?.driver_id || vehicle?.in_charge_id || (isDriver ? myEmployeeId || '' : ''),
             loader_name: '',
             unit_price: defaultUnitPrice,
             quantity: 0,
@@ -269,7 +292,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         }
       } else {
         if (existingDvs.length > 0) {
-          existingDvs.forEach((dv: any) => {
+          existingDvs.forEach((dv) => {
             if (initialVid && dv.vehicle_id !== initialVid) return;
 
             const assignmentImages = Array.isArray(dv.image_urls)
@@ -278,7 +301,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
 
             baselines.push(0);
             initialAssignments.push({
-              vehicle_id: dv.vehicle_id,
+              vehicle_id: dv.vehicle_id || '',
               driver_id: dv.driver_id || '',
               loader_name: dv.loader_name || '',
               unit_price: Number(dv.unit_price || defaultUnitPrice || 0),
@@ -303,7 +326,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
           baselines.push(0);
           initialAssignments.push({
             vehicle_id: initialVid,
-            driver_id: vehicle?.driver_id || vehicle?.in_charge_id || (isDriver ? myEmployeeId : ''),
+            driver_id: vehicle?.driver_id || vehicle?.in_charge_id || (isDriver ? myEmployeeId || '' : ''),
             loader_name: '',
             unit_price: defaultUnitPrice,
             quantity: remainingForThis,
@@ -330,8 +353,8 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         });
       }
 
-      const existingImages = (order as any).image_urls || [];
-      const legacyImage = (order as any).image_url;
+      const existingImages = order.image_urls || [];
+      const legacyImage = order.image_url;
       const orderLevelImageUrls = Array.isArray(existingImages) ? [...existingImages] : [];
       if (legacyImage && !orderLevelImageUrls.includes(legacyImage)) {
         orderLevelImageUrls.push(legacyImage);
@@ -345,11 +368,11 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
        */
       let formGlobalImageUrls = [...orderLevelImageUrls];
       const rowsWithVehicle = initialAssignments.filter(
-        (a: any) => a.vehicle_id && String(a.vehicle_id).trim() !== '',
+        (a) => a.vehicle_id && String(a.vehicle_id).trim() !== '',
       );
       const hadStoredRowImages =
         existingDvs.length > 0 &&
-        existingDvs.some((dv: any) => Array.isArray(dv.image_urls) && dv.image_urls.length > 0);
+        existingDvs.some((dv) => Array.isArray(dv.image_urls) && dv.image_urls.length > 0);
 
       if (formGlobalImageUrls.length > 0 && rowsWithVehicle.length > 0 && !hadStoredRowImages) {
         if (rowsWithVehicle.length === 1) {
@@ -414,15 +437,19 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       }
 
       for (let i = 0; i < data.assignments.length; i++) {
-        const finalQty = (assignmentBaselines[i] ?? 0) + (Number(data.assignments[i].quantity) || 0);
-        if (finalQty <= 0) {
-          toast.error('Mỗi dòng xe cần có số lượng > 0.');
+        const assignment = data.assignments[i];
+        const finalQty = (assignmentBaselines[i] ?? 0) + (Number(assignment.quantity) || 0);
+        const unitPrice = Number(assignment.unit_price) || 0;
+        const orderValue = finalQty * unitPrice * 1000;
+
+        if (assignment.export_payment_status === 'paid' && (finalQty <= 0 || unitPrice <= 0 || orderValue <= 0)) {
+          toast.error('Dòng đã TT cần nhập số lượng, đơn giá và có thành tiền.');
           return;
         }
       }
 
-      const normalizedAssignments = data.assignments
-        .map((assignment, index) => {
+      const normalizedAssignments: AssignmentPayload[] = data.assignments
+        .map((assignment, index): AssignmentPayload => {
           const vehicle = eligibleVehicles.find((v) => v.id === assignment.vehicle_id);
           const resolvedDriverId =
             assignment.driver_id ||
@@ -474,10 +501,10 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       const finalAssignmentsToSubmit = [...normalizedAssignments];
 
       if (mode !== 'add-new' && initialVid) {
-        const hiddenAssignments = (order.delivery_vehicles || []).filter(
+        const hiddenAssignments = ((order.delivery_vehicles || []) as DeliveryVehicleWithPricing[]).filter(
           (dv) => dv.vehicle_id !== initialVid && (dv.assigned_quantity || 0) > 0
-        ).map((dv: any) => ({
-          vehicle_id: dv.vehicle_id,
+        ).map((dv): AssignmentPayload => ({
+          vehicle_id: dv.vehicle_id || '',
           driver_id: dv.driver_id || '',
           loader_name: dv.loader_name || '',
           unit_price: Number(dv.unit_price || order.unit_price || 0),
@@ -497,7 +524,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         return;
       }
 
-      const payload: any = {
+      const payload: AssignVehiclePayload = {
         assignments: finalAssignmentsToSubmit,
         unit_price: finalAssignmentsToSubmit[0]?.unit_price || 0,
         delivered_at: new Date().toISOString(),
@@ -619,7 +646,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
               {fields.map((field, index) => {
                 const currentVid = watchAssignments[index]?.vehicle_id;
                 const isPaid = currentVid
-                  ? (order?.payment_collections || []).some((pc: any) => pc.vehicle_id === currentVid && (pc.status === 'confirmed' || pc.status === 'self_confirmed'))
+                  ? (order?.payment_collections || []).some((pc) => pc.vehicle_id === currentVid && (pc.status === 'confirmed' || pc.status === 'self_confirmed'))
                   : false;
 
                 const isMyVehicleRow = currentVid === myVehicle?.id;
@@ -838,7 +865,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                             type="button"
                             onClick={() => {
                               if (isRowDisabled) return;
-                              setValue(`assignments.${index}.export_payment_status` as any, 'unpaid', { shouldValidate: true });
+                              setValue(`assignments.${index}.export_payment_status` as AssignmentPaymentStatusPath, 'unpaid', { shouldValidate: true });
                             }}
                             className={clsx(
                               'h-9 rounded-lg border text-[11px] font-bold transition-all',
@@ -854,7 +881,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
                             type="button"
                             onClick={() => {
                               if (isRowDisabled) return;
-                              setValue(`assignments.${index}.export_payment_status` as any, 'paid', { shouldValidate: true });
+                              setValue(`assignments.${index}.export_payment_status` as AssignmentPaymentStatusPath, 'paid', { shouldValidate: true });
                             }}
                             className={clsx(
                               'h-9 rounded-lg border text-[11px] font-bold transition-all',
