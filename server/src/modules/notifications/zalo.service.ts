@@ -2707,6 +2707,7 @@ export class ZaloService {
         delivery_date,
         delivery_time,
         expected_amount,
+        export_payment_status,
         profiles (full_name),
         vehicles (license_plate),
         delivery_orders!inner(
