@@ -286,7 +286,7 @@ export class DeliveryNoteGenerator {
     const width = 1000;
     const rowHeight = 40;
     const headerHeight = 160; // Shop name + Title + Customer + Date info
-    const height = headerHeight + (data.items.length + 1) * rowHeight + 20;
+    const height = headerHeight + (data.items.length + 2) * rowHeight + 20;
     const fontSize = 14;
 
     const escapeXml = (unsafe: string) => {
@@ -303,6 +303,9 @@ export class DeliveryNoteGenerator {
       customerName: escapeXml(data.customerName),
       deliveryDate: escapeXml(data.deliveryDate),
     };
+
+    const totalQuantity = data.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+    const totalAmount = data.items.reduce((sum, item) => sum + Number(item.total || 0), 0);
 
     let rowsSvg = '';
     data.items.forEach((item, i) => {
@@ -335,6 +338,26 @@ export class DeliveryNoteGenerator {
         </g>
       `;
     });
+
+    const totalY = headerHeight + (data.items.length + 1) * rowHeight;
+    rowsSvg += `
+      <g transform="translate(10, ${totalY})">
+        <rect x="0" y="0" width="340" height="${rowHeight}" fill="white" stroke="black" />
+        <text x="330" y="${rowHeight / 2 + 5}" font-family="'DejaVu Sans', sans-serif" font-size="${fontSize}" font-weight="bold" text-anchor="end">Tổng cộng</text>
+
+        <rect x="340" y="0" width="90" height="${rowHeight}" fill="white" stroke="black" />
+        <text x="385" y="${rowHeight / 2 + 5}" font-family="'DejaVu Sans', sans-serif" font-size="${fontSize}" font-weight="bold" text-anchor="middle">${totalQuantity.toLocaleString('vi-VN')}</text>
+
+        <rect x="430" y="0" width="190" height="${rowHeight}" fill="white" stroke="black" />
+
+        <rect x="620" y="0" width="120" height="${rowHeight}" fill="white" stroke="black" />
+
+        <rect x="740" y="0" width="120" height="${rowHeight}" fill="white" stroke="black" />
+        <text x="850" y="${rowHeight / 2 + 5}" font-family="'DejaVu Sans', sans-serif" font-size="${fontSize}" font-weight="bold" text-anchor="end">${totalAmount.toLocaleString('vi-VN')}</text>
+
+        <rect x="860" y="0" width="${width - 20 - 860}" height="${rowHeight}" fill="white" stroke="black" />
+      </g>
+    `;
 
     const svg = `
       <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
