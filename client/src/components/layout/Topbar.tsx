@@ -117,7 +117,10 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       'dang-giao': 'Đang giao',
       'chi-phi': 'Chi phí',
       'khach-hang-than-thiet': 'KH thân thiết',
-      'cai-dat-he-thong': 'Cài đặt hệ thống'
+      'cai-dat-he-thong': 'Cài đặt hệ thống',
+      'zalo-tong-ket-tap-hoa': 'Tổng kết Zalo tạp hóa',
+      'zalo-tong-ket-vua-rau': 'Tổng kết Zalo vựa rau',
+      'zalo-tong-ket-nguoi-gui-rau': 'Tổng kết Zalo người gửi rau'
     };
 
     const segment = path.split('/').pop() || '';

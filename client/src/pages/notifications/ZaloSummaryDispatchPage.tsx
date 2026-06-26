@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import PageHeader from '../../components/shared/PageHeader';
 import { DatePicker } from '../../components/shared/DatePicker';
 import { SearchInput } from '../../components/ui/SearchInput';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { zaloSummaryApi, type ZaloSummaryStatusItem, type ZaloSummaryType } from '../../api/zaloSummaryApi';
 import { matchesSearch } from '../../lib/str-utils';
 
@@ -49,10 +50,24 @@ const summaryTypeLabelMap: Record<ZaloSummaryType, string> = {
   sender: 'người gửi rau',
 };
 
+const statusFilterOptions = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'pending', label: 'Chưa gửi' },
+  { value: 'success', label: 'Đã gửi' },
+  { value: 'failed', label: 'Thất bại' },
+  { value: 'skipped', label: 'Bỏ qua' },
+];
+
+const errorFilterOptions = [
+  { value: 'all', label: 'Tất cả' },
+  { value: 'has_error', label: 'Có lỗi' },
+  { value: 'no_error', label: 'Không lỗi' },
+];
+
 const SummaryStatCard: React.FC<{ label: string; value: number; colorClass?: string }> = ({ label, value, colorClass }) => (
-  <div className={`rounded-xl border border-border/60 bg-card p-3 ${colorClass || ''}`}>
-    <div className="text-[11px] text-muted-foreground uppercase tracking-wide">{label}</div>
-    <div className="text-2xl font-black text-foreground tabular-nums mt-1">{value}</div>
+  <div className={`rounded-xl border border-border/60 bg-card px-3 py-2.5 shadow-sm shadow-black/[0.02] md:p-3 ${colorClass || ''}`}>
+    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-wide md:text-[11px]">{label}</div>
+    <div className="text-xl font-black leading-tight text-foreground tabular-nums mt-0.5 md:mt-1 md:text-2xl">{value}</div>
   </div>
 );
 
@@ -242,54 +257,52 @@ const ZaloSummaryDispatchPage: React.FC<Props> = ({ type, title, description, ba
         <p className="text-xs text-muted-foreground">{description}</p>
       </div>
 
-      <div className="rounded-2xl border border-border/60 bg-card p-4 mb-4">
-        <div className="flex flex-col md:flex-row md:items-end gap-3">
-          <label className="flex flex-col gap-1">
+      <div className="rounded-2xl border border-border/60 bg-card p-3 shadow-sm shadow-black/[0.02] mb-4 sm:p-4">
+        <div className="grid grid-cols-3 gap-2 md:flex md:items-end md:gap-3">
+          <label className="order-1 col-span-1 flex min-w-0 flex-col gap-1 md:order-none">
             <span className="text-[12px] font-semibold text-muted-foreground">Ngày tổng kết</span>
             <DatePicker
               value={date}
               onChange={setDate}
-              className="h-10 bg-white min-w-[160px]"
+              className="h-11 w-full bg-white text-xs md:h-10 md:min-w-[160px] md:text-sm"
             />
           </label>
-          <div className="flex flex-col gap-1 w-full md:max-w-[320px]">
+          <div className="order-3 col-span-3 flex w-full flex-col gap-1 md:order-none md:max-w-[320px]">
             <span className="text-[12px] font-semibold text-muted-foreground">Tìm kiếm khách hàng</span>
             <SearchInput
               placeholder="Tên/SĐT (hỗ trợ không dấu)..."
               onSearch={(query) => setSearchQuery(query)}
-              className="h-10 bg-white"
+              className="h-11 bg-white md:h-10"
             />
           </div>
-          <label className="flex flex-col gap-1 w-full md:w-[170px]">
-            <span className="text-[12px] font-semibold text-muted-foreground">Trạng thái</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-              className="h-10 px-3 rounded-xl border border-border bg-white text-[13px] text-foreground outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="all">Tất cả</option>
-              <option value="pending">Chưa gửi</option>
-              <option value="success">Đã gửi</option>
-              <option value="failed">Thất bại</option>
-              <option value="skipped">Bỏ qua</option>
-            </select>
-          </label>
-          <label className="flex flex-col gap-1 w-full md:w-[170px]">
-            <span className="text-[12px] font-semibold text-muted-foreground">Lỗi gửi</span>
-            <select
-              value={errorFilter}
-              onChange={(e) => setErrorFilter(e.target.value as typeof errorFilter)}
-              className="h-10 px-3 rounded-xl border border-border bg-white text-[13px] text-foreground outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="all">Tất cả</option>
-              <option value="has_error">Có lỗi</option>
-              <option value="no_error">Không lỗi</option>
-            </select>
-          </label>
+          <div className="order-2 col-span-2 grid grid-cols-2 gap-2 md:order-none md:flex md:gap-3">
+            <label className="flex min-w-0 flex-col gap-1 md:w-[170px]">
+              <span className="text-[12px] font-semibold text-muted-foreground">Trạng thái</span>
+              <SearchableSelect
+                options={statusFilterOptions}
+                value={statusFilter}
+                onValueChange={(value) => setStatusFilter((value || 'all') as typeof statusFilter)}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm trạng thái..."
+                className="h-11 min-w-0 bg-white px-2 text-xs md:h-10 md:px-3 md:text-[13px]"
+              />
+            </label>
+            <label className="flex min-w-0 flex-col gap-1 md:w-[170px]">
+              <span className="text-[12px] font-semibold text-muted-foreground">Lỗi gửi</span>
+              <SearchableSelect
+                options={errorFilterOptions}
+                value={errorFilter}
+                onValueChange={(value) => setErrorFilter((value || 'all') as typeof errorFilter)}
+                placeholder="Tất cả"
+                searchPlaceholder="Tìm lỗi gửi..."
+                className="h-11 min-w-0 bg-white px-2 text-xs md:h-10 md:px-3 md:text-[13px]"
+              />
+            </label>
+          </div>
           <button
             onClick={() => void refetch()}
             disabled={isFetching}
-            className="h-10 px-4 rounded-xl bg-primary text-white text-[13px] font-bold hover:bg-primary/90 transition inline-flex items-center gap-2 disabled:opacity-60"
+            className="order-4 col-span-3 h-11 w-full justify-center rounded-xl bg-primary px-4 text-[13px] font-bold text-white transition hover:bg-primary/90 disabled:opacity-60 inline-flex items-center gap-2 md:order-none md:h-10 md:w-auto"
           >
             <RefreshCw size={14} className={isFetching ? 'animate-spin' : ''} />
             Làm mới
@@ -307,7 +320,7 @@ const ZaloSummaryDispatchPage: React.FC<Props> = ({ type, title, description, ba
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
+          <div className="grid grid-cols-3 gap-2 mb-3 sm:gap-3 md:mb-4 md:grid-cols-5">
             <SummaryStatCard label="Tổng khách" value={stats.total} />
             <SummaryStatCard label="Đã gửi" value={stats.sent} colorClass="bg-emerald-50/70" />
             <SummaryStatCard label="Thất bại" value={stats.failed} colorClass="bg-red-50/70" />
@@ -315,22 +328,32 @@ const ZaloSummaryDispatchPage: React.FC<Props> = ({ type, title, description, ba
             <SummaryStatCard label="Chưa gửi" value={stats.pending} colorClass="bg-slate-50/70" />
           </div>
 
-          <div className="mb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+          <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div className="text-sm text-muted-foreground">
               Đã chọn <span className="font-black text-foreground">{selectedItems.length}</span> khách trong danh sách lọc.
             </div>
-            <div className="flex items-center gap-2">
+            <label className="flex h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-semibold text-foreground md:hidden">
+              <input
+                type="checkbox"
+                checked={allVisibleSelected}
+                disabled={sortedItems.length === 0 || isAnySending}
+                onChange={(e) => toggleSelectAllVisible(e.target.checked)}
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary/40"
+              />
+              Chọn tất cả đang hiển thị
+            </label>
+            <div className="grid grid-cols-2 gap-2 md:flex md:items-center">
               <button
                 onClick={() => setSelectedTargetIds([])}
                 disabled={selectedItems.length === 0 || isAnySending}
-                className="h-9 px-3 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold disabled:opacity-60"
+                className="h-10 px-3 rounded-lg border border-border bg-background hover:bg-muted text-xs font-semibold disabled:opacity-60 md:h-9"
               >
                 Bỏ chọn
               </button>
               <button
                 onClick={handleBulkSend}
                 disabled={selectedItems.length === 0 || isAnySending}
-                className="h-9 px-3 rounded-lg bg-primary text-white hover:bg-primary/90 text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-60"
+                className="h-10 justify-center px-3 rounded-lg bg-primary text-white hover:bg-primary/90 text-xs font-semibold inline-flex items-center gap-1 disabled:opacity-60 md:h-9"
               >
                 <SendHorizonal size={14} />
                 {bulkSendMutation.isPending ? 'Đang gửi hàng loạt' : 'Gửi đã chọn'}
@@ -338,7 +361,83 @@ const ZaloSummaryDispatchPage: React.FC<Props> = ({ type, title, description, ba
             </div>
           </div>
 
-          <div className="rounded-2xl border border-border/60 bg-card overflow-hidden min-h-0">
+          <div className="md:hidden space-y-3">
+            {sortedItems.length === 0 ? (
+              <div className="rounded-2xl border border-border/60 bg-card px-4 py-10 text-center text-sm text-muted-foreground">
+                Không có dữ liệu {summaryTypeLabelMap[type]} trong ngày đã chọn.
+              </div>
+            ) : (
+              sortedItems.map((item, index) => {
+                const isSending = sendMutation.isPending && sendMutation.variables?.targetId === item.targetId;
+                return (
+                  <article key={item.targetId} className="rounded-2xl border border-border/60 bg-card p-3 shadow-sm shadow-black/[0.03]">
+                    <div className="flex items-start gap-3">
+                      <input
+                        type="checkbox"
+                        checked={selectedIdSet.has(item.targetId)}
+                        disabled={isAnySending}
+                        onChange={(e) => toggleSelectOne(item.targetId, e.target.checked)}
+                        className="mt-1 h-5 w-5 rounded border-border text-primary focus:ring-primary/40"
+                        aria-label={`Chọn ${item.targetName}`}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">#{index + 1}</div>
+                            <h2 className="break-words text-base font-black leading-snug text-foreground">{item.targetName || '-'}</h2>
+                          </div>
+                          <span className={`shrink-0 inline-flex px-2 py-1 rounded-full border text-xs font-semibold ${statusClassMap[item.status]}`}>
+                            {statusLabelMap[item.status]}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                          <div className="rounded-xl bg-muted/40 p-2">
+                            <div className="font-semibold text-muted-foreground">SĐT</div>
+                            <div className="mt-1 font-bold text-foreground break-all">{item.targetPhone || '-'}</div>
+                          </div>
+                          <div className="rounded-xl bg-muted/40 p-2">
+                            <div className="font-semibold text-muted-foreground">Đơn / dòng</div>
+                            <div className="mt-1 font-bold text-foreground tabular-nums">{item.orderCount} / {item.itemRowCount}</div>
+                          </div>
+                          <div className="col-span-2 rounded-xl bg-muted/40 p-2">
+                            <div className="font-semibold text-muted-foreground">Lần gửi cuối</div>
+                            <div className="mt-1 text-foreground">{formatDateTime(item.lastSentAt)} • {item.triggeredBy ? triggerLabelMap[item.triggeredBy] : '-'}</div>
+                          </div>
+                          {item.lastError ? (
+                            <div className="col-span-2 rounded-xl bg-red-50 p-2 text-red-700">
+                              <div className="font-semibold">Lỗi gửi</div>
+                              <div className="mt-1 break-words">{item.lastError}</div>
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="mt-3 grid grid-cols-2 gap-2">
+                          <button
+                            onClick={() => window.open(item.publicLink, '_blank', 'noopener,noreferrer')}
+                            className="h-10 rounded-xl border border-border bg-background hover:bg-muted text-xs font-semibold inline-flex items-center justify-center gap-1"
+                          >
+                            <ExternalLink size={14} />
+                            Mở link
+                          </button>
+                          <button
+                            onClick={() => sendMutation.mutate(item)}
+                            disabled={isSending || bulkSendMutation.isPending}
+                            className="h-10 rounded-xl bg-primary text-white hover:bg-primary/90 text-xs font-semibold inline-flex items-center justify-center gap-1 disabled:opacity-60"
+                          >
+                            <SendHorizonal size={14} />
+                            {isSending ? 'Đang gửi' : 'Gửi lại'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </article>
+                );
+              })
+            )}
+          </div>
+
+          <div className="hidden rounded-2xl border border-border/60 bg-card overflow-hidden min-h-0 md:block">
             <div
               className="overflow-auto max-h-[calc(100vh-320px)] md:max-h-[calc(100vh-340px)] custom-scrollbar pb-3"
               style={{ scrollbarGutter: 'stable both-edges' }}
