@@ -444,11 +444,10 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       for (let i = 0; i < data.assignments.length; i++) {
         const assignment = data.assignments[i];
         const finalQty = (assignmentBaselines[i] ?? 0) + (Number(assignment.quantity) || 0);
-        const unitPrice = Number(assignment.unit_price) || 0;
-        const orderValue = finalQty * unitPrice * 1000;
+        const orderValue = Number(assignment.expected_amount) || 0;
 
-        if (shouldRequirePaidExportAmount && assignment.export_payment_status === 'paid' && (finalQty <= 0 || unitPrice <= 0 || orderValue <= 0)) {
-          toast.error('Dòng đã TT cần nhập số lượng, đơn giá và có thành tiền.');
+        if (shouldRequirePaidExportAmount && assignment.export_payment_status === 'paid' && (finalQty <= 0 || orderValue <= 0)) {
+          toast.error('Dòng đã TT cần nhập số lượng và thành tiền.');
           return;
         }
       }
