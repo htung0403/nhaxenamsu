@@ -32,7 +32,7 @@ const assignmentSchema = z.object({
   image_urls: z.array(z.string()).default([]),
   delivery_date: z.string().optional().nullable(),
   delivery_time: z.string().optional().nullable(),
-  export_payment_status: z.enum(['unpaid', 'paid']).default('paid'),
+  export_payment_status: z.enum(['unpaid', 'paid']).default('unpaid'),
 });
 
 const schema = z.object({
@@ -287,7 +287,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
             image_urls: [],
             delivery_date: format(now, 'yyyy-MM-dd'),
             delivery_time: format(now, 'HH:mm'),
-            export_payment_status: 'paid',
+            export_payment_status: 'unpaid',
           });
         }
       } else {
@@ -313,7 +313,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
               image_urls: assignmentImages,
               delivery_date: dv.delivery_date || format(now, 'yyyy-MM-dd'),
               delivery_time: dv.delivery_time || format(now, 'HH:mm'),
-              export_payment_status: dv.export_payment_status || 'paid',
+              export_payment_status: dv.export_payment_status || 'unpaid',
             });
           });
         }
@@ -334,7 +334,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
             image_urls: [],
             delivery_date: format(now, 'yyyy-MM-dd'),
             delivery_time: format(now, 'HH:mm'),
-            export_payment_status: 'paid',
+            export_payment_status: 'unpaid',
           });
         }
       }
@@ -518,7 +518,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
           image_urls: Array.isArray(dv.image_urls) ? dv.image_urls : [],
           delivery_date: dv.delivery_date,
           delivery_time: dv.delivery_time,
-          export_payment_status: dv.export_payment_status || 'paid',
+          export_payment_status: dv.export_payment_status || 'unpaid',
         }));
 
         finalAssignmentsToSubmit.push(...hiddenAssignments);

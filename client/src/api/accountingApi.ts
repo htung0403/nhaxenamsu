@@ -1,5 +1,39 @@
 import axiosClient from './axiosClient';
 
+export type VehicleDebtCustomerType = 'loyal' | 'grocery_non_loyal';
+
+export interface VehicleDebt {
+  id: string;
+  delivery_vehicle_id: string;
+  delivery_order_id: string;
+  order_id: string;
+  order_code: string;
+  order_date?: string | null;
+  delivery_date?: string | null;
+  delivery_time?: string | null;
+  assigned_at?: string | null;
+  customer: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    address?: string | null;
+    is_loyal?: boolean | null;
+  };
+  vehicle: {
+    id?: string | null;
+    license_plate?: string | null;
+  };
+  driver: {
+    id?: string | null;
+    full_name?: string | null;
+    phone?: string | null;
+  };
+  assigned_quantity: number;
+  unit_price: number;
+  expected_amount: number;
+  export_payment_status: 'unpaid';
+}
+
 export const accountingApi = {
   getDebts: async () => {
     const { data } = await axiosClient.get('/accounting/debts');
@@ -13,6 +47,13 @@ export const accountingApi = {
 
   getRevenueByVehicle: async (params?: { from?: string; to?: string }) => {
     const { data } = await axiosClient.get('/accounting/revenue/by-vehicle', { params });
+    return data;
+  },
+
+  getVehicleDebts: async (customerType: VehicleDebtCustomerType) => {
+    const { data } = await axiosClient.get<VehicleDebt[]>('/accounting/vehicle-debts', {
+      params: { customerType },
+    });
     return data;
   },
 

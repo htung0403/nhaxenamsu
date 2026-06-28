@@ -8,6 +8,7 @@ const router = Router();
 router.use(authMiddleware);
 
 router.get('/debts', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingController.getDebts);
+router.get('/vehicle-debts', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingController.getVehicleDebts);
 router.get('/revenue/by-date', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingController.getRevenueByDate);
 router.get('/revenue/by-vehicle', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingController.getRevenueByVehicle);
 

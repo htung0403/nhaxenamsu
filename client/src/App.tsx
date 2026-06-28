@@ -218,7 +218,8 @@ function AppRoutes() {
             <Route index element={<WholesaleCustomersPage type="vegetable_receiver" />} />
             <Route path=":id" element={<CustomerDetailPage />} />
           </Route>
-          <Route path="cong-no" element={<CustomerDebtPage />} />
+          <Route path="cong-no" element={<CustomerDebtPage mode="loyal" />} />
+          <Route path="cong-no-theo-xe" element={<CustomerDebtPage mode="vehicle" />} />
           <Route path="thu-tien-sg" element={<SgCashCollectionsPage />} />
           <Route path="thu-tien-hang" element={<PaymentCollectionsPage />} />
           <Route path="in-thu-tien-sg" element={<PrintSgCashCollectionsPage />} />

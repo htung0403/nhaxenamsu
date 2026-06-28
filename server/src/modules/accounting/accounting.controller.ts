@@ -34,6 +34,20 @@ export class AccountingController {
     }
   }
 
+  static async getVehicleDebts(req: Request, res: Response) {
+    try {
+      const customerType = req.query.customerType as 'loyal' | 'grocery_non_loyal' | undefined;
+      if (customerType !== 'loyal' && customerType !== 'grocery_non_loyal') {
+        return res.status(400).json(errorResponse('Loại khách hàng không hợp lệ'));
+      }
+
+      const data = await AccountingService.getVehicleDebts(customerType);
+      return res.status(200).json(successResponse(data));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
   static async listSgImportCash(req: Request, res: Response) {
     try {
       if (!req.user) {

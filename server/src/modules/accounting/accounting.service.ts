@@ -1,5 +1,39 @@
 import { supabaseService } from '../../config/supabase';
 
+export type VehicleDebtCustomerType = 'loyal' | 'grocery_non_loyal';
+
+export interface VehicleDebtRow {
+  id: string;
+  delivery_vehicle_id: string;
+  delivery_order_id: string;
+  order_id: string;
+  order_code: string;
+  order_date?: string | null;
+  delivery_date?: string | null;
+  delivery_time?: string | null;
+  assigned_at?: string | null;
+  customer: {
+    id: string;
+    name: string;
+    phone?: string | null;
+    address?: string | null;
+    is_loyal?: boolean | null;
+  };
+  vehicle: {
+    id?: string | null;
+    license_plate?: string | null;
+  };
+  driver: {
+    id?: string | null;
+    full_name?: string | null;
+    phone?: string | null;
+  };
+  assigned_quantity: number;
+  unit_price: number;
+  expected_amount: number;
+  export_payment_status: 'unpaid';
+}
+
 export class AccountingService {
   static async getDebts() {
     const { data, error } = await supabaseService
@@ -52,6 +86,95 @@ export class AccountingService {
     }, {});
 
     return aggregation;
+  }
+
+  static async getVehicleDebts(customerType: VehicleDebtCustomerType): Promise<VehicleDebtRow[]> {
+    const { data, error } = await supabaseService
+      .from('delivery_vehicles')
+      .select(`
+        id,
+        delivery_order_id,
+        vehicle_id,
+        driver_id,
+        assigned_quantity,
+        expected_amount,
+        delivery_date,
+        delivery_time,
+        assigned_at,
+        export_payment_status,
+        vehicles ( id, license_plate ),
+        drivers:profiles!delivery_vehicles_driver_id_fkey(id, full_name, phone),
+        delivery_orders (
+          id,
+          unit_price,
+          delivery_date,
+          delivery_time,
+          import_orders (
+            id,
+            order_code,
+            order_date,
+            customer_id,
+            customers!import_orders_customer_id_fkey(id, name, phone, address, is_loyal)
+          )
+        )
+      `)
+      .eq('export_payment_status', 'unpaid')
+      .order('delivery_date', { ascending: false })
+      .order('assigned_at', { ascending: false });
+
+    if (error) throw error;
+
+    return (data || [])
+      .map((row: any): VehicleDebtRow | null => {
+        const deliveryOrder = Array.isArray(row.delivery_orders) ? row.delivery_orders[0] : row.delivery_orders;
+        const importOrder = Array.isArray(deliveryOrder?.import_orders)
+          ? deliveryOrder.import_orders[0]
+          : deliveryOrder?.import_orders;
+        const customer = Array.isArray(importOrder?.customers) ? importOrder.customers[0] : importOrder?.customers;
+
+        if (!deliveryOrder || !importOrder || !customer) return null;
+
+        const isLoyal = customer.is_loyal === true;
+        if (customerType === 'loyal' && !isLoyal) return null;
+        if (customerType === 'grocery_non_loyal' && isLoyal) return null;
+
+        const expectedAmount = Number(row.expected_amount || 0);
+        const assignedQuantity = Number(row.assigned_quantity || 0);
+        const unitPrice = Number(deliveryOrder.unit_price || 0);
+
+        return {
+          id: row.id,
+          delivery_vehicle_id: row.id,
+          delivery_order_id: row.delivery_order_id,
+          order_id: importOrder.id,
+          order_code: importOrder.order_code || `#${String(importOrder.id).slice(0, 8).toUpperCase()}`,
+          order_date: importOrder.order_date,
+          delivery_date: row.delivery_date || deliveryOrder.delivery_date,
+          delivery_time: row.delivery_time || deliveryOrder.delivery_time,
+          assigned_at: row.assigned_at,
+          customer: {
+            id: customer.id,
+            name: customer.name,
+            phone: customer.phone,
+            address: customer.address,
+            is_loyal: customer.is_loyal,
+          },
+          vehicle: {
+            id: row.vehicles?.id || row.vehicle_id,
+            license_plate: row.vehicles?.license_plate,
+          },
+          driver: {
+            id: row.drivers?.id || row.driver_id,
+            full_name: row.drivers?.full_name,
+            phone: row.drivers?.phone,
+          },
+          assigned_quantity: assignedQuantity,
+          unit_price: unitPrice,
+          expected_amount: expectedAmount,
+          export_payment_status: 'unpaid',
+        };
+      })
+      .filter((row): row is VehicleDebtRow => row !== null);
   }
 
   static async getInvoiceOrders(filters: {

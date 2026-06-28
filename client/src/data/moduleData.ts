@@ -121,7 +121,8 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
     {
       section: 'Công nợ & Báo cáo',
       items: [
-        { icon: Banknote, title: 'Công nợ KH', description: 'Theo dõi công nợ khách hàng.', colorScheme: 'orange', path: '/app/ke-toan/cong-no' },
+        { icon: Heart, title: 'Công nợ KH thân thiết', description: 'Phân xe chưa thanh toán của khách hàng thân thiết.', colorScheme: 'orange', path: '/app/ke-toan/cong-no' },
+        { icon: DeliveryIcon, title: 'Công nợ theo xe', description: 'Phân xe chưa thanh toán của khách tạp hóa.', colorScheme: 'blue', path: '/app/ke-toan/cong-no-theo-xe' },
         { icon: FileText, title: 'Báo cáo doanh thu', description: 'Báo cáo doanh thu theo ngày.', colorScheme: 'purple', path: '/app/ke-toan/doanh-thu' },
         { icon: Banknote, title: 'Thu tiền hàng', description: 'Quản lý thu nộp tiền giao hàng.', colorScheme: 'green', path: '/app/ke-toan/thu-tien-hang' },
       ]
