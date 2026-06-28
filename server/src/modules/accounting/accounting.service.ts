@@ -104,21 +104,25 @@ export class AccountingService {
         export_payment_status,
         vehicles ( id, license_plate ),
         drivers:profiles!delivery_vehicles_driver_id_fkey(id, full_name, phone),
-        delivery_orders (
+        delivery_orders!inner (
           id,
           unit_price,
           delivery_date,
           delivery_time,
-          import_orders (
+          import_orders!inner (
             id,
             order_code,
             order_date,
             customer_id,
+            receiver_name,
+            receiver_phone,
+            sender_name,
             customers!import_orders_customer_id_fkey(id, name, phone, address, is_loyal)
           )
         )
       `)
-      .eq('export_payment_status', 'unpaid')
+      .or('export_payment_status.eq.unpaid,export_payment_status.is.null')
+      .range(0, 9999)
       .order('delivery_date', { ascending: false })
       .order('assigned_at', { ascending: false });
 
@@ -132,11 +136,14 @@ export class AccountingService {
           : deliveryOrder?.import_orders;
         const customer = Array.isArray(importOrder?.customers) ? importOrder.customers[0] : importOrder?.customers;
 
-        if (!deliveryOrder || !importOrder || !customer) return null;
+        if (!deliveryOrder || !importOrder) return null;
 
-        const isLoyal = customer.is_loyal === true;
+        const isLoyal = customer?.is_loyal === true;
         if (customerType === 'loyal' && !isLoyal) return null;
         if (customerType === 'grocery_non_loyal' && isLoyal) return null;
+
+        const customerName = customer?.name || importOrder.receiver_name || importOrder.sender_name || 'Khách tạp hóa';
+        const customerPhone = customer?.phone || importOrder.receiver_phone || null;
 
         const expectedAmount = Number(row.expected_amount || 0);
         const assignedQuantity = Number(row.assigned_quantity || 0);
@@ -153,11 +160,11 @@ export class AccountingService {
           delivery_time: row.delivery_time || deliveryOrder.delivery_time,
           assigned_at: row.assigned_at,
           customer: {
-            id: customer.id,
-            name: customer.name,
-            phone: customer.phone,
-            address: customer.address,
-            is_loyal: customer.is_loyal,
+            id: customer?.id || importOrder.customer_id || importOrder.id,
+            name: customerName,
+            phone: customerPhone,
+            address: customer?.address || null,
+            is_loyal: customer?.is_loyal || false,
           },
           vehicle: {
             id: row.vehicles?.id || row.vehicle_id,
