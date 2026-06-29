@@ -132,7 +132,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   const hasActiveFilters = filterCustomer.length > 0 || filterVehicle.length > 0 || !!startDate || !!endDate;
 
   return (
-    <div className="h-full flex flex-col p-4 sm:p-6 overflow-hidden">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0 overflow-hidden">
       <PageHeader title={config.title} description={config.description} backPath="/app/ke-toan" />
 
       <div className="md:hidden mb-4">
