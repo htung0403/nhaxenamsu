@@ -117,6 +117,72 @@ export class CustomerService {
     return data;
   }
 
+  static async getVegetableReceiverCustomersBySender(senderId: string) {
+    const { data, error } = await supabaseService
+      .from('vegetable_orders')
+      .select('id, customer_id, receiver_name, receiver_phone, receiver_address, total_amount, payment_status, created_at, customers:customers!vegetable_orders_customer_id_fkey(id, user_id, name, phone, address, customer_type, created_at, aliases)')
+      .eq('sender_id', senderId)
+      .is('deleted_at', null)
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+
+    const customerMap = new Map<string, any>();
+
+    for (const order of data || []) {
+      const linkedCustomer = Array.isArray((order as any).customers) ? (order as any).customers[0] : (order as any).customers;
+      const fallbackName = ((order as any).receiver_name || '').trim();
+      const fallbackPhone = ((order as any).receiver_phone || '').trim();
+      const fallbackAddress = ((order as any).receiver_address || '').trim();
+      const key = linkedCustomer?.id || fallbackPhone || fallbackName;
+      if (!key) continue;
+
+      const current = customerMap.get(key) || {
+        id: linkedCustomer?.id || key,
+        user_id: linkedCustomer?.user_id || null,
+        name: linkedCustomer?.name || fallbackName || 'Chưa có tên',
+        phone: linkedCustomer?.phone || fallbackPhone || null,
+        address: linkedCustomer?.address || fallbackAddress || null,
+        customer_type: linkedCustomer?.customer_type || 'vegetable_receiver',
+        aliases: linkedCustomer?.aliases || [],
+        created_at: linkedCustomer?.created_at || (order as any).created_at,
+        total_orders: 0,
+        total_revenue: 0,
+        debt: 0,
+      };
+
+      const amount = Number((order as any).total_amount || 0);
+      current.total_orders += 1;
+      current.total_revenue += amount;
+      if ((order as any).payment_status !== 'paid') {
+        current.debt += amount;
+      }
+
+      customerMap.set(key, current);
+    }
+
+    return Array.from(customerMap.values()).sort((a, b) => b.total_orders - a.total_orders || a.name.localeCompare(b.name, 'vi'));
+  }
+  static async getVegetableOrdersBySenderAndReceiver(senderId: string, receiverKey: string) {
+    const decodedReceiverKey = decodeURIComponent(receiverKey).trim();
+    let query = supabaseService
+      .from('vegetable_orders')
+      .select('*, customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, address, aliases), sender_customers:customers!vegetable_orders_sender_id_fkey(id, name, phone), vegetable_order_items(*, products(*))')
+      .eq('sender_id', senderId)
+      .is('deleted_at', null)
+      .order('order_date', { ascending: false })
+      .order('created_at', { ascending: false });
+
+    if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(decodedReceiverKey)) {
+      query = query.eq('customer_id', decodedReceiverKey);
+    } else {
+      query = query.or(`receiver_phone.eq.${decodedReceiverKey},receiver_name.eq.${decodedReceiverKey}`);
+    }
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return (data || []).map((order: any) => ({ ...order, order_category: 'vegetable' }));
+  }
   static async bulkSetLoyal(customerIds: string[], isLoyal: boolean) {
     if (!customerIds || customerIds.length === 0) return [];
     

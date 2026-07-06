@@ -5,7 +5,7 @@ import { useCustomers, useDeleteCustomer } from '../../hooks/queries/useCustomer
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
 import ErrorState from '../../components/shared/ErrorState';
-import { Plus, Pencil, Trash2, GitMerge, UserPlus } from 'lucide-react';
+import { Plus, Pencil, Trash2, GitMerge, UserPlus, Users } from 'lucide-react';
 import AddEditCustomerDialog from './dialogs/AddEditCustomerDialog';
 import MergeCustomerDialog from './dialogs/MergeCustomerDialog';
 import CreateCustomerAccountDialog from './dialogs/CreateCustomerAccountDialog';
@@ -37,7 +37,21 @@ interface Props {
   type?: 'vegetable_sender' | 'vegetable';
 }
 
+const pageCopyByType: Record<NonNullable<Props['type']>, { title: string; description: string; addLabel: string }> = {
+  vegetable_sender: {
+    title: 'Danh sách người gửi rau',
+    description: 'Quản lý khách hàng gửi rau và thông tin liên hệ.',
+    addLabel: 'Thêm người gửi',
+  },
+  vegetable: {
+    title: 'Danh sách KH Rau',
+    description: 'Quản lý khách hàng rau.',
+    addLabel: 'Thêm KH',
+  },
+};
+
 const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) => {
+  const isVegetableSenderList = type === 'vegetable_sender';
   const { data: customers, isLoading, isError, refetch } = useCustomers(type);
   const deleteCustomer = useDeleteCustomer();
   const navigate = useNavigate();
@@ -55,6 +69,8 @@ const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) 
   const [isMergeOpen, setIsMergeOpen] = useState(false);
   const [isMergeClosing, setIsMergeClosing] = useState(false);
   const [sourceCustomerForMerge, setSourceCustomerForMerge] = useState<Customer | null>(null);
+
+  const pageCopy = pageCopyByType[type];
 
   const closeAddDialog = () => {
     setIsAddClosing(true);
@@ -152,8 +168,8 @@ const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) 
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
         <PageHeader
-          title="Danh sách KH Rau"
-          description="Quản lý khách hàng rau"
+          title={pageCopy.title}
+          description={pageCopy.description}
           backPath="/app/khach-hang"
           actions={
             <div className="flex items-center gap-3">
@@ -167,7 +183,7 @@ const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) 
                 className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-[13px] font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
               >
                 <Plus size={16} />
-                Thêm KH
+                {pageCopy.addLabel}
               </button>
             </div>
           }
@@ -283,6 +299,19 @@ const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) 
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-center gap-2">
+                          {isVegetableSenderList && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                navigate(`${c.id}/khach-hang`);
+                              }}
+                              className="p-2 rounded-lg hover:bg-emerald-50 text-muted-foreground hover:text-emerald-600 transition-colors"
+                              title="Khách hàng của người gửi"
+                            >
+                              <Users size={14} />
+                            </button>
+                          )}
                           {!c.user_id && (
                             <button
                               type="button"
@@ -392,6 +421,19 @@ const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) 
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-1">
+                    {isVegetableSenderList && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`${c.id}/khach-hang`);
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border text-[12px] font-semibold text-muted-foreground hover:text-emerald-600 hover:border-emerald-200 hover:bg-emerald-50 transition-colors"
+                      >
+                        <Users size={13} />
+                        Khách hàng
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={(e) => {

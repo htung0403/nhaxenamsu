@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Clock3, Eye, Image as ImageIcon, ImagePlus, Loader2, Package, Plus, ShieldCheck, Trash2, X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PageHeader from '../../components/shared/PageHeader';
@@ -12,7 +11,6 @@ import { TimePicker24h } from '../../components/shared/TimePicker24h';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { useAuth } from '../../context/AuthContext';
 import { useCustomerByUserId, useCreateMyOrder, useMyDeliveryOrders, useMyDeliveryVehicles, useUpdateMyOrder } from '../../hooks/queries/useCustomers';
-import { useMyPermissions } from '../../hooks/queries/useRoles';
 import { uploadApi } from '../../api/uploadApi';
 import { VehicleCellTooltip } from '../delivery/components/VehicleCellTooltip';
 import OrderImagesDialog from '../delivery/dialogs/OrderImagesDialog';
@@ -20,8 +18,6 @@ import { cloudinarySmall } from '../../lib/cloudinaryUrl';
 import { getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
 import type { Customer, DeliveryOrder, ImportOrder } from '../../types';
 
-const CUSTOMER_ORDER_CREATE_PATH = '/app/tai-khoan/don-hang/tao-don';
-const GROCERY_RECEIVER_RETURN_CREATE_PATH = '/app/don-hang-cua-toi/tao-don-doi-tra';
 
 const getToday = () => new Date().toISOString().slice(0, 10);
 const getCurrentTime = () => new Date().toTimeString().slice(0, 5);
@@ -321,11 +317,9 @@ export type CustomerOrdersPageType = Extract<
 >;
 
 const GroceryReceiverOrdersPage = () => {
-  const navigate = useNavigate();
   const customerType = 'grocery_receiver' as CustomerOrdersPageType;
   const { user } = useAuth();
   const { data: customer, isLoading: loadingCustomer } = useCustomerByUserId(user?.id || '');
-  const { data: myPermissions } = useMyPermissions(!!user?.id);
   const createOrderMutation = useCreateMyOrder();
   const updateOrderMutation = useUpdateMyOrder();
 
@@ -350,7 +344,6 @@ const GroceryReceiverOrdersPage = () => {
   const isGrocerySenderPage = effectiveCustomerType === 'grocery_sender';
   const { data: deliveryOrders, isLoading, isError, refetch } = useMyDeliveryOrders(!!user?.id);
   const { data: deliveryVehicles } = useMyDeliveryVehicles(!!user?.id);
-  const canSelfCreate = (myPermissions?.page_paths || []).includes(CUSTOMER_ORDER_CREATE_PATH);
   const customerId = customer?.id;
 
   const sortedOrders = useMemo(() => {
@@ -428,18 +421,6 @@ const GroceryReceiverOrdersPage = () => {
     }),
     [deliveryVehicles, isVegetableOrder],
   );
-
-  const openCreateModal = () => {
-    navigate(GROCERY_RECEIVER_RETURN_CREATE_PATH);
-    return;
-    setEditingOrder(null);
-    setFormState((() => {
-      const initialState = createInitialFormState();
-      initialState.sender_name = customer?.name || '';
-      return initialState;
-    })());
-    setIsCreateOpen(true);
-  };
 
   const closeModal = () => {
     if (createOrderMutation.isPending || updateOrderMutation.isPending) return;
@@ -595,17 +576,6 @@ const GroceryReceiverOrdersPage = () => {
 
       <div className="space-y-3 flex-1 min-h-0 flex flex-col">
         <div className={`bg-card flex flex-row w-full gap-2 items-center border border-border overflow-x-auto custom-scrollbar ${isGrocerySenderPage ? 'rounded-3xl shadow-sm p-3' : 'rounded-2xl shadow-sm p-2.5'}`}>
-          <button
-            type="button"
-            onClick={openCreateModal}
-            disabled={!canSelfCreate}
-            className={`flex items-center gap-2 justify-center shrink-0 border border-primary/20 rounded-xl transition-all bg-primary text-white hover:bg-primary/90 font-bold text-[13px] disabled:opacity-60 ${isGrocerySenderPage ? 'h-10 px-4 shadow-sm' : 'h-9.5 px-3'}`}
-            title={canSelfCreate ? 'Tạo đơn đổi trả' : 'Bạn chưa có quyền tạo đơn đổi trả'}
-          >
-            <Plus size={16} />
-            <span className="hidden sm:inline">Tạo đơn đổi trả</span>
-          </button>
-
           <div className="flex-1 min-w-58 md:max-w-full">
             <SearchInput
               placeholder="Tìm mã trả hàng, người gửi, người nhận..."
@@ -697,7 +667,7 @@ const GroceryReceiverOrdersPage = () => {
                 {displayedOrders.length === 0 ? (
                   <tr>
                     <td colSpan={5 + (isVegetableOrder ? 0 : 1) + (isInSgTab ? 0 : 2 + (showExcessColumn ? 1 : 0) + (displayedVehicles.length || FALLBACK_VEHICLE_COLUMNS.length))} className="px-4 py-12 text-center">
-                      <EmptyOrdersState canSelfCreate={canSelfCreate} onCreate={openCreateModal} />
+                      <EmptyOrdersState />
                     </td>
                   </tr>
                 ) : (
@@ -851,7 +821,7 @@ const GroceryReceiverOrdersPage = () => {
 
             <div className={`${isInSgTab ? 'hidden' : 'md:hidden'} p-3 space-y-3`}>
             {displayedOrders.length === 0 ? (
-              <EmptyOrdersState canSelfCreate={canSelfCreate} onCreate={openCreateModal} />
+              <EmptyOrdersState />
             ) : (
               displayedOrders.map((order) => {
                 const sourceOrder = getDeliverySourceOrder(order);
@@ -1194,22 +1164,13 @@ const InfoBlock: React.FC<{ label: string; value: string; strong?: boolean }> = 
   </div>
 );
 
-const EmptyOrdersState: React.FC<{ canSelfCreate: boolean; onCreate: () => void }> = ({ canSelfCreate, onCreate }) => (
+const EmptyOrdersState: React.FC = () => (
   <div className="mx-auto flex max-w-sm flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 px-5 py-8 text-center">
     <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
       <Package size={22} />
     </div>
     <div className="font-black text-foreground">Chưa có đơn trả hàng nào</div>
-    <p className="mt-1 text-[13px] text-muted-foreground">Tạo phiếu đầu tiên khi hàng của khách bị lỗi cần trả về SG.</p>
-    <button
-      type="button"
-      onClick={onCreate}
-      disabled={!canSelfCreate}
-      className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-[13px] font-bold text-white hover:bg-primary/90 disabled:opacity-50"
-    >
-      <Plus size={14} />
-      Tạo trả hàng
-    </button>
+    <p className="mt-1 text-[13px] text-muted-foreground">Chưa có phiếu nào trong bộ lọc hiện tại.</p>
   </div>
 );
 
@@ -1245,4 +1206,6 @@ const ImagePicker: React.FC<{
 );
 
 export default GroceryReceiverOrdersPage;
+
+
 

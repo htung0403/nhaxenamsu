@@ -23,6 +23,7 @@ export type SidebarItem = {
 
 export const sidebarMenu: SidebarItem[] = [
   { icon: Home, label: 'Trang chủ', path: '/app' },
+  { icon: Users, label: 'Tài khoản khách hàng', path: '/app/tai-khoan', hiddenForRoles: ['admin'] },
   { icon: ClipboardList, label: 'Đơn của tôi', path: '/app/tai-khoan/don-hang', hiddenForRoles: ['admin'] },
   { icon: Send, label: 'Tạo đơn gửi', path: '/app/don-hang-cua-toi/tao-don-gui', hiddenForRoles: ['admin'] },
   { icon: CirclePlus, label: 'Tạo đơn đổi trả', path: '/app/don-hang-cua-toi/tao-don-doi-tra', hiddenForRoles: ['admin'] },

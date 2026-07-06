@@ -159,6 +159,13 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
           path: '/app/tai-khoan/don-hang/tao-don',
         },
         {
+          icon: Users,
+          title: 'Khách hàng của tôi',
+          description: 'Người gửi rau quản lý danh sách vựa/khách nhận của riêng mình.',
+          colorScheme: 'emerald',
+          path: '/app/tai-khoan/khach-hang',
+        },
+        {
           icon: Send,
           title: 'Tạo đơn gửi tạp hóa',
           description: 'Trang tạo đơn gửi riêng cho khách gửi tạp hóa.',
@@ -176,4 +183,3 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
     },
   ],
 };
-

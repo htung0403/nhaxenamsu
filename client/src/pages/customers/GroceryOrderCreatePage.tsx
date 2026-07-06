@@ -263,8 +263,8 @@ const GroceryOrderCreatePage: React.FC<{ mode: GroceryCreateMode }> = ({ mode })
   const formDisabled = !canSelfCreate || !isExpectedCustomer || isSubmitting;
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 bg-slate-50/70 -m-4 p-4 md:-m-6 md:p-6">
-      <div className="mx-auto flex max-w-6xl flex-col gap-5">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 bg-slate-50/60 -m-4 p-4 md:-m-6 md:p-6">
+      <div className="flex w-full flex-col gap-5">
         <PageHeader title={copy.title} description={copy.description} />
 
         <button
@@ -276,19 +276,19 @@ const GroceryOrderCreatePage: React.FC<{ mode: GroceryCreateMode }> = ({ mode })
           Quay lại danh sách
         </button>
 
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <form onSubmit={handleSubmit} className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm">
-            <div className="border-b border-border bg-gradient-to-br from-blue-50 via-white to-orange-50 px-5 py-5 md:px-7">
+        <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_300px] 2xl:grid-cols-[minmax(0,1fr)_320px]">
+          <form onSubmit={handleSubmit} className="overflow-hidden rounded-3xl border border-border bg-white shadow-sm ring-1 ring-slate-100">
+            <div className="border-b border-border bg-gradient-to-br from-blue-50 via-white to-orange-50 px-5 py-5 md:px-7 xl:px-8 xl:py-6">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div>
+                <div className="max-w-3xl">
                   <div className="inline-flex items-center gap-2 rounded-full border border-blue-100 bg-white/80 px-3 py-1 text-[12px] font-black text-blue-700 shadow-sm">
                     <ShieldCheck size={14} />
                     {copy.badge}
                   </div>
-                  <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950 md:text-3xl">{copy.heroTitle}</h2>
+                  <h2 className="mt-4 text-2xl font-black tracking-tight text-slate-950 md:text-3xl xl:text-[34px] xl:leading-[1.08]">{copy.heroTitle}</h2>
                   <p className="mt-2 max-w-2xl text-sm font-medium leading-6 text-slate-600">{copy.heroDescription}</p>
                 </div>
-                <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/80 bg-white/80 p-2 shadow-sm md:min-w-[280px]">
+                <div className="grid grid-cols-3 gap-2 rounded-2xl border border-white/80 bg-white/90 p-2 shadow-sm md:min-w-[280px] xl:min-w-[300px]">
                   <Metric label="Dòng" value={totals.lines.toLocaleString('vi-VN')} />
                   <Metric label="SL" value={totals.quantity.toLocaleString('vi-VN')} />
                   <Metric label="Ảnh" value={totals.images.toLocaleString('vi-VN')} />
@@ -302,19 +302,21 @@ const GroceryOrderCreatePage: React.FC<{ mode: GroceryCreateMode }> = ({ mode })
               </div>
             )}
 
-            <div className="space-y-7 p-5 md:p-7">
+            <div className="space-y-8 p-5 md:p-7 xl:p-8">
               <Section title="Thông tin đơn" description="Ngày, giờ và thông tin đối tác nhận/gửi hàng.">
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
                   <DateField label="Ngày đơn" value={formState.order_date} onChange={(value) => setFormState((prev) => ({ ...prev, order_date: value }))} />
                   <TimeField label="Giờ đơn" value={formState.order_time} onChange={(value) => setFormState((prev) => ({ ...prev, order_time: value }))} />
+                  <div className="md:col-span-2">
+                    <Input label={copy.lockedNameLabel} value={customer?.name || formState.sender_name} onChange={() => undefined} disabled required />
+                  </div>
                 </div>
-                <Input label={copy.lockedNameLabel} value={customer?.name || formState.sender_name} onChange={() => undefined} disabled required />
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[minmax(240px,1fr)_220px]">
                   <Input label={copy.partnerLabel} value={formState.receiver_name} onChange={(value) => setFormState((prev) => ({ ...prev, receiver_name: value }))} required />
                   <Input label="Số điện thoại" value={formState.receiver_phone} onChange={(value) => setFormState((prev) => ({ ...prev, receiver_phone: value }))} />
                 </div>
                 <Input label="Địa chỉ" value={formState.receiver_address} onChange={(value) => setFormState((prev) => ({ ...prev, receiver_address: value }))} placeholder="Nhập địa chỉ giao/nhận nếu có" />
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[220px_240px]">
                   <Input label={copy.amountLabel} type="number" min={0} value={formState.total_amount} onChange={(value) => setFormState((prev) => ({ ...prev, total_amount: value }))} placeholder="Nhập cước nếu biết" />
                   <div className="space-y-1.5">
                     <label className="text-[12px] font-bold text-slate-600">Trạng thái thanh toán</label>
@@ -346,9 +348,12 @@ const GroceryOrderCreatePage: React.FC<{ mode: GroceryCreateMode }> = ({ mode })
               >
                 <div className="space-y-3">
                   {formState.items.map((item, index) => (
-                    <div key={index} className="rounded-2xl border border-border bg-slate-50/70 p-4 shadow-sm">
-                      <div className="mb-3 flex items-center justify-between gap-3">
-                        <div className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white text-sm font-black text-blue-700 shadow-sm">{index + 1}</div>
+                    <div key={index} className="rounded-2xl border border-border bg-slate-50/80 p-4 shadow-sm transition-shadow duration-200 hover:shadow-md xl:p-5">
+                      <div className="mb-3 flex items-center justify-between gap-3 xl:mb-4">
+                        <div className="inline-flex items-center gap-2 text-sm font-black text-slate-700">
+                          <span className="inline-flex h-8 w-8 items-center justify-center rounded-xl bg-white text-blue-700 shadow-sm">{index + 1}</span>
+                          Dòng hàng
+                        </div>
                         <button
                           type="button"
                           onClick={() => removeItem(index)}
@@ -360,7 +365,7 @@ const GroceryOrderCreatePage: React.FC<{ mode: GroceryCreateMode }> = ({ mode })
                           <Trash2 size={15} />
                         </button>
                       </div>
-                      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,1fr)_120px]">
+                      <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(220px,1fr)_120px] xl:grid-cols-[minmax(280px,1fr)_120px]">
                         <Input label="Mặt hàng" value={item.product_name} onChange={(value) => updateItem(index, { product_name: value })} placeholder="Nhập tên mặt hàng" required />
                         <Input label="Số lượng" type="number" min={1} value={item.quantity} onChange={(value) => updateItem(index, { quantity: value })} required />
                       </div>
@@ -389,7 +394,7 @@ const GroceryOrderCreatePage: React.FC<{ mode: GroceryCreateMode }> = ({ mode })
               </Section>
             </div>
 
-            <div className="sticky bottom-0 flex flex-col gap-2 border-t border-border bg-white/95 px-5 py-4 backdrop-blur md:flex-row md:items-center md:justify-end md:px-7">
+            <div className="sticky bottom-0 flex flex-col gap-2 border-t border-border bg-white/95 px-5 py-4 backdrop-blur md:flex-row md:items-center md:justify-end md:px-7 xl:px-8">
               <button
                 type="button"
                 onClick={() => navigate(LIST_PATH)}
@@ -408,7 +413,7 @@ const GroceryOrderCreatePage: React.FC<{ mode: GroceryCreateMode }> = ({ mode })
             </div>
           </form>
 
-          <aside className="space-y-4 lg:sticky lg:top-6 lg:self-start">
+          <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
             <div className="rounded-3xl border border-border bg-white p-5 shadow-sm">
               <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-50 text-blue-700">
                 <Package size={22} />
@@ -521,3 +526,4 @@ const ImagePicker: React.FC<{
 );
 
 export default GroceryOrderCreatePage;
+

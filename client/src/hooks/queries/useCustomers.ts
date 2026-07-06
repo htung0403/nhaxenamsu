@@ -6,6 +6,8 @@ import toast from 'react-hot-toast';
 export const customerKeys = {
   all: ['customers'] as const,
   list: (type?: string) => [...customerKeys.all, 'list', type] as const,
+  vegetableSenderReceivers: (senderId: string) => [...customerKeys.all, 'vegetable-sender-receivers', senderId] as const,
+  vegetableSenderReceiverOrders: (senderId: string, receiverKey: string) => [...customerKeys.all, 'vegetable-sender-receiver-orders', senderId, receiverKey] as const,
   loyalList: () => [...customerKeys.all, 'loyalList'] as const,
   detail: (id: string) => [...customerKeys.all, 'detail', id] as const,
   orders: (id: string) => [...customerKeys.all, 'orders', id] as const,
@@ -26,6 +28,20 @@ export function useCustomers(type?: string, enabled = true) {
   });
 }
 
+export function useVegetableReceiverCustomersBySender(senderId: string | undefined) {
+  return useQuery({
+    queryKey: customerKeys.vegetableSenderReceivers(senderId || ''),
+    queryFn: () => customersApi.getVegetableReceiverCustomersBySender(senderId || ''),
+    enabled: Boolean(senderId),
+  });
+}
+export function useVegetableOrdersBySenderAndReceiver(senderId: string | undefined, receiverKey: string | undefined) {
+  return useQuery({
+    queryKey: customerKeys.vegetableSenderReceiverOrders(senderId || '', receiverKey || ''),
+    queryFn: () => customersApi.getVegetableOrdersBySenderAndReceiver(senderId || '', receiverKey || ''),
+    enabled: Boolean(senderId && receiverKey),
+  });
+}
 export function useCustomer(id: string) {
   return useQuery({
     queryKey: customerKeys.detail(id),

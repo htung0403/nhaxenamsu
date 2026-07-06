@@ -110,6 +110,10 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
       'ung-vien': 'Ứng viên',
       'cai-dat': 'Cài đặt hệ thống',
       'khach-hang': 'Khách hàng',
+      'nguoi-gui-rau': 'Người gửi rau',
+      'vua-rau': 'Vựa nhận rau',
+      'khach-hang-rau': 'Người gửi rau',
+      'khach-hang-tap-hoa': 'Người gửi tạp hóa',
       'ke-toan': 'Kế toán',
       'hang-hoa': 'Hàng hóa',
       'quan-ly-xe': 'Quản lý xe',
@@ -505,4 +509,3 @@ const Topbar: React.FC<TopbarProps> = ({ sidebarOpen, setSidebarOpen }) => {
 };
 
 export default Topbar;
-

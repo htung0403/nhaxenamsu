@@ -61,6 +61,14 @@ export const customersApi = {
     return data;
   },
 
+  getVegetableReceiverCustomersBySender: async (senderId: string) => {
+    const { data } = await axiosClient.get<Customer[]>(`/customers/vegetable-senders/${senderId}/receivers`);
+    return data;
+  },
+  getVegetableOrdersBySenderAndReceiver: async (senderId: string, receiverKey: string) => {
+    const { data } = await axiosClient.get<ImportOrder[]>(`/customers/vegetable-senders/${senderId}/receivers/${encodeURIComponent(receiverKey)}/orders`);
+    return data;
+  },
   create: async (payload: { name: string; phone?: string | null; address?: string | null; latitude?: number | null; longitude?: number | null; customer_type?: string; aliases?: string[] }) => {
     const { data } = await axiosClient.post<Customer>('/customers', payload);
     return data;

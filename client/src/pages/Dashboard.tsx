@@ -16,6 +16,12 @@ import { matchesSearch } from '../lib/str-utils';
 
 const dashboardModules: ActionCardProps[] = [
   {
+    icon: ClipboardList,
+    title: 'Tài khoản khách hàng',
+    description: 'Đơn hàng và khách hàng của tài khoản hiện tại.',
+    href: '/app/tai-khoan',
+    colorScheme: 'green'
+  },  {
     icon: Box,
     title: 'Hàng hóa',
     description: 'Kho, nhập hàng, xuất hàng, tồn kho.',

@@ -92,6 +92,16 @@ router.post(
 	CustomerController.undoMerge
 );
 
+router.get(
+	'/vegetable-senders/:senderId/receivers/:receiverKey/orders',
+	requirePolicy('CUSTOMERS_DIRECTORY_READ', 'CUSTOMER_ORDERS_MANAGE'),
+	CustomerController.getVegetableOrdersBySenderAndReceiver
+);
+router.get(
+	'/vegetable-senders/:senderId/receivers',
+	requirePolicy('CUSTOMERS_DIRECTORY_READ', 'CUSTOMER_ORDERS_MANAGE'),
+	CustomerController.getVegetableReceiverCustomersBySender
+);
 router.put(
 	'/bulk-loyal',
 	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),

@@ -125,6 +125,37 @@ export class CustomerController {
     }
   }
 
+  static async getVegetableReceiverCustomersBySender(req: Request, res: Response) {
+    try {
+      const senderId = z.string().uuid().parse(req.params.senderId);
+      if (req.user?.role === 'customer') {
+        const currentCustomer = await CustomerService.getByUserId(req.user.id);
+        if (!currentCustomer?.id || currentCustomer.id !== senderId) {
+          return res.status(403).json(errorResponse('Bạn chỉ được xem khách hàng của tài khoản hiện tại', 'FORBIDDEN'));
+        }
+      }
+      const data = await CustomerService.getVegetableReceiverCustomersBySender(senderId);
+      return res.status(200).json(successResponse(data));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+  static async getVegetableOrdersBySenderAndReceiver(req: Request, res: Response) {
+    try {
+      const senderId = z.string().uuid().parse(req.params.senderId);
+      const receiverKey = z.string().min(1).parse(req.params.receiverKey);
+      if (req.user?.role === 'customer') {
+        const currentCustomer = await CustomerService.getByUserId(req.user.id);
+        if (!currentCustomer?.id || currentCustomer.id !== senderId) {
+          return res.status(403).json(errorResponse('Bạn chỉ được xem đơn hàng của tài khoản hiện tại', 'FORBIDDEN'));
+        }
+      }
+      const data = await CustomerService.getVegetableOrdersBySenderAndReceiver(senderId, receiverKey);
+      return res.status(200).json(successResponse(data));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
   static async bulkSetLoyal(req: Request, res: Response) {
     try {
       const validated = bulkLoyalSchema.parse(req.body);

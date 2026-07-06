@@ -43,6 +43,8 @@ import DriverActiveTripPage from './pages/vehicles/DriverActiveTripPage';
 import PaymentCollectionsPage from './pages/vehicles/payment-collections/PaymentCollectionsPage';
 import GroceryCustomersPage from './pages/customers/GroceryCustomersPage';
 import VegetableCustomersPage from './pages/customers/VegetableCustomersPage';
+import VegetableSenderCustomersPage from './pages/customers/VegetableSenderCustomersPage';
+import VegetableSenderCustomerOrdersPage from './pages/customers/VegetableSenderCustomerOrdersPage';
 import WholesaleCustomersPage from './pages/customers/WholesaleCustomersPage';
 import LoyalCustomersPage from './pages/customers/LoyalCustomersPage';
 import SalarySettingsPage from './pages/hr/SalarySettingsPage';
@@ -130,9 +132,12 @@ function AppRoutes() {
       >
         <Route path="/app" element={<Dashboard />} />
         <Route path="/app/ho-so" element={<ProfilePage />} />
-        <Route path="/app/ho-so/:id" element={<ProfilePage />} />
+        <Route path="/app/ho-so/:id" element={<ProfilePage />} />
+        <Route path="/app/tai-khoan" element={<ModulePage />} />
         <Route path="/app/tai-khoan/don-hang" element={<Navigate to="/app/don-hang-cua-toi" replace />} />
         <Route path="/app/tai-khoan/don-hang/tao-don" element={<Navigate to="/app/don-hang-cua-toi/tao-don-gui" replace />} />
+        <Route path="/app/tai-khoan/khach-hang" element={<VegetableSenderCustomersPage />} />
+        <Route path="/app/tai-khoan/khach-hang/:receiverKey/don-hang" element={<VegetableSenderCustomerOrdersPage />} />
         <Route path="/app/don-hang-cua-toi" element={<MyOrdersByCustomerTypePage />} />
         <Route path="/app/don-hang-cua-toi/tao-don-gui" element={<GroceryOrderCreatePage mode="sender" />} />
         <Route path="/app/don-hang-cua-toi/tao-don-doi-tra" element={<GroceryOrderCreatePage mode="receiver" />} />
@@ -184,6 +189,8 @@ function AppRoutes() {
           <Route path="nguoi-gui-rau">
             <Route index element={<VegetableCustomersPage type="vegetable_sender" />} />
             <Route path=":id" element={<CustomerDetailPage />} />
+            <Route path=":senderId/khach-hang" element={<VegetableSenderCustomersPage />} />
+            <Route path=":senderId/khach-hang/:receiverKey/don-hang" element={<VegetableSenderCustomerOrdersPage />} />
           </Route>
           <Route path="vua-rau">
             <Route index element={<WholesaleCustomersPage type="vegetable_receiver" />} />
@@ -213,6 +220,8 @@ function AppRoutes() {
           <Route path="khach-hang-rau">
             <Route index element={<VegetableCustomersPage type="vegetable_sender" />} />
             <Route path=":id" element={<CustomerDetailPage />} />
+            <Route path=":senderId/khach-hang" element={<VegetableSenderCustomersPage />} />
+            <Route path=":senderId/khach-hang/:receiverKey/don-hang" element={<VegetableSenderCustomerOrdersPage />} />
           </Route>
           <Route path="vua-rau">
             <Route index element={<WholesaleCustomersPage type="vegetable_receiver" />} />

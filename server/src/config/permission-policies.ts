@@ -1,6 +1,6 @@
 export const PAGE_POLICIES = {
   PROFILE_VIEW: ['/ho-so'],
-  CUSTOMER_ORDERS_MANAGE: ['/tai-khoan/don-hang'],
+  CUSTOMER_ORDERS_MANAGE: ['/tai-khoan/don-hang', '/tai-khoan/khach-hang'],
   CUSTOMER_ORDERS_SELF_CREATE: ['/tai-khoan/don-hang/tao-don'],
 
   PRODUCTS_IMPORT_ACCESS: ['/hang-hoa/nhap-hang', '/hang-hoa/xac-nhan-hang-gui', '/hang-hoa/hang-gui-sg', '/hang-hoa/nhap-hang-rau'],
@@ -10,7 +10,14 @@ export const PAGE_POLICIES = {
   PRODUCTS_SETTINGS: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau'],
   PRODUCTS_CATALOG_ACCESS: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau', '/hang-hoa/nhap-hang', '/hang-hoa/nhap-hang-rau'],
 
-  CUSTOMERS_DIRECTORY_READ: ['/ke-toan/khach-hang-tap-hoa', '/ke-toan/khach-hang-rau', '/ke-toan/vua-rau'],
+  CUSTOMERS_DIRECTORY_READ: [
+    '/khach-hang/nguoi-gui-tap-hoa',
+    '/khach-hang/nguoi-gui-rau',
+    '/khach-hang/vua-rau',
+    '/ke-toan/khach-hang-tap-hoa',
+    '/ke-toan/khach-hang-rau',
+    '/ke-toan/vua-rau',
+  ],
   CUSTOMERS_SHARED_LOOKUP: [
     '/ke-toan/khach-hang-tap-hoa',
     '/ke-toan/khach-hang-rau',
@@ -20,7 +27,14 @@ export const PAGE_POLICIES = {
     '/hang-hoa/hang-gui-sg',
     '/hang-hoa/nhap-hang-rau',
   ],
-  MERGE_CUSTOMERS: ['/ke-toan/khach-hang-tap-hoa', '/ke-toan/khach-hang-rau', '/ke-toan/vua-rau'],
+  MERGE_CUSTOMERS: [
+    '/khach-hang/nguoi-gui-tap-hoa',
+    '/khach-hang/nguoi-gui-rau',
+    '/khach-hang/vua-rau',
+    '/ke-toan/khach-hang-tap-hoa',
+    '/ke-toan/khach-hang-rau',
+    '/ke-toan/vua-rau',
+  ],
   ACCOUNTING_DEBT_MANAGE: ['/ke-toan/cong-no'],
   ACCOUNTING_REVENUE_VIEW: ['/ke-toan/doanh-thu'],
   ACCOUNTING_REPORTS_VIEW: ['/ke-toan/cong-no', '/ke-toan/doanh-thu'],
