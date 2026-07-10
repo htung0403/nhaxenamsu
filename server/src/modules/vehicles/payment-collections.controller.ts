@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 const createSchema = z.object({
   deliveryOrderId: z.string().uuid(),
+  sourceOrderIds: z.array(z.string().uuid()).optional(),
   collectedAmount: z.number().min(0),
   collectedAt: z.string(),
   notes: z.string().optional(),

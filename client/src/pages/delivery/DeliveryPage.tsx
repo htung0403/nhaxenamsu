@@ -29,6 +29,14 @@ import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { matchesSearch } from '../../lib/str-utils';
 import { getDeliveryAnchorDateString } from '../../lib/deliveryDayAnchor';
 import { isOldOrderForAgeRule, getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
+import {
+  createDeliveryGroupSourceIdsMap,
+  getDeliveryViewGroupKey,
+  getReceiverDisplayName,
+  groupDeliveryOrderBuckets,
+  groupDeliveryOrdersForView,
+  mergeDeliveryOrderGroup,
+} from '../../lib/deliveryGrouping';
 import type { DeliveryOrder, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
@@ -128,35 +136,6 @@ const getDisplayProductName = (order: DeliveryOrder) => {
   const createdDate = getImportOrderShortDate(order);
   return createdDate ? `${productName} (${createdDate})` : productName;
 };
-
-const getReceiverDisplayName = (order: DeliveryOrder) => {
-  const orderObj = order.import_orders || order.vegetable_orders;
-  if (!orderObj) return '-';
-
-  if (order.status === 'hang_o_sg' && orderObj.selected_alias) {
-    return orderObj.selected_alias;
-  }
-
-  return orderObj.customers?.name || orderObj.receiver_name?.trim() || orderObj.profiles?.full_name || '-';
-};
-
-const getSourcePaymentStatus = (order: DeliveryOrder) => {
-  const sourceOrder = Array.isArray(order.import_orders) ? order.import_orders[0] : order.import_orders
-    || (Array.isArray(order.vegetable_orders) ? order.vegetable_orders[0] : order.vegetable_orders);
-  return sourceOrder?.payment_status || 'unpaid';
-};
-
-const getDeliveryGroupKey = (order: DeliveryOrder) => {
-  const deliveryDate = order.delivery_date || 'N/A';
-  const category = order.order_category || 'standard';
-  const receiver = getReceiverDisplayName(order);
-  const product = (order.product_name || '').trim();
-  const paymentStatus = getSourcePaymentStatus(order);
-  return `${deliveryDate}|${category}|${receiver}|${product}|${paymentStatus}`;
-};
-
-const getDeliveryViewGroupKey = (order: DeliveryOrder) =>
-  order.status === 'hang_o_sg' ? `single:${order.id}` : getDeliveryGroupKey(order);
 
 type DeliverySourceRelation = {
   profiles?: { full_name?: string | null } | null;
@@ -354,34 +333,7 @@ const DeliveryPage: React.FC = () => {
   );
 
   const groupedOrdersView = React.useMemo(() => {
-    const map = new Map<string, DeliveryOrder[]>();
-    (baseOrders || []).forEach((order) => {
-      const key = getDeliveryViewGroupKey(order);
-      const list = map.get(key) || [];
-      list.push(order);
-      map.set(key, list);
-    });
-
-    const grouped = Array.from(map.values()).map((group) => {
-      const ordered = [...group].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      const first = ordered[0];
-      const totalQuantity = ordered.reduce((sum, order) => sum + (Number(order.total_quantity) || 0), 0);
-      const mergedDeliveryVehicles = ordered.flatMap((order) => order.delivery_vehicles || []);
-      const mergedPaymentCollections = ordered.flatMap((order) => order.payment_collections || []);
-      const sourceIds = ordered.map((order) => order.id);
-      const allHangOsg = ordered.every((order) => order.status === 'hang_o_sg');
-      const hasDaGiao = ordered.some((order) => order.status === 'da_giao');
-
-      return {
-        ...first,
-        total_quantity: totalQuantity,
-        delivery_vehicles: mergedDeliveryVehicles,
-        payment_collections: mergedPaymentCollections,
-        source_order_ids: sourceIds,
-        source_orders: ordered,
-        status: allHangOsg ? 'hang_o_sg' : (hasDaGiao ? 'da_giao' : 'can_giao'),
-      } as DeliveryOrder;
-    });
+    const grouped = groupDeliveryOrdersForView(baseOrders || []);
 
     if (!user || hasFullGoodsModuleAccess(user)) return grouped;
 
@@ -395,30 +347,9 @@ const DeliveryPage: React.FC = () => {
   }, [baseOrders, user, vehicles]);
 
   const adminCanGiaoGroupKeySet = React.useMemo(() => {
-    const grouped = new Map<string, DeliveryOrder[]>();
-
-    baseOrders.forEach((order) => {
-      const key = getDeliveryViewGroupKey(order);
-      const list = grouped.get(key) || [];
-      list.push(order);
-      grouped.set(key, list);
-    });
-
     const keys = new Set<string>();
-    grouped.forEach((group, key) => {
-      const ordered = [...group].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-      const first = ordered[0];
-      const totalQuantity = ordered.reduce((sum, order) => sum + (Number(order.total_quantity) || 0), 0);
-      const mergedDeliveryVehicles = ordered.flatMap((order) => order.delivery_vehicles || []);
-      const allHangOsg = ordered.every((order) => order.status === 'hang_o_sg');
-      const hasDaGiao = ordered.some((order) => order.status === 'da_giao');
-
-      const adminViewOrder = {
-        ...first,
-        total_quantity: totalQuantity,
-        delivery_vehicles: mergedDeliveryVehicles,
-        status: allHangOsg ? 'hang_o_sg' : (hasDaGiao ? 'da_giao' : 'can_giao'),
-      } as DeliveryOrder;
+    groupDeliveryOrderBuckets(baseOrders).forEach((group, key) => {
+      const adminViewOrder = mergeDeliveryOrderGroup(group);
 
       if (getEffectiveDeliveryStatus(adminViewOrder) === 'can_giao') {
         keys.add(key);
@@ -428,13 +359,10 @@ const DeliveryPage: React.FC = () => {
     return keys;
   }, [baseOrders]);
 
-  const groupToSourceIdsMap = React.useMemo(() => {
-    const map = new Map<string, string[]>();
-    groupedOrdersView.forEach((order) => {
-      map.set(order.id, order.source_order_ids && order.source_order_ids.length > 0 ? order.source_order_ids : [order.id]);
-    });
-    return map;
-  }, [groupedOrdersView]);
+  const groupToSourceIdsMap = React.useMemo(
+    () => createDeliveryGroupSourceIdsMap(groupedOrdersView),
+    [groupedOrdersView]
+  );
 
   const expandGroupedIds = React.useCallback((ids: string[]) => {
     const expanded = new Set<string>();

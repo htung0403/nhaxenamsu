@@ -256,6 +256,7 @@ CREATE TABLE public.payment_collections (
   self_confirm_reason TEXT,
   notes TEXT,
   image_url TEXT,
+  source_order_ids UUID[],
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -268,8 +269,8 @@ CREATE INDEX idx_pc_vehicle_id ON public.payment_collections(vehicle_id);
 
 -- Constraint for uniqueness
 CREATE UNIQUE INDEX unique_active_collection 
-  ON public.payment_collections(delivery_order_id) 
-  WHERE status IN ('submitted','confirmed','self_confirmed');
+  ON public.payment_collections(delivery_order_id, vehicle_id) 
+  WHERE status IN ('submitted','confirmed','self_confirmed') AND delivery_order_id IS NOT NULL;
 
 -- 12. LEAVE REQUESTS
 CREATE TABLE public.leave_requests (
@@ -469,3 +470,5 @@ BEGIN
     );
 END;
 $$ LANGUAGE plpgsql;
+
+

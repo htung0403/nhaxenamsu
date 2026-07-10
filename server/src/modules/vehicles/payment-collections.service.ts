@@ -59,45 +59,58 @@ export class PaymentCollectionsService {
   }
 
   static async createPaymentCollection(data: CreatePaymentCollectionDto, driverId: string) {
-    // 1. Get delivery order to get customer_id and expected_amount
-    const { data: doData, error: doError } = await supabaseService
+    const sourceOrderIds = Array.from(new Set([data.deliveryOrderId, ...(data.sourceOrderIds || [])].filter(Boolean)));
+    if (sourceOrderIds.length === 0) throw new Error('Vui lòng chọn đơn hàng');
+
+    const { data: deliveryOrders, error: doError } = await supabaseService
       .from('delivery_orders')
       .select('id, import_orders(customer_id, total_amount), vegetable_orders(customer_id, total_amount)')
-      .eq('id', data.deliveryOrderId)
-      .single();
+      .in('id', sourceOrderIds);
 
-    if (doError || !doData) throw new Error('Không tìm thấy đơn giao hàng');
+    if (doError) throw doError;
+    if (!deliveryOrders || deliveryOrders.length !== sourceOrderIds.length) throw new Error('Không tìm thấy đầy đủ đơn giao hàng trong nhóm');
 
-    // 2. Get vehicle_id and expected_amount from delivery_vehicles where assigned to this driver or loader
+
+
     const { data: dvDataList, error: dvError } = await supabaseService
       .from('delivery_vehicles')
-      .select('vehicle_id, expected_amount, driver_id, vehicles(in_charge_id)')
-      .eq('delivery_order_id', data.deliveryOrderId);
+      .select('delivery_order_id, vehicle_id, expected_amount, assigned_quantity, driver_id, vehicles(in_charge_id)')
+      .in('delivery_order_id', sourceOrderIds);
 
-    if (dvError || !dvDataList || dvDataList.length === 0) throw new Error('Lỗi truy xuất xe giao hàng');
+    if (dvError) throw dvError;
 
-    const dvData = dvDataList.find((dv: any) => dv.driver_id === driverId || dv.vehicles?.in_charge_id === driverId);
+    const assignedRows = (dvDataList || []).filter((dv: any) => dv.driver_id === driverId || dv.vehicles?.in_charge_id === driverId);
+    if (assignedRows.length === 0) throw new Error('Bạn không được giao đơn hàng này');
 
-    if (!dvData) throw new Error('Bạn không được giao đơn hàng này');
+    const vehicleId = assignedRows[0].vehicle_id;
+    const sameVehicleRows = assignedRows.filter((dv: any) => dv.vehicle_id === vehicleId);
+    const expectedAmount = sameVehicleRows.reduce((sum: number, dv: any) => sum + (Number(dv.expected_amount) || 0), 0);
 
-    const ioOrVeg: any = doData.vegetable_orders || doData.import_orders;
+    await this.assertNoPaymentCollectionConflict(sourceOrderIds, vehicleId, undefined, true);
+
+    const firstOrder: any = deliveryOrders.find((order: any) => order.id === data.deliveryOrderId) || deliveryOrders[0];
+    const ioOrVeg: any = firstOrder.vegetable_orders || firstOrder.import_orders;
     const importOrder: any = Array.isArray(ioOrVeg) ? ioOrVeg[0] : ioOrVeg;
-    // Prefer the explicitly assigned expected_amount from delivery_vehicles. Fallback to import order total if missing.
-    const expectedAmount = Number(dvData.expected_amount) || Number(importOrder?.total_amount) || 0;
+    const fallbackAmount = deliveryOrders.reduce((sum: number, order: any) => {
+      const source: any = Array.isArray(order.vegetable_orders) ? order.vegetable_orders[0] : order.vegetable_orders
+        || (Array.isArray(order.import_orders) ? order.import_orders[0] : order.import_orders);
+      return sum + (Number(source?.total_amount) || 0);
+    }, 0);
+    const finalExpectedAmount = expectedAmount || fallbackAmount;
 
-    if (data.collectedAmount < expectedAmount && (!data.notes || data.notes.trim() === '')) {
+    if (data.collectedAmount < finalExpectedAmount && (!data.notes || data.notes.trim() === '')) {
       throw new Error('Vui lòng ghi chú lý do thu thiếu tiền');
     }
 
-    // 3. Create the payment collection ticket
     const { data: pcData, error: pcError } = await supabaseService
       .from('payment_collections')
       .insert({
         delivery_order_id: data.deliveryOrderId,
+        source_order_ids: sourceOrderIds,
         customer_id: importOrder?.customer_id,
         driver_id: driverId,
-        vehicle_id: dvData.vehicle_id,
-        expected_amount: expectedAmount,
+        vehicle_id: vehicleId,
+        expected_amount: finalExpectedAmount,
         collected_amount: data.collectedAmount,
         collected_at: data.collectedAt,
         notes: data.notes,
@@ -108,7 +121,7 @@ export class PaymentCollectionsService {
       .single();
 
     if (pcError) {
-      if (pcError.code === '23505') { // unique_active_collection
+      if (pcError.code === '23505') {
         throw new Error('Đơn hàng này đã có phiếu thu hoạt động');
       }
       throw pcError;
@@ -177,6 +190,8 @@ export class PaymentCollectionsService {
     if (!canSubmitForDriver) throw new Error('Không có quyền nộp phiếu này');
     if (pc.status !== 'draft') throw new Error('Phiếu phải ở trạng thái draft để nộp');
 
+    await this.assertNoPaymentCollectionConflict(this.getPaymentSourceOrderIds(pc), pc.vehicle_id, pc.id, false);
+
     const updatePayload = {
       status: 'submitted',
       receiver_id: data.receiverId,
@@ -190,7 +205,12 @@ export class PaymentCollectionsService {
       .update(updatePayload)
       .eq('id', id);
 
-    if (error) throw error;
+    if (error) {
+      if ((error as any).code === '23505') {
+        throw new Error('Đơn hàng này đã có phiếu thu đang nộp hoặc đã xác nhận');
+      }
+      throw error;
+    }
     return this.getPaymentCollectionById(id);
   }
 
@@ -211,10 +231,7 @@ export class PaymentCollectionsService {
 
     if (error) throw error;
 
-    // update debt
-    await this.updateCustomerDebt(pc.customer_id, pc.collected_amount, pc.id);
-    await this.updateImportOrderPaidAmount(pc.delivery_order_id, pc.collected_amount);
-    await this.updateExportOrderPaymentStatus(pc.delivery_order_id, pc.collected_amount);
+    await this.applyConfirmedPayment(pc);
 
     return this.getPaymentCollectionById(id);
   }
@@ -238,10 +255,7 @@ export class PaymentCollectionsService {
 
     if (error) throw error;
 
-    // update debt
-    await this.updateCustomerDebt(pc.customer_id, pc.collected_amount, pc.id);
-    await this.updateImportOrderPaidAmount(pc.delivery_order_id, pc.collected_amount);
-    await this.updateExportOrderPaymentStatus(pc.delivery_order_id, pc.collected_amount);
+    await this.applyConfirmedPayment(pc);
 
     return this.getPaymentCollectionById(id);
   }
@@ -319,6 +333,94 @@ export class PaymentCollectionsService {
 
     if (insertError) {
       console.error('Failed to log receipt for payment collection', insertError);
+    }
+  }
+
+  private static getPaymentSourceOrderIds(pc: any) {
+    const ids = Array.isArray(pc.source_order_ids) && pc.source_order_ids.length > 0
+      ? pc.source_order_ids
+      : [pc.delivery_order_id];
+    return Array.from(new Set(ids.filter(Boolean))) as string[];
+  }
+
+  private static async assertNoPaymentCollectionConflict(
+    sourceOrderIds: string[],
+    vehicleId: string,
+    currentPaymentCollectionId?: string,
+    includeDraft = false
+  ) {
+    if (sourceOrderIds.length === 0 || !vehicleId) return;
+
+    const statuses = includeDraft
+      ? ['draft', 'submitted', 'confirmed', 'self_confirmed']
+      : ['submitted', 'confirmed', 'self_confirmed'];
+    const sourceIdSet = new Set(sourceOrderIds);
+
+    const { data: collections, error } = await supabaseService
+      .from('payment_collections')
+      .select('id, delivery_order_id, source_order_ids, status, vehicle_id')
+      .in('status', statuses)
+      .eq('vehicle_id', vehicleId);
+
+    if (error) throw error;
+
+    const hasConflict = (collections || []).some((pc: any) => {
+      if (currentPaymentCollectionId && pc.id === currentPaymentCollectionId) return false;
+      if (pc.delivery_order_id && sourceIdSet.has(pc.delivery_order_id)) return true;
+      const pcSourceIds = Array.isArray(pc.source_order_ids) ? pc.source_order_ids : [];
+      return pcSourceIds.some((id: string) => sourceIdSet.has(id));
+    });
+
+    if (hasConflict) {
+      throw new Error(includeDraft
+        ? 'Một hoặc nhiều đơn trong nhóm đã có phiếu thu'
+        : 'Đơn hàng này đã có phiếu thu đang nộp hoặc đã xác nhận');
+    }
+  }
+
+  private static async getPaymentAllocations(pc: any) {
+    const sourceOrderIds = this.getPaymentSourceOrderIds(pc);
+    if (sourceOrderIds.length === 0) return [];
+
+    const { data: dvRows, error } = await supabaseService
+      .from('delivery_vehicles')
+      .select('delivery_order_id, expected_amount')
+      .in('delivery_order_id', sourceOrderIds)
+      .eq('vehicle_id', pc.vehicle_id);
+
+    if (error) throw error;
+
+    const expectedByOrderId = new Map<string, number>();
+    (dvRows || []).forEach((row: any) => {
+      expectedByOrderId.set(row.delivery_order_id, (expectedByOrderId.get(row.delivery_order_id) || 0) + (Number(row.expected_amount) || 0));
+    });
+
+    const totalExpected = sourceOrderIds.reduce((sum, id) => sum + (expectedByOrderId.get(id) || 0), 0);
+    const collectedAmount = Number(pc.collected_amount || 0);
+
+    if (totalExpected <= 0) {
+      const evenAmount = sourceOrderIds.length > 0 ? collectedAmount / sourceOrderIds.length : 0;
+      return sourceOrderIds.map((deliveryOrderId) => ({ deliveryOrderId, amount: evenAmount }));
+    }
+
+    let allocated = 0;
+    return sourceOrderIds.map((deliveryOrderId, index) => {
+      const expectedAmount = expectedByOrderId.get(deliveryOrderId) || 0;
+      const amount = index === sourceOrderIds.length - 1
+        ? collectedAmount - allocated
+        : (collectedAmount * expectedAmount / totalExpected);
+      allocated += amount;
+      return { deliveryOrderId, amount };
+    });
+  }
+
+  private static async applyConfirmedPayment(pc: any) {
+    await this.updateCustomerDebt(pc.customer_id, pc.collected_amount, pc.id);
+
+    const allocations = await this.getPaymentAllocations(pc);
+    for (const allocation of allocations) {
+      await this.updateImportOrderPaidAmount(allocation.deliveryOrderId, allocation.amount);
+      await this.updateExportOrderPaymentStatus(allocation.deliveryOrderId, allocation.amount);
     }
   }
 
@@ -412,6 +514,7 @@ export class PaymentCollectionsService {
     return {
       id: pc.id,
       deliveryOrderId: pc.delivery_order_id,
+      sourceOrderIds: Array.isArray(pc.source_order_ids) && pc.source_order_ids.length > 0 ? pc.source_order_ids : (pc.delivery_order_id ? [pc.delivery_order_id] : []),
       deliveryOrderCode: pc.delivery_orders?.vegetable_orders ? (Array.isArray(pc.delivery_orders.vegetable_orders) ? pc.delivery_orders.vegetable_orders[0].order_code : pc.delivery_orders.vegetable_orders.order_code) : (pc.delivery_orders?.import_orders ? (Array.isArray(pc.delivery_orders.import_orders) ? pc.delivery_orders.import_orders[0].order_code : pc.delivery_orders.import_orders.order_code) : undefined),
       customerId: pc.customer_id,
       customerName: pc.delivery_orders?.vegetable_orders ? (Array.isArray(pc.delivery_orders.vegetable_orders) ? pc.delivery_orders.vegetable_orders[0].customers?.name : pc.delivery_orders.vegetable_orders.customers?.name) : (pc.delivery_orders?.import_orders ? (Array.isArray(pc.delivery_orders.import_orders) ? pc.delivery_orders.import_orders[0].customers?.name : pc.delivery_orders.import_orders.customers?.name) : undefined),

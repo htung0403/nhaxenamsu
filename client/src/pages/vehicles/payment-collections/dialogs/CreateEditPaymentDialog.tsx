@@ -11,6 +11,7 @@ import { SearchableSelect } from '../../../../components/ui/SearchableSelect';
 import { uploadApi } from '../../../../api/uploadApi';
 import toast from 'react-hot-toast';
 import { cloudinaryThumb } from '../../../../lib/cloudinaryUrl';
+import { getReceiverDisplayName, groupDeliveryOrdersForView } from '../../../../lib/deliveryGrouping';
 
 interface Props {
   isOpen: boolean;
@@ -40,24 +41,37 @@ const CreateEditPaymentDialog: React.FC<Props> = ({ isOpen, onClose, payment }) 
   const { user } = useAuth();
   const { data: deliveries } = useAllPendingDeliveries();
 
-  // Resolve pending orders for the logged-in driver based on deliveries
+  // Resolve pending orders for the logged-in driver, grouped the same way as DeliveryPage.
   const pendingOrders = useMemo(() => {
     if (!deliveries) return [];
-    return deliveries
-      .filter(d => 
-        d.delivery_vehicles?.some(v => v.driver_id === user?.id || v.vehicles?.in_charge_id === user?.id)
-      )
-      .map(d => {
-        const myAssignment = d.delivery_vehicles?.find(v => v.driver_id === user?.id || v.vehicles?.in_charge_id === user?.id);
-        return {
-          id: d.id,
-          code: d.import_orders?.order_code || d.vegetable_orders?.order_code || 'N/A',
-          customer: d.import_orders?.customers?.name || d.vegetable_orders?.customers?.name || 'Vô Danh',
-          productName: d.product_name,
-          quantity: myAssignment?.assigned_quantity ?? d.total_quantity,
-          amount: myAssignment?.expected_amount ?? d.import_orders?.total_amount ?? d.vegetable_orders?.total_amount ?? 0
-        };
-      });
+
+    const driverDeliveries = deliveries.filter((delivery) =>
+      delivery.delivery_vehicles?.some((vehicle) => vehicle.driver_id === user?.id || vehicle.vehicles?.in_charge_id === user?.id)
+    );
+
+    return groupDeliveryOrdersForView(driverDeliveries).map((delivery) => {
+      const sourceOrders = delivery.source_orders && delivery.source_orders.length > 0 ? delivery.source_orders : [delivery];
+      const sourceOrderIds = delivery.source_order_ids && delivery.source_order_ids.length > 0 ? delivery.source_order_ids : [delivery.id];
+      const assignments = sourceOrders.flatMap((sourceOrder) =>
+        (sourceOrder.delivery_vehicles || []).filter((vehicle) => vehicle.driver_id === user?.id || vehicle.vehicles?.in_charge_id === user?.id)
+      );
+      const quantity = assignments.reduce((sum, assignment) => sum + (Number(assignment.assigned_quantity) || 0), 0) || delivery.total_quantity;
+      const amount = assignments.reduce((sum, assignment) => sum + (Number(assignment.expected_amount) || 0), 0)
+        || sourceOrders.reduce((sum, sourceOrder) => sum + (Number(sourceOrder.import_orders?.total_amount || sourceOrder.vegetable_orders?.total_amount) || 0), 0);
+      const codes = sourceOrders
+        .map((sourceOrder) => sourceOrder.import_orders?.order_code || sourceOrder.vegetable_orders?.order_code)
+        .filter(Boolean);
+
+      return {
+        id: delivery.id,
+        sourceOrderIds,
+        code: codes.length > 1 ? codes[0] + ' +' + (codes.length - 1) : (codes[0] || 'N/A'),
+        customer: getReceiverDisplayName(delivery) || 'Vô Danh',
+        productName: delivery.product_name,
+        quantity,
+        amount,
+      };
+    });
   }, [deliveries, user?.id]);
 
   const [deliveryOrderId, setDeliveryOrderId] = useState('');
@@ -166,6 +180,7 @@ const CreateEditPaymentDialog: React.FC<Props> = ({ isOpen, onClose, payment }) 
     } else {
       createPayment({
         deliveryOrderId,
+        sourceOrderIds: selectedOrder?.sourceOrderIds,
         collectedAmount: Number(collectedAmount),
         collectedAt: new Date(collectedAt).toISOString(),
         notes,
