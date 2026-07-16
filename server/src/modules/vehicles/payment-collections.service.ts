@@ -13,7 +13,7 @@ export class PaymentCollectionsService {
           total_quantity,
           import_orders ( order_code, customers!import_orders_customer_id_fkey ( name ) ),
           vegetable_orders ( order_code, customers!vegetable_orders_customer_id_fkey ( name ) ),
-          delivery_vehicles ( vehicle_id, assigned_quantity, expected_amount )
+          delivery_vehicles ( id, vehicle_id, driver_id, delivery_date, delivery_time, assigned_quantity, expected_amount )
         ),
         drivers:profiles!payment_collections_driver_id_fkey(full_name),
         receivers:profiles!payment_collections_receiver_id_fkey(full_name),
@@ -45,7 +45,7 @@ export class PaymentCollectionsService {
           total_quantity,
           import_orders ( order_code, customers!import_orders_customer_id_fkey ( name ) ),
           vegetable_orders ( order_code, customers!vegetable_orders_customer_id_fkey ( name ) ),
-          delivery_vehicles ( vehicle_id, assigned_quantity, expected_amount )
+          delivery_vehicles ( id, vehicle_id, driver_id, delivery_date, delivery_time, assigned_quantity, expected_amount )
         ),
         drivers:profiles!payment_collections_driver_id_fkey(full_name),
         receivers:profiles!payment_collections_receiver_id_fkey(full_name),
@@ -74,7 +74,7 @@ export class PaymentCollectionsService {
 
     const { data: dvDataList, error: dvError } = await supabaseService
       .from('delivery_vehicles')
-      .select('delivery_order_id, vehicle_id, expected_amount, assigned_quantity, driver_id, vehicles(in_charge_id)')
+      .select('id, delivery_order_id, vehicle_id, expected_amount, assigned_quantity, driver_id, delivery_date, delivery_time, vehicles(in_charge_id)')
       .in('delivery_order_id', sourceOrderIds);
 
     if (dvError) throw dvError;
@@ -82,11 +82,13 @@ export class PaymentCollectionsService {
     const assignedRows = (dvDataList || []).filter((dv: any) => dv.driver_id === driverId || dv.vehicles?.in_charge_id === driverId);
     if (assignedRows.length === 0) throw new Error('Bạn không được giao đơn hàng này');
 
-    const vehicleId = assignedRows[0].vehicle_id;
-    const sameVehicleRows = assignedRows.filter((dv: any) => dv.vehicle_id === vehicleId);
+    const activeCollectionIds = await this.getActiveDeliveryVehicleIds(sourceOrderIds);
+    const payableRows = assignedRows.filter((dv: any) => !activeCollectionIds.has(dv.id));
+    const targetRows = payableRows.length > 0 ? payableRows : assignedRows;
+    const vehicleId = targetRows[0].vehicle_id;
+    const sameVehicleRows = targetRows.filter((dv: any) => dv.vehicle_id === vehicleId);
     const expectedAmount = sameVehicleRows.reduce((sum: number, dv: any) => sum + (Number(dv.expected_amount) || 0), 0);
-
-    await this.assertNoPaymentCollectionConflict(sourceOrderIds, vehicleId, undefined, true);
+    const deliveryVehicleId = sameVehicleRows.length === 1 ? sameVehicleRows[0].id : null;
 
     const firstOrder: any = deliveryOrders.find((order: any) => order.id === data.deliveryOrderId) || deliveryOrders[0];
     const ioOrVeg: any = firstOrder.vegetable_orders || firstOrder.import_orders;
@@ -110,6 +112,7 @@ export class PaymentCollectionsService {
         customer_id: importOrder?.customer_id,
         driver_id: driverId,
         vehicle_id: vehicleId,
+        delivery_vehicle_id: deliveryVehicleId,
         expected_amount: finalExpectedAmount,
         collected_amount: data.collectedAmount,
         collected_at: data.collectedAt,
@@ -122,7 +125,7 @@ export class PaymentCollectionsService {
 
     if (pcError) {
       if (pcError.code === '23505') {
-        throw new Error('Đơn hàng này đã có phiếu thu hoạt động');
+        throw new Error('Chuyến phân xe này đã có phiếu thu hoạt động');
       }
       throw pcError;
     }
@@ -157,11 +160,19 @@ export class PaymentCollectionsService {
       if (data.totalPackages !== undefined) deliveryVehiclePayload.assigned_quantity = data.totalPackages;
       if (data.expectedAmount !== undefined) deliveryVehiclePayload.expected_amount = data.expectedAmount;
 
-      const { error: deliveryVehicleError } = await supabaseService
+      let deliveryVehicleQuery = supabaseService
         .from('delivery_vehicles')
-        .update(deliveryVehiclePayload)
-        .eq('delivery_order_id', pc.delivery_order_id)
-        .eq('vehicle_id', pc.vehicle_id);
+        .update(deliveryVehiclePayload);
+
+      if (pc.delivery_vehicle_id) {
+        deliveryVehicleQuery = deliveryVehicleQuery.eq('id', pc.delivery_vehicle_id);
+      } else {
+        deliveryVehicleQuery = deliveryVehicleQuery
+          .eq('delivery_order_id', pc.delivery_order_id)
+          .eq('vehicle_id', pc.vehicle_id);
+      }
+
+      const { error: deliveryVehicleError } = await deliveryVehicleQuery;
 
       if (deliveryVehicleError) throw deliveryVehicleError;
     }
@@ -189,8 +200,6 @@ export class PaymentCollectionsService {
     const canSubmitForDriver = pc.driver_id === actor.id || ['admin', 'manager', 'staff'].includes(actor.role);
     if (!canSubmitForDriver) throw new Error('Không có quyền nộp phiếu này');
     if (pc.status !== 'draft') throw new Error('Phiếu phải ở trạng thái draft để nộp');
-
-    await this.assertNoPaymentCollectionConflict(this.getPaymentSourceOrderIds(pc), pc.vehicle_id, pc.id, false);
 
     const updatePayload = {
       status: 'submitted',
@@ -291,7 +300,7 @@ export class PaymentCollectionsService {
           total_quantity,
           import_orders ( order_code, customers!import_orders_customer_id_fkey ( name ) ),
           vegetable_orders ( order_code, customers!vegetable_orders_customer_id_fkey ( name ) ),
-          delivery_vehicles ( vehicle_id, assigned_quantity, expected_amount )
+          delivery_vehicles ( id, vehicle_id, driver_id, delivery_date, delivery_time, assigned_quantity, expected_amount )
         ),
         drivers:profiles!payment_collections_driver_id_fkey(full_name),
         receivers:profiles!payment_collections_receiver_id_fkey(full_name),
@@ -376,6 +385,21 @@ export class PaymentCollectionsService {
         ? 'Một hoặc nhiều đơn trong nhóm đã có phiếu thu'
         : 'Đơn hàng này đã có phiếu thu đang nộp hoặc đã xác nhận');
     }
+  }
+
+  private static async getActiveDeliveryVehicleIds(sourceOrderIds: string[]) {
+    if (sourceOrderIds.length === 0) return new Set<string>();
+
+    const { data, error } = await supabaseService
+      .from('payment_collections')
+      .select('delivery_vehicle_id')
+      .in('delivery_order_id', sourceOrderIds)
+      .in('status', ['draft', 'submitted', 'confirmed', 'self_confirmed'])
+      .not('delivery_vehicle_id', 'is', null);
+
+    if (error) throw error;
+
+    return new Set((data || []).map((pc: any) => pc.delivery_vehicle_id).filter(Boolean));
   }
 
   private static async getPaymentAllocations(pc: any) {
@@ -488,7 +512,14 @@ export class PaymentCollectionsService {
     const doRow = pc.delivery_orders;
     const dvsRaw = doRow?.delivery_vehicles;
     const dvList: any[] = Array.isArray(dvsRaw) ? dvsRaw : dvsRaw ? [dvsRaw] : [];
-    const match = dvList.find((dv: any) => dv.vehicle_id === pc.vehicle_id);
+    const match = pc.delivery_vehicle_id
+      ? dvList.find((dv: any) => dv.id === pc.delivery_vehicle_id)
+      : dvList.find((dv: any) =>
+        dv.vehicle_id === pc.vehicle_id &&
+        (!pc.driver_id || dv.driver_id === pc.driver_id) &&
+        Number(dv.assigned_quantity || 0) > 0 &&
+        Number(dv.expected_amount || 0) === Number(pc.expected_amount || 0)
+      ) || dvList.find((dv: any) => dv.vehicle_id === pc.vehicle_id);
 
     let totalPackages: number | undefined;
     if (match?.assigned_quantity != null && match.assigned_quantity !== '') {
@@ -514,6 +545,7 @@ export class PaymentCollectionsService {
     return {
       id: pc.id,
       deliveryOrderId: pc.delivery_order_id,
+      deliveryVehicleId: pc.delivery_vehicle_id,
       sourceOrderIds: Array.isArray(pc.source_order_ids) && pc.source_order_ids.length > 0 ? pc.source_order_ids : (pc.delivery_order_id ? [pc.delivery_order_id] : []),
       deliveryOrderCode: pc.delivery_orders?.vegetable_orders ? (Array.isArray(pc.delivery_orders.vegetable_orders) ? pc.delivery_orders.vegetable_orders[0].order_code : pc.delivery_orders.vegetable_orders.order_code) : (pc.delivery_orders?.import_orders ? (Array.isArray(pc.delivery_orders.import_orders) ? pc.delivery_orders.import_orders[0].order_code : pc.delivery_orders.import_orders.order_code) : undefined),
       customerId: pc.customer_id,

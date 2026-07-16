@@ -33,6 +33,7 @@ export type PaymentReceiverType = 'staff' | 'manager';
 export interface PaymentCollection {
   id: string;
   deliveryOrderId: string;
+  deliveryVehicleId?: string | null;
   sourceOrderIds?: string[];
   deliveryOrderCode: string;
   customerId: string;
@@ -78,3 +79,4 @@ export interface ConfirmPaymentDto {
   confirmedAt: string;
   notes?: string;
 }
+

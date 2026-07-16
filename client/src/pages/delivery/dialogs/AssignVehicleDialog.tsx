@@ -165,7 +165,10 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       if (isDriver) {
         initialVid = initialVid || myVehicle?.id || '';
       }
-      if (initialVid && order?.delivery_vehicles) {
+      if (mode === 'add-new' && order?.delivery_vehicles) {
+        hiddenSum = order.delivery_vehicles
+          .reduce((acc, dv) => acc + (Number(dv.assigned_quantity) || 0), 0);
+      } else if (initialVid && order?.delivery_vehicles) {
         hiddenSum = order.delivery_vehicles
           .filter((dv) => dv.vehicle_id !== initialVid)
           .reduce((acc, dv) => acc + (Number(dv.assigned_quantity) || 0), 0);
@@ -173,7 +176,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
 
       return visibleSum + hiddenSum;
     },
-    [watchAssignments, assignmentBaselines, initialVehicleId, isDriver, myVehicle, order]
+    [watchAssignments, assignmentBaselines, initialVehicleId, isDriver, myVehicle, order, mode]
   );
   const currentAvailable = order ? Math.max(0, order.total_quantity - projectedAssignedTotal) : 0;
 
@@ -276,14 +279,16 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       if (mode === 'add-new') {
         if (initialVid) {
           const vehicle = eligibleVehicles.find(v => v.id === initialVid);
+          const alreadyAssignedSum = existingDvs.reduce((sum, dv) => sum + (Number(dv.assigned_quantity) || 0), 0);
+          const remainingForThis = Math.max(0, order.total_quantity - alreadyAssignedSum);
           baselines.push(0);
           initialAssignments.push({
             vehicle_id: initialVid,
             driver_id: vehicle?.driver_id || vehicle?.in_charge_id || (isDriver ? myEmployeeId || '' : ''),
             loader_name: '',
             unit_price: defaultUnitPrice,
-            quantity: 0,
-            expected_amount: 0,
+            quantity: remainingForThis,
+            expected_amount: importPaidReset ? 0 : remainingForThis * defaultUnitPrice,
             image_urls: [],
             delivery_date: format(now, 'yyyy-MM-dd'),
             delivery_time: format(now, 'HH:mm'),
@@ -417,7 +422,10 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       }
 
       let hiddenSum = 0;
-      if (initialVid && order.delivery_vehicles) {
+      if (mode === 'add-new' && order.delivery_vehicles) {
+        hiddenSum = order.delivery_vehicles
+          .reduce((acc, dv) => acc + (Number(dv.assigned_quantity) || 0), 0);
+      } else if (initialVid && order.delivery_vehicles) {
         hiddenSum = order.delivery_vehicles
           .filter((dv) => dv.vehicle_id !== initialVid)
           .reduce((acc, dv) => acc + (Number(dv.assigned_quantity) || 0), 0);
@@ -650,7 +658,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
             <div className="flex flex-col gap-3">
               {fields.map((field, index) => {
                 const currentVid = watchAssignments[index]?.vehicle_id;
-                const isPaid = currentVid
+                const isPaid = mode !== 'add-new' && currentVid
                   ? (order?.payment_collections || []).some((pc) => pc.vehicle_id === currentVid && (pc.status === 'confirmed' || pc.status === 'self_confirmed'))
                   : false;
 

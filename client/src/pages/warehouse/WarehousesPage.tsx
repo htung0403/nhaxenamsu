@@ -41,6 +41,7 @@ import type { DeliveryOrder, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
 import { VehicleCellTooltip } from '../delivery/components/VehicleCellTooltip';
+import { isDeliveryVehiclePaymentPaid } from '../../lib/deliveryPaymentStatus';
 
 // ---------------------------------------------------------------------------
 // Helpers (copied from DeliveryPage)
@@ -51,7 +52,6 @@ const formatNumber = (val?: number) => {
   return new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(val);
 };
 
-const isPaidCollectionStatus = (status?: string) => status === 'confirmed' || status === 'self_confirmed';
 
 const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'vegetable') => {
   if (!vehicle.goods_categories || vehicle.goods_categories.length === 0) return true;
@@ -778,9 +778,6 @@ const WarehousesPage: React.FC = () => {
                               const isEditableByMe = myVehicleIdSet.has(v.id);
                               const canEdit = isEditableByMe || isAdmin;
                               const isExportPaid = dvs.length > 0 && dvs.some(dv => dv.export_payment_status === 'paid');
-                              const isCollectionPaid = (o.payment_collections || []).some(
-                                (pc) => pc.vehicle_id === v.id && isPaidCollectionStatus(pc.status)
-                              );
 
                               return (
                                 <td
@@ -807,7 +804,7 @@ const WarehousesPage: React.FC = () => {
                                           return (
                                             <React.Fragment key={dvItem.id || idx}>
                                               {idx > 0 && <span className="text-[10px] text-muted-foreground/50">+</span>}
-                                              <VehicleCellTooltip dv={dvItem} vehicle={v} qty={dvItem.assigned_quantity || 0} isPaid={isCollectionPaid} exportPaid={isDvExportPaid}>
+                                              <VehicleCellTooltip dv={dvItem} vehicle={v} qty={dvItem.assigned_quantity || 0} isPaid={isDeliveryVehiclePaymentPaid(dvItem, o.payment_collections, o.delivery_vehicles)} exportPaid={isDvExportPaid}>
                                                 <span
                                                   onClick={(e) => {
                                                     e.stopPropagation();
@@ -842,7 +839,7 @@ const WarehousesPage: React.FC = () => {
                                           <Pencil size={11} strokeWidth={2.5} />
                                         </button>
                                       )}
-                                      {isCollectionPaid && (
+                                      {dvs.some((dv) => isDeliveryVehiclePaymentPaid(dv, o.payment_collections, o.delivery_vehicles)) && (
                                         <div className="mt-0.5 flex items-center justify-center gap-0.5 text-green-600 bg-green-500/10 rounded-sm px-1" title="Đã xác nhận thu tiền">
                                           <CheckCircle size={8} strokeWidth={3} />
                                           <span className="text-[9px] font-black leading-none pb-px">Thu</span>
@@ -994,11 +991,7 @@ const WarehousesPage: React.FC = () => {
                                 {(o.delivery_vehicles || [])
                                   .filter((dv) => (dv.assigned_quantity || 0) > 0)
                                   .map((dv) => {
-                                    const isPaid = (o.payment_collections || []).some(
-                                      (pc) =>
-                                        pc.vehicle_id === dv.vehicle_id &&
-                                        isPaidCollectionStatus(pc.status)
-                                    );
+                                    const isPaid = isDeliveryVehiclePaymentPaid(dv, o.payment_collections, o.delivery_vehicles);
                                     return (
                                       <div
                                         key={dv.id}
@@ -1231,14 +1224,4 @@ const WarehousesPage: React.FC = () => {
 };
 
 export default WarehousesPage;
-
-
-
-
-
-
-
-
-
-
 

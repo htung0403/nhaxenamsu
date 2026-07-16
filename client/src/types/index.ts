@@ -393,6 +393,9 @@ export interface DeliveryOrder {
     id: string;
     status: PaymentCollectionStatus;
     vehicle_id: string;
+    delivery_vehicle_id?: string | null;
+    expected_amount?: number | null;
+    collected_amount?: number | null;
     image_url?: string;
     image_urls?: string[];
   }[];
@@ -469,6 +472,7 @@ export type PaymentReceiverType = 'staff' | 'manager';
 export interface PaymentCollection {
   id: string;
   deliveryOrderId: string;
+  deliveryVehicleId?: string | null;
   sourceOrderIds?: string[];
   deliveryOrderCode: string;
   customerId: string;
@@ -656,4 +660,5 @@ export interface ImportOrderFilters {
   page?: number;
   pageSize?: number;
 }
+
 

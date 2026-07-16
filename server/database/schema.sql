@@ -243,6 +243,7 @@ CREATE TABLE public.payment_collections (
   customer_id UUID REFERENCES public.customers(id),
   driver_id UUID NOT NULL REFERENCES public.profiles(id),
   vehicle_id UUID NOT NULL REFERENCES public.vehicles(id),
+  delivery_vehicle_id UUID REFERENCES public.delivery_vehicles(id) ON DELETE SET NULL,
   expected_amount NUMERIC(15,2) NOT NULL,
   collected_amount NUMERIC(15,2) NOT NULL,
   difference NUMERIC(15,2) GENERATED ALWAYS AS (collected_amount - expected_amount) STORED,
@@ -266,11 +267,12 @@ CREATE INDEX idx_pc_driver_id ON public.payment_collections(driver_id);
 CREATE INDEX idx_pc_status ON public.payment_collections(status);
 CREATE INDEX idx_pc_collected_at ON public.payment_collections(collected_at);
 CREATE INDEX idx_pc_vehicle_id ON public.payment_collections(vehicle_id);
+CREATE INDEX idx_pc_delivery_vehicle_id ON public.payment_collections(delivery_vehicle_id);
 
 -- Constraint for uniqueness
 CREATE UNIQUE INDEX unique_active_collection 
-  ON public.payment_collections(delivery_order_id, vehicle_id) 
-  WHERE status IN ('submitted','confirmed','self_confirmed') AND delivery_order_id IS NOT NULL;
+  ON public.payment_collections(delivery_vehicle_id) 
+  WHERE status IN ('submitted','confirmed','self_confirmed') AND delivery_vehicle_id IS NOT NULL;
 
 -- 12. LEAVE REQUESTS
 CREATE TABLE public.leave_requests (

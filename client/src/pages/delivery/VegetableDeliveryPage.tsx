@@ -27,6 +27,7 @@ import type { DeliveryOrder, Vehicle } from '../../types';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 import { deliveryOrderVisibleToUser, hasFullGoodsModuleAccess } from '../../utils/goodsModuleScope';
 import { VehicleCellTooltip } from './components/VehicleCellTooltip';
+import { isDeliveryVehiclePaymentPaid } from '../../lib/deliveryPaymentStatus';
 
 const formatNumber = (val?: number) => {
   if (val == null) return '0';
@@ -69,7 +70,6 @@ const PAYMENT_STATUS_CONFIG = {
   paid: { label: 'Đã thu', className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-500 border-emerald-200/20' },
 };
 
-const isPaidCollectionStatus = (status?: string) => status === 'confirmed' || status === 'self_confirmed';
 
 const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'vegetable') => {
   if (!vehicle.goods_categories || vehicle.goods_categories.length === 0) return true;
@@ -113,25 +113,15 @@ const isRevertAllowed = (order: DeliveryOrder) => {
   });
 };
 
+
 const getOrderPaymentStatus = (order: DeliveryOrder): keyof typeof PAYMENT_STATUS_CONFIG => {
-  const assignedVehicleIds = (order.delivery_vehicles || [])
-    .filter((dv) => (dv.assigned_quantity || 0) > 0)
-    .map((dv) => dv.vehicle_id)
-    .filter((vehicleId): vehicleId is string => Boolean(vehicleId));
+  const assignedTrips = (order.delivery_vehicles || []).filter((dv) => (dv.assigned_quantity || 0) > 0);
 
-  if (assignedVehicleIds.length === 0) return 'unpaid';
+  if (assignedTrips.length === 0) return 'unpaid';
 
-  const paidVehicleIds = new Set(
-    (order.payment_collections || [])
-      .filter((pc) => isPaidCollectionStatus(pc.status))
-      .map((pc) => pc.vehicle_id)
-      .filter((vehicleId): vehicleId is string => Boolean(vehicleId))
-  );
-
-  const paidCount = assignedVehicleIds.filter((vehicleId) => paidVehicleIds.has(vehicleId)).length;
-
+  const paidCount = assignedTrips.filter((dv) => isDeliveryVehiclePaymentPaid(dv, order.payment_collections, order.delivery_vehicles)).length;
   if (paidCount === 0) return 'unpaid';
-  if (paidCount === assignedVehicleIds.length) return 'paid';
+  if (paidCount >= assignedTrips.length) return 'paid';
   return 'partial';
 };
 
@@ -897,10 +887,7 @@ const VegetableDeliveryPage: React.FC = () => {
                               const displayQty = qty > 0 ? qty : fallbackQty;
                               const isEditableByMe = myVehicleIdSet.has(v.id);
                               const canEdit = isEditableByMe || isAdmin;
-
-                              const isPaid = (o.payment_collections || []).some(
-                                (pc) => pc.vehicle_id === v.id && isPaidCollectionStatus(pc.status)
-                              );
+                              const cellHasPaidTrip = dvs.some((dv) => isDeliveryVehiclePaymentPaid(dv, o.payment_collections, o.delivery_vehicles));
 
                               return (
                                 <td
@@ -922,7 +909,7 @@ const VegetableDeliveryPage: React.FC = () => {
                                         {dvs.map((dvItem, idx) => (
                                           <React.Fragment key={dvItem.id || idx}>
                                             {idx > 0 && <span className="text-[10px] text-muted-foreground/50">+</span>}
-                                            <VehicleCellTooltip dv={dvItem} vehicle={v} qty={dvItem.assigned_quantity || 0} isPaid={isPaid} exportPaid={dvItem.export_payment_status === 'paid'}>
+                                            <VehicleCellTooltip dv={dvItem} vehicle={v} qty={dvItem.assigned_quantity || 0} isPaid={isDeliveryVehiclePaymentPaid(dvItem, o.payment_collections, o.delivery_vehicles)} exportPaid={dvItem.export_payment_status === 'paid'}>
                                               <span className="cursor-help hover:text-blue-700 underline decoration-dotted decoration-blue-500/30 underline-offset-2">
                                                 {formatNumber(dvItem.assigned_quantity)}
                                               </span>
@@ -942,7 +929,7 @@ const VegetableDeliveryPage: React.FC = () => {
                                           <Pencil size={11} strokeWidth={2.5} />
                                         </button>
                                       )}
-                                      {isPaid && (
+                                      {cellHasPaidTrip && (
                                         <div className="mt-0.5 flex items-center justify-center gap-0.5 text-green-600 bg-green-500/10 rounded-sm px-1" title="Đã xác nhận thu tiền">
                                           <CheckCircle size={8} strokeWidth={3} />
                                           <span className="text-[9px] font-black leading-none pb-px">Thu</span>
@@ -966,7 +953,7 @@ const VegetableDeliveryPage: React.FC = () => {
                                           <Pencil size={11} strokeWidth={2.5} />
                                         </button>
                                       )}
-                                      {isPaid && (
+                                      {cellHasPaidTrip && (
                                         <div className="mt-0.5 flex items-center justify-center gap-0.5 text-green-600 bg-green-500/10 rounded-sm px-1" title="Đã xác nhận thu tiền">
                                           <CheckCircle size={8} strokeWidth={3} />
                                           <span className="text-[9px] font-black leading-none pb-px">Thu</span>
@@ -1147,9 +1134,7 @@ const VegetableDeliveryPage: React.FC = () => {
                                   }
                                   return true;
                                 }).map((dv) => {
-                                  const isPaid = (o.payment_collections || []).some(
-                                    (pc) => pc.vehicle_id === dv.vehicle_id && isPaidCollectionStatus(pc.status)
-                                  );
+                                  const isPaid = isDeliveryVehiclePaymentPaid(dv, o.payment_collections, o.delivery_vehicles);
                                   return (
                                     <div key={dv.id} className={clsx("flex items-center gap-1.5 px-2 py-1 rounded-md border", isPaid ? "bg-green-500/10 border-green-200/20" : "bg-blue-500/10 border-blue-200/20")} title={isPaid ? "Đã thu tiền" : undefined}>
                                       <Truck size={12} className={isPaid ? "text-green-500" : "text-blue-500"} />
@@ -1444,3 +1429,4 @@ const VegetableDeliveryPage: React.FC = () => {
 };
 
 export default VegetableDeliveryPage;
+
