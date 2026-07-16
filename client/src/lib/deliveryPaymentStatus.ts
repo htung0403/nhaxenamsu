@@ -17,19 +17,13 @@ export const isPaidCollectionStatus = (status?: PaymentCollectionStatus | string
 export const isDeliveryVehiclePaymentPaid = (
   deliveryVehicle: DeliveryVehicle,
   paymentCollections?: DeliveryPaymentCollection[],
-  siblingDeliveryVehicles?: DeliveryVehicle[],
+  _siblingDeliveryVehicles?: DeliveryVehicle[],
 ) => {
   const paidCollections = (paymentCollections || []).filter((pc) => PAID_COLLECTION_STATUSES.has(pc.status));
 
   if (deliveryVehicle.id) {
-    const directMatch = paidCollections.some((pc) => pc.delivery_vehicle_id === deliveryVehicle.id);
-    if (directMatch) return true;
+    return paidCollections.some((pc) => pc.delivery_vehicle_id === deliveryVehicle.id);
   }
-
-  const sameVehicleTrips = (siblingDeliveryVehicles || [])
-    .filter((dv) => dv.vehicle_id === deliveryVehicle.vehicle_id && (Number(dv.assigned_quantity) || 0) > 0);
-
-  if (deliveryVehicle.id && sameVehicleTrips.length > 1) return false;
 
   return paidCollections.some((pc) => {
     if (pc.delivery_vehicle_id) return false;
