@@ -243,19 +243,13 @@ export class DeliveryService {
     return src.customers?.name || src.receiver_name?.trim() || src.profiles?.full_name || '-';
   }
 
-  private static getDeliverySourcePaymentStatusForGroup(row: any): string {
-    const src = this.pickDeliveryRelation(row?.import_orders) || this.pickDeliveryRelation(row?.vegetable_orders);
-    return src?.payment_status || 'unpaid';
-  }
-
   private static getDeliveryScopeGroupKey(row: any): string {
     if (row?.status === 'hang_o_sg') return `single:${row?.id}`;
     const deliveryDate = row?.delivery_date || 'N/A';
     const category = row?.order_category || 'standard';
     const receiver = this.getDeliveryReceiverForGroup(row);
     const product = (row?.product_name || '').trim();
-    const paymentStatus = this.getDeliverySourcePaymentStatusForGroup(row);
-    return `${deliveryDate}|${category}|${receiver}|${product}|${paymentStatus}`;
+    return `${deliveryDate}|${category}|${receiver}|${product}`;
   }
 
   static async getAllToday(startDate?: string, endDate?: string, orderCategory?: string, actor?: UserPayload) {
