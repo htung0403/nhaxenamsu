@@ -475,6 +475,7 @@ export interface PaymentCollection {
   deliveryVehicleId?: string | null;
   sourceOrderIds?: string[];
   deliveryOrderCode: string;
+  productName?: string;
   customerId: string;
   customerName: string;
   driverId: string;
@@ -491,6 +492,8 @@ export interface PaymentCollection {
   receiverName?: string;
   receiverType?: PaymentReceiverType;
   confirmedAt?: string;
+  confirmedById?: string;
+  confirmedByName?: string;
   selfConfirmReason?: string;
   notes?: string;
   imageUrl?: string;

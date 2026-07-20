@@ -41,6 +41,7 @@ import DriverMapPage from './pages/vehicles/DriverMapPage';
 import DriverDeliveriesPage from './pages/vehicles/DriverDeliveriesPage';
 import DriverActiveTripPage from './pages/vehicles/DriverActiveTripPage';
 import PaymentCollectionsPage from './pages/vehicles/payment-collections/PaymentCollectionsPage';
+import PrintPaymentCollectionHistoryPage from './pages/vehicles/payment-collections/PrintPaymentCollectionHistoryPage';
 import GroceryCustomersPage from './pages/customers/GroceryCustomersPage';
 import VegetableCustomersPage from './pages/customers/VegetableCustomersPage';
 import VegetableSenderCustomersPage from './pages/customers/VegetableSenderCustomersPage';
@@ -231,6 +232,7 @@ function AppRoutes() {
           <Route path="cong-no-theo-xe" element={<CustomerDebtPage mode="vehicle" />} />
           <Route path="thu-tien-sg" element={<SgCashCollectionsPage />} />
           <Route path="thu-tien-hang" element={<PaymentCollectionsPage />} />
+          <Route path="in-lich-su-thu-tien" element={<PrintPaymentCollectionHistoryPage />} />
           <Route path="in-thu-tien-sg" element={<PrintSgCashCollectionsPage />} />
           <Route path="doanh-thu" element={<RevenueReportPage />} />
           <Route path="hoa-don-tap-hoa" element={<InvoiceGroceryPage />} />

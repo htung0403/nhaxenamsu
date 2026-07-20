@@ -84,6 +84,7 @@ const StaffConfirmationTab: React.FC = () => {
 
     result = result.filter(c => 
       matchesSearch(c.deliveryOrderCode, filterSearch) ||
+      matchesSearch(c.productName || '', filterSearch) ||
       matchesSearch(c.driverName || '', filterSearch) ||
       matchesSearch(c.customerName || '', filterSearch)
     );
@@ -343,6 +344,7 @@ const StaffConfirmationTab: React.FC = () => {
                               <div>
                               <h3 className="font-bold text-slate-800 text-[14px]">{pc.deliveryOrderCode}</h3>
                               <p className="text-[12px] text-slate-500">{pc.customerName}</p>
+                              <p className="text-[12px] text-slate-500 truncate">{pc.productName || '--'}</p>
                               </div>
                             </div>
                             <span className="bg-yellow-100 text-yellow-700 text-[11px] px-2 py-0.5 rounded font-bold">Chờ XN</span>
@@ -398,6 +400,7 @@ const StaffConfirmationTab: React.FC = () => {
                     />
                   </th>
                   <th className="px-4 py-3">Phiếu / Khách Hàng</th>
+                  <th className="px-4 py-3">Tên Hàng</th>
                   <th className="px-4 py-3">Tài Xế</th>
                   <th className="px-4 py-3">Biển Số Xe</th>
                   <th className="px-4 py-3">Tiền Thực Thu</th>
@@ -417,7 +420,7 @@ const StaffConfirmationTab: React.FC = () => {
                       className="bg-slate-100/50 cursor-pointer select-none hover:bg-slate-200/50 transition-colors"
                       onClick={() => toggleDate(dateKey)}
                     >
-                      <td colSpan={8} className="px-4 py-2 text-[13px] font-bold text-slate-700">
+                      <td colSpan={9} className="px-4 py-2 text-[13px] font-bold text-slate-700">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <input
@@ -450,6 +453,9 @@ const StaffConfirmationTab: React.FC = () => {
                         <td className="px-4 py-3 text-[13px]">
                           <div className="font-bold text-slate-800">{pc.deliveryOrderCode}</div>
                           <div className="text-slate-500">{pc.customerName}</div>
+                        </td>
+                        <td className="px-4 py-3 text-[13px] font-medium text-slate-600">
+                          {pc.productName || '--'}
                         </td>
                         <td className="px-4 py-3 text-[13px] font-medium text-slate-600">
                           {pc.driverName || '--'}

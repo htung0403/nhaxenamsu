@@ -5,7 +5,10 @@ import { clsx } from 'clsx';
 import DriverPaymentTab from './DriverPaymentTab';
 import StaffConfirmationTab from './StaffConfirmationTab';
 import ManagerSummaryTab from './ManagerSummaryTab';
+import ConfirmedPaymentHistoryTab from './ConfirmedPaymentHistoryTab';
 import { isDriverLikeRoleKey } from '../../../utils/routePermissions';
+
+type PaymentCollectionTab = 'thu-tien' | 'xac-nhan' | 'lich-su' | 'tong-hop';
 
 const PaymentCollectionsPage: React.FC = () => {
   const { user } = useAuth();
@@ -19,7 +22,7 @@ const PaymentCollectionsPage: React.FC = () => {
     return 'xac-nhan';
   };
 
-  const [activeTab, setActiveTab] = useState<'thu-tien' | 'xac-nhan' | 'tong-hop'>(getDefaultTab());
+  const [activeTab, setActiveTab] = useState<PaymentCollectionTab>(getDefaultTab());
 
   const tabs = [];
   if (isDriver || role === 'staff' || role === 'manager' || role === 'admin') {
@@ -27,6 +30,7 @@ const PaymentCollectionsPage: React.FC = () => {
   }
   if (role === 'staff' || role === 'manager' || role === 'admin') {
     tabs.push({ id: 'xac-nhan', label: 'Xác Nhận Thu Tiền' });
+    tabs.push({ id: 'lich-su', label: 'Lịch Sử Đã Xác Nhận' });
   }
   if (role === 'manager' || role === 'admin') {
     tabs.push({ id: 'tong-hop', label: 'Tổng Hợp Thu Tiền' });
@@ -48,7 +52,7 @@ const PaymentCollectionsPage: React.FC = () => {
           {tabs.map((tab) => (
             <button
               key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
+              onClick={() => setActiveTab(tab.id as PaymentCollectionTab)}
               className={clsx(
                 "flex-1 px-2 py-2 rounded-md text-[12px] sm:text-[13px] font-bold transition-all duration-200 text-center flex items-center justify-center",
                 activeTab === tab.id
@@ -58,7 +62,7 @@ const PaymentCollectionsPage: React.FC = () => {
             >
               <span className="hidden sm:inline">{tab.label}</span>
               <span className="sm:hidden">
-                 {tab.id === 'thu-tien' ? 'Thu Tiền' : tab.id === 'xac-nhan' ? 'Xác Nhận' : 'Tổng Hợp'}
+                 {tab.id === 'thu-tien' ? 'Thu Tiền' : tab.id === 'xac-nhan' ? 'Xác Nhận' : tab.id === 'lich-su' ? 'Lịch Sử' : 'Tổng Hợp'}
               </span>
             </button>
           ))}
@@ -70,6 +74,7 @@ const PaymentCollectionsPage: React.FC = () => {
         <div className="pt-2 md:pt-0">
           {activeTab === 'thu-tien' && <DriverPaymentTab readonly={!(isDriver || role === 'staff' || role === 'manager' || role === 'admin')} />}
           {activeTab === 'xac-nhan' && <StaffConfirmationTab />}
+          {activeTab === 'lich-su' && <ConfirmedPaymentHistoryTab />}
           {activeTab === 'tong-hop' && <ManagerSummaryTab />}
         </div>
       </div>

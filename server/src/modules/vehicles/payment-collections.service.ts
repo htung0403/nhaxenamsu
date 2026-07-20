@@ -9,6 +9,7 @@ export class PaymentCollectionsService {
         *,
         delivery_orders (
           id,
+          product_name,
           unit_price,
           total_quantity,
           import_orders ( order_code, deleted_at, customers!import_orders_customer_id_fkey ( name ) ),
@@ -30,8 +31,11 @@ export class PaymentCollectionsService {
     const { data, error } = await query;
     if (error) throw error;
 
+    const visibleData = data.filter((pc: any) => !this.isPaymentCollectionSourceDeleted(pc));
+    await this.hydrateConfirmerNames(visibleData);
+
     // Map to normalized PaymentCollection shape matching frontend
-    return data.filter((pc: any) => !this.isPaymentCollectionSourceDeleted(pc)).map((pc: any) => this.mapToDto(pc));
+    return visibleData.map((pc: any) => this.mapToDto(pc));
   }
 
   static async getPaymentCollectionById(id: string) {
@@ -41,6 +45,7 @@ export class PaymentCollectionsService {
         *,
         delivery_orders (
           id,
+          product_name,
           unit_price,
           total_quantity,
           import_orders ( order_code, deleted_at, customers!import_orders_customer_id_fkey ( name ) ),
@@ -55,6 +60,7 @@ export class PaymentCollectionsService {
       .single();
 
     if (error) throw error;
+    await this.hydrateConfirmerNames([data]);
     return this.mapToDto(data);
   }
 
@@ -255,13 +261,23 @@ export class PaymentCollectionsService {
     const updatePayload = {
       status: 'confirmed',
       confirmed_at: data.confirmedAt,
+      confirmed_by: receiverId,
       notes: data.notes ? data.notes : pc.notes
     };
 
-    const { error } = await supabaseService
+    let { error } = await supabaseService
       .from('payment_collections')
       .update(updatePayload)
       .eq('id', id);
+
+    if (error && this.isMissingConfirmedByColumnError(error)) {
+      const { confirmed_by, ...fallbackPayload } = updatePayload;
+      const fallbackResult = await supabaseService
+        .from('payment_collections')
+        .update(fallbackPayload)
+        .eq('id', id);
+      error = fallbackResult.error;
+    }
 
     if (error) throw error;
 
@@ -297,6 +313,7 @@ export class PaymentCollectionsService {
         *,
         delivery_orders (
           id,
+          product_name,
           unit_price,
           total_quantity,
           import_orders ( order_code, deleted_at, customers!import_orders_customer_id_fkey ( name ) ),
@@ -314,7 +331,9 @@ export class PaymentCollectionsService {
     const { data, error } = await query;
     if (error) throw error;
 
-    return data.filter((pc: any) => !this.isPaymentCollectionSourceDeleted(pc)).map((pc: any) => this.mapToDto(pc));
+    const visibleData = data.filter((pc: any) => !this.isPaymentCollectionSourceDeleted(pc));
+    await this.hydrateConfirmerNames(visibleData);
+    return visibleData.map((pc: any) => this.mapToDto(pc));
   }
 
   private static async getRawById(id: string) {
@@ -527,6 +546,33 @@ export class PaymentCollectionsService {
       && paymentCollection?.cancellation_reason === 'Delivery order deleted';
   }
 
+  private static isMissingConfirmedByColumnError(error: any): boolean {
+    const message = `${error?.message || ''} ${error?.details || ''}`.toLowerCase();
+    return message.includes('confirmed_by') && (message.includes('schema cache') || message.includes('column'));
+  }
+
+  private static async hydrateConfirmerNames(paymentCollections: any[]) {
+    const confirmerIds = Array.from(new Set(
+      paymentCollections
+        .map((paymentCollection) => paymentCollection?.confirmed_by)
+        .filter(Boolean)
+    ));
+    if (confirmerIds.length === 0) return;
+
+    const { data, error } = await supabaseService
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', confirmerIds);
+
+    if (error) return;
+
+    const nameById = new Map((data || []).map((profile: any) => [profile.id, profile.full_name]));
+    paymentCollections.forEach((paymentCollection) => {
+      const fullName = nameById.get(paymentCollection?.confirmed_by);
+      if (fullName) paymentCollection.confirmers = { full_name: fullName };
+    });
+  }
+
   private static mapToDto(pc: any) {
     const doRow = pc.delivery_orders;
     const dvsRaw = doRow?.delivery_vehicles;
@@ -567,6 +613,7 @@ export class PaymentCollectionsService {
       deliveryVehicleId: pc.delivery_vehicle_id,
       sourceOrderIds: Array.isArray(pc.source_order_ids) && pc.source_order_ids.length > 0 ? pc.source_order_ids : (pc.delivery_order_id ? [pc.delivery_order_id] : []),
       deliveryOrderCode: pc.delivery_orders?.vegetable_orders ? (Array.isArray(pc.delivery_orders.vegetable_orders) ? pc.delivery_orders.vegetable_orders[0].order_code : pc.delivery_orders.vegetable_orders.order_code) : (pc.delivery_orders?.import_orders ? (Array.isArray(pc.delivery_orders.import_orders) ? pc.delivery_orders.import_orders[0].order_code : pc.delivery_orders.import_orders.order_code) : undefined),
+      productName: doRow?.product_name,
       customerId: pc.customer_id,
       customerName: pc.delivery_orders?.vegetable_orders ? (Array.isArray(pc.delivery_orders.vegetable_orders) ? pc.delivery_orders.vegetable_orders[0].customers?.name : pc.delivery_orders.vegetable_orders.customers?.name) : (pc.delivery_orders?.import_orders ? (Array.isArray(pc.delivery_orders.import_orders) ? pc.delivery_orders.import_orders[0].customers?.name : pc.delivery_orders.import_orders.customers?.name) : undefined),
       driverId: pc.driver_id,
@@ -583,6 +630,8 @@ export class PaymentCollectionsService {
       receiverName: pc.receivers?.full_name,
       receiverType: pc.receiver_type,
       confirmedAt: pc.confirmed_at,
+      confirmedById: pc.confirmed_by,
+      confirmedByName: pc.confirmers?.full_name || pc.receivers?.full_name,
       selfConfirmReason: pc.self_confirm_reason,
       notes: pc.notes,
       imageUrl: pc.image_url,
