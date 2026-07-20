@@ -11,8 +11,8 @@ export class PaymentCollectionsService {
           id,
           unit_price,
           total_quantity,
-          import_orders ( order_code, customers!import_orders_customer_id_fkey ( name ) ),
-          vegetable_orders ( order_code, customers!vegetable_orders_customer_id_fkey ( name ) ),
+          import_orders ( order_code, deleted_at, customers!import_orders_customer_id_fkey ( name ) ),
+          vegetable_orders ( order_code, deleted_at, customers!vegetable_orders_customer_id_fkey ( name ) ),
           delivery_vehicles ( id, vehicle_id, driver_id, delivery_date, delivery_time, assigned_quantity, expected_amount )
         ),
         drivers:profiles!payment_collections_driver_id_fkey(full_name),
@@ -31,7 +31,7 @@ export class PaymentCollectionsService {
     if (error) throw error;
 
     // Map to normalized PaymentCollection shape matching frontend
-    return data.map((pc: any) => this.mapToDto(pc));
+    return data.filter((pc: any) => !this.isPaymentCollectionSourceDeleted(pc)).map((pc: any) => this.mapToDto(pc));
   }
 
   static async getPaymentCollectionById(id: string) {
@@ -43,8 +43,8 @@ export class PaymentCollectionsService {
           id,
           unit_price,
           total_quantity,
-          import_orders ( order_code, customers!import_orders_customer_id_fkey ( name ) ),
-          vegetable_orders ( order_code, customers!vegetable_orders_customer_id_fkey ( name ) ),
+          import_orders ( order_code, deleted_at, customers!import_orders_customer_id_fkey ( name ) ),
+          vegetable_orders ( order_code, deleted_at, customers!vegetable_orders_customer_id_fkey ( name ) ),
           delivery_vehicles ( id, vehicle_id, driver_id, delivery_date, delivery_time, assigned_quantity, expected_amount )
         ),
         drivers:profiles!payment_collections_driver_id_fkey(full_name),
@@ -64,11 +64,12 @@ export class PaymentCollectionsService {
 
     const { data: deliveryOrders, error: doError } = await supabaseService
       .from('delivery_orders')
-      .select('id, import_orders(customer_id, total_amount), vegetable_orders(customer_id, total_amount)')
+      .select('id, import_orders(customer_id, total_amount, deleted_at), vegetable_orders(customer_id, total_amount, deleted_at)')
       .in('id', sourceOrderIds);
 
     if (doError) throw doError;
     if (!deliveryOrders || deliveryOrders.length !== sourceOrderIds.length) throw new Error('Không tìm thấy đầy đủ đơn giao hàng trong nhóm');
+    if (deliveryOrders.some((order: any) => this.isDeliveryOrderSourceDeleted(order))) throw new Error('Không thể tạo phiếu thu cho đơn hàng đã xóa');
 
 
 
@@ -298,8 +299,8 @@ export class PaymentCollectionsService {
           id,
           unit_price,
           total_quantity,
-          import_orders ( order_code, customers!import_orders_customer_id_fkey ( name ) ),
-          vegetable_orders ( order_code, customers!vegetable_orders_customer_id_fkey ( name ) ),
+          import_orders ( order_code, deleted_at, customers!import_orders_customer_id_fkey ( name ) ),
+          vegetable_orders ( order_code, deleted_at, customers!vegetable_orders_customer_id_fkey ( name ) ),
           delivery_vehicles ( id, vehicle_id, driver_id, delivery_date, delivery_time, assigned_quantity, expected_amount )
         ),
         drivers:profiles!payment_collections_driver_id_fkey(full_name),
@@ -313,7 +314,7 @@ export class PaymentCollectionsService {
     const { data, error } = await query;
     if (error) throw error;
 
-    return data.map((pc: any) => this.mapToDto(pc));
+    return data.filter((pc: any) => !this.isPaymentCollectionSourceDeleted(pc)).map((pc: any) => this.mapToDto(pc));
   }
 
   private static async getRawById(id: string) {
@@ -508,6 +509,24 @@ export class PaymentCollectionsService {
   }
 
   // Helper mapping 
+  private static pickRelation(relation: any): any {
+    if (Array.isArray(relation)) return relation[0];
+    return relation || undefined;
+  }
+
+  private static isDeliveryOrderSourceDeleted(deliveryOrder: any): boolean {
+    const importOrder = this.pickRelation(deliveryOrder?.import_orders);
+    const vegetableOrder = this.pickRelation(deliveryOrder?.vegetable_orders);
+    return Boolean(importOrder?.deleted_at || vegetableOrder?.deleted_at);
+  }
+
+  private static isPaymentCollectionSourceDeleted(paymentCollection: any): boolean {
+    if (this.isDeliveryOrderSourceDeleted(paymentCollection?.delivery_orders)) return true;
+    return paymentCollection?.status === 'cancelled'
+      && paymentCollection?.delivery_order_id == null
+      && paymentCollection?.cancellation_reason === 'Delivery order deleted';
+  }
+
   private static mapToDto(pc: any) {
     const doRow = pc.delivery_orders;
     const dvsRaw = doRow?.delivery_vehicles;
