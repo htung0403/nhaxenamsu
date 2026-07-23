@@ -648,7 +648,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   const debtDesktopRows = React.useMemo(() => sortedDates.map((date) => (
     <React.Fragment key={date}>
       <tr className="bg-muted/50">
-        <td colSpan={mode === 'vehicle' ? 10 : 8} className="px-4 py-2 border-y border-slate-100/10">
+        <td colSpan={10} className="px-4 py-2 border-y border-slate-100/10">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-lg bg-red-500/10 flex items-center justify-center text-red-600">
               <Calendar size={13} />
@@ -663,16 +663,14 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
       {groupedDebts[date].map((debt) => (
         <React.Fragment key={debt.id}>
           <tr className="hover:bg-muted/10 transition-colors group">
-            {mode === 'vehicle' && (
-              <td className="px-4 py-3 align-top">
-                <input
-                  type="checkbox"
-                  checked={selectedDebtIds.includes(debt.id)}
-                  onChange={() => toggleDebtSelection(debt.id)}
-                  className="h-4 w-4 rounded border-border text-emerald-600 accent-emerald-600"
-                />
-              </td>
-            )}
+            <td className="px-4 py-3 align-top">
+              <input
+                type="checkbox"
+                checked={selectedDebtIds.includes(debt.id)}
+                onChange={() => toggleDebtSelection(debt.id)}
+                className="h-4 w-4 rounded border-border text-emerald-600 accent-emerald-600"
+              />
+            </td>
             <td className="px-4 py-3 align-top">
               <span className="text-[13px] font-bold text-primary tabular-nums">{debt.order_code}</span>
               <span className="block text-[11px] text-muted-foreground mt-1">{formatDate(debt.order_date)}</span>
@@ -696,17 +694,15 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
             <td className="px-4 py-3 text-center align-top">
               <span className="inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-700">Chưa TT</span>
             </td>
-            {mode === 'vehicle' && (
-              <td className="px-4 py-3 text-right align-top">
-                <button
-                  type="button"
-                  onClick={() => openPaymentForm(debt)}
-                  className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-black uppercase text-white shadow-sm hover:bg-emerald-700"
-                >
-                  <CheckCircle2 size={13} /> Nhập tiền trả
-                </button>
-              </td>
-            )}
+            <td className="px-4 py-3 text-right align-top">
+              <button
+                type="button"
+                onClick={() => openPaymentForm(debt)}
+                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-black uppercase text-white shadow-sm hover:bg-emerald-700"
+              >
+                <CheckCircle2 size={13} /> Nhập tiền trả
+              </button>
+            </td>
           </tr>
         </React.Fragment>
       ))}
@@ -716,17 +712,15 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   const renderDebtMobileCard = React.useCallback((debt: VehicleDebt) => {
     const isSelected = selectedDebtIds.includes(debt.id);
     return (
-      <div key={debt.id} className={`bg-card border rounded-2xl p-3 shadow-sm transition-all ${isSelected ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-border'}`}>
+      <div key={debt.id} className={`bg-card border rounded-2xl p-3 transition-all ${isSelected ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-border'}`}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex min-w-0 items-start gap-2.5">
-          {mode === 'vehicle' && (
-            <input
-              type="checkbox"
-              checked={isSelected}
-              onChange={() => toggleDebtSelection(debt.id)}
-              className="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-emerald-600 accent-emerald-600"
-            />
-          )}
+          <input
+            type="checkbox"
+            checked={isSelected}
+            onChange={() => toggleDebtSelection(debt.id)}
+            className="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-emerald-600 accent-emerald-600"
+          />
           <div className="min-w-0">
             <p className="truncate text-[13px] font-black text-primary">{debt.order_code}</p>
             <p className="mt-0.5 text-[11px] font-semibold text-muted-foreground">{formatDate(getDebtDate(debt))}</p>
@@ -756,15 +750,13 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
           <p className="text-[13px] font-black text-red-600 tabular-nums">{formatCurrency(debt.expected_amount)}</p>
         </div>
       </div>
-      {mode === 'vehicle' && (
-        <button
-          type="button"
-          onClick={() => openPaymentForm(debt)}
-          className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2.5 text-[12px] font-black uppercase text-white shadow-sm hover:bg-emerald-700"
-        >
-          <CheckCircle2 size={14} /> Nhập tiền trả
-        </button>
-      )}
+      <button
+        type="button"
+        onClick={() => openPaymentForm(debt)}
+        className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2.5 text-[12px] font-black uppercase text-white shadow-sm hover:bg-emerald-700"
+      >
+        <CheckCircle2 size={14} /> Nhập tiền trả
+      </button>
     </div>
     );
   }, [mode, openPaymentForm, selectedDebtIds, toggleDebtSelection]);
@@ -778,18 +770,16 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
     const dateDebtTotal = dateDebts.reduce((sum, debt) => sum + Number(debt.expected_amount || 0), 0);
 
     return (
-      <div key={date} className="space-y-2.5">
-        <div className="sticky top-0 z-10 rounded-2xl border border-border bg-background/95 p-2.5 shadow-sm backdrop-blur">
+      <div key={date} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 p-3 backdrop-blur">
           <div className="flex items-center gap-2.5">
-            {mode === 'vehicle' && (
-              <input
-                type="checkbox"
-                checked={isAllDateSelected}
-                onChange={() => toggleDebtDateSelection(date)}
-                className="h-4 w-4 shrink-0 rounded border-border text-emerald-600 accent-emerald-600"
-                aria-label={`Chọn toàn bộ đơn ngày ${date !== 'N/A' ? formatDate(date) : 'chưa có ngày'}`}
-              />
-            )}
+            <input
+              type="checkbox"
+              checked={isAllDateSelected}
+              onChange={() => toggleDebtDateSelection(date)}
+              className="h-4 w-4 shrink-0 rounded border-border text-emerald-600 accent-emerald-600"
+              aria-label={`Chọn toàn bộ đơn ngày ${date !== 'N/A' ? formatDate(date) : 'chưa có ngày'}`}
+            />
             <button
               type="button"
               onClick={() => toggleDebtDateCollapse(date)}
@@ -815,7 +805,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
         </div>
         <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${isCollapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}>
           <div className="min-h-0 overflow-hidden">
-            <div className={`space-y-2.5 transition-transform duration-300 ease-out ${isCollapsed ? '-translate-y-1' : 'translate-y-0'}`}>
+            <div className={`space-y-2.5 bg-muted/20 p-2 transition-transform duration-300 ease-out ${isCollapsed ? '-translate-y-1' : 'translate-y-0'}`}>
               {dateDebts.map(renderDebtMobileCard)}
             </div>
           </div>
@@ -836,7 +826,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
     const visiblePages = Array.from({ length: Math.min(totalPages, 5) }, (_, index) => startPage + index);
 
     return (
-      <div className="sticky bottom-[72px] z-30 mt-2 shrink-0 bg-background md:bottom-0 md:mt-0">
+      <div className="mt-2 shrink-0 bg-background md:sticky md:bottom-0 md:z-30 md:mt-0">
         <div className="flex items-center justify-between rounded-b-2xl border-x border-b border-border bg-card/95 px-3 py-3 shadow-[0_-10px_24px_rgba(15,23,42,0.08)] backdrop-blur md:px-4">
           <span className="text-[12px] font-bold text-muted-foreground">
             {`${(page - 1) * PAGE_SIZE + 1}-${Math.min(page * PAGE_SIZE, totalItems)}`} / Tổng {totalItems}
@@ -949,8 +939,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
         </button>
       </div>
 
-      {mode === 'vehicle' && (
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
           <div className="inline-flex rounded-2xl border border-border bg-card p-1 shadow-sm w-full md:w-auto">
             <button
               type="button"
@@ -997,10 +986,9 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
             </button>
           )}
         </div>
-      )}
 
       <div className="flex flex-col -mx-4 sm:mx-0">
-        {activeTab === 'history' && mode === 'vehicle' ? (
+        {activeTab === 'history' ? (
           isHistoryLoading ? (
             <div className="p-4"><LoadingSkeleton rows={8} columns={7} /></div>
           ) : isHistoryError ? (
@@ -1132,17 +1120,15 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
               <table className="relative z-[1] w-full border-separate border-spacing-0 rounded-t-2xl">
                 <thead className="sticky top-0 z-20 rounded-t-2xl bg-muted [clip-path:inset(0_round_1rem_1rem_0_0)]">
                   <tr className="border-b border-border">
-                    {mode === 'vehicle' && (
-                      <th className="bg-muted px-4 py-4 text-left border-b border-border md:rounded-tl-2xl">
-                        <input
-                          type="checkbox"
-                          checked={isAllFilteredDebtsSelected}
-                          onChange={toggleAllFilteredDebts}
-                          className="h-4 w-4 rounded border-border text-emerald-600 accent-emerald-600"
-                        />
-                      </th>
-                    )}
-                    <th className={`bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-left border-b border-border ${mode === 'vehicle' ? '' : 'md:rounded-tl-2xl'}`}>Mã đơn</th>
+                    <th className="bg-muted px-4 py-4 text-left border-b border-border md:rounded-tl-2xl">
+                      <input
+                        type="checkbox"
+                        checked={isAllFilteredDebtsSelected}
+                        onChange={toggleAllFilteredDebts}
+                        className="h-4 w-4 rounded border-border text-emerald-600 accent-emerald-600"
+                      />
+                    </th>
+                    <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-left border-b border-border">Mã đơn</th>
                     <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-left border-b border-border">Khách hàng</th>
                     <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-left border-b border-border">Xe / tài xế</th>
                     <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-left border-b border-border">Tên hàng</th>
@@ -1150,7 +1136,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
                     <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-right border-b border-border">Đơn giá</th>
                     <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-right border-b border-border">Công nợ</th>
                     <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-center border-b border-border">Trạng thái</th>
-                    {mode === 'vehicle' && <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-right border-b border-border md:rounded-tr-2xl">Thao tác</th>}
+                    <th className="bg-muted px-4 py-4 text-[11px] font-bold text-muted-foreground uppercase text-right border-b border-border md:rounded-tr-2xl">Thao tác</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 bg-card">
@@ -1160,7 +1146,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
               </table>
             </div>
 
-            <div className="md:hidden space-y-2.5 p-3 pb-24">
+            <div className="md:hidden space-y-3 px-4 py-3 pb-24">
               {debtMobileGroups}
 
             </div>
