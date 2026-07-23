@@ -1,7 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Banknote, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Filter, History, Package, Pencil, Store, Truck, UserRound } from 'lucide-react';
+import { Banknote, Calendar, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Filter, History, Package, Pencil, Printer, Store, Truck, UserRound } from 'lucide-react';
 import PageHeader from '../../components/shared/PageHeader';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
@@ -73,6 +74,7 @@ type HistoryViewMode = 'order' | 'vehicle';
 type CustomerDebtPageMode = 'loyal' | 'vehicle';
 
 const PAGE_SIZE = 50;
+const CUSTOMER_DEBT_PRINT_STORAGE_KEY = 'customer-debt-a4-print-orders';
 
 interface CustomerDebtPageProps {
   mode?: CustomerDebtPageMode;
@@ -103,6 +105,7 @@ const pageConfig: Record<CustomerDebtPageMode, {
 
 const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) => {
   const config = pageConfig[mode];
+  const navigate = useNavigate();
   const { data: debts = [], isLoading, isError, refetch } = useVehicleDebts(config.customerType);
   const { data: paymentHistory = [], isLoading: isHistoryLoading, isError: isHistoryError, refetch: refetchHistory } = useVehicleDebtPayments(config.customerType);
   const paymentMutation = useRecordVehicleDebtPayments(config.customerType);
@@ -361,6 +364,39 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
     setSelectedDebtIds([]);
   };
 
+  const openA4PrintPage = React.useCallback(() => {
+    const sortedPrintDebts = [...activePaymentDebts].sort((a, b) =>
+      (a.customer?.name || '').localeCompare(b.customer?.name || '', 'vi'),
+    );
+
+    const printPayload = {
+      title: config.title,
+      mode,
+      printed_at: new Date().toISOString(),
+      orders: sortedPrintDebts.map((debt) => {
+        const item = paymentItems[debt.id] || { quantity: debt.assigned_quantity, unit_price: debt.unit_price, paid_amount: debt.expected_amount };
+        return {
+          id: debt.id,
+          order_code: debt.order_code,
+          order_date: debt.order_date,
+          delivery_date: getDebtDate(debt),
+          customer_name: debt.customer?.name || 'Chưa có khách',
+          customer_phone: debt.customer?.phone || '',
+          vehicle_plate: debt.vehicle?.license_plate || '',
+          driver_name: debt.driver?.full_name || '',
+          product_name: debt.product_name || '',
+          quantity: Number(item.quantity || 0),
+          unit_price: normalizeMoneyValue(Number(item.unit_price || 0)),
+          expected_amount: Number(debt.expected_amount || 0),
+          paid_amount: normalizeMoneyValue(Number(item.paid_amount || 0)),
+        };
+      }),
+    };
+
+    sessionStorage.setItem(CUSTOMER_DEBT_PRINT_STORAGE_KEY, JSON.stringify(printPayload));
+    navigate('/app/ke-toan/in-cong-no-a4');
+  }, [activePaymentDebts, config.title, mode, navigate, paymentItems]);
+
   const submitEditPaymentForm = async () => {
     if (!editingPayment) return;
     const item = paymentItems[editingPayment.id] || { quantity: 0, unit_price: 0, paid_amount: 0 };
@@ -523,14 +559,23 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
             >
               Hủy
             </button>
-            <button
-              type="button"
-              onClick={submitPaymentForm}
-              disabled={paymentMutation.isPending}
-              className="h-11 rounded-xl bg-emerald-600 px-6 text-[13px] font-black uppercase text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
-            >
-              {paymentMutation.isPending ? 'Đang lưu...' : `Lưu ${activePaymentDebts.length} đơn`}
-            </button>
+            <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={openA4PrintPage}
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-border bg-card px-5 text-[13px] font-black uppercase text-muted-foreground hover:bg-muted"
+              >
+                <Printer size={15} /> In A4
+              </button>
+              <button
+                type="button"
+                onClick={submitPaymentForm}
+                disabled={paymentMutation.isPending}
+                className="h-11 rounded-xl bg-emerald-600 px-6 text-[13px] font-black uppercase text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60"
+              >
+                {paymentMutation.isPending ? 'Đang lưu...' : `Lưu ${activePaymentDebts.length} đơn`}
+              </button>
+            </div>
           </div>
         </div>
       </div>,

@@ -55,6 +55,7 @@ import CustomerDetailPage from './pages/customers/CustomerDetailPage';
 import MyOrdersByCustomerTypePage from './pages/customers/MyOrdersByCustomerTypePage';
 import GroceryOrderCreatePage from './pages/customers/GroceryOrderCreatePage';
 import CustomerDebtPage from './pages/customers/CustomerDebtPage';
+import PrintCustomerDebtA4Page from './pages/customers/PrintCustomerDebtA4Page';
 import RevenueReportPage from './pages/customers/RevenueReportPage';
 import SgCashCollectionsPage from './pages/accounting/SgCashCollectionsPage';
 import InvoiceGroceryPage from './pages/accounting/InvoiceGroceryPage';
@@ -230,6 +231,7 @@ function AppRoutes() {
           </Route>
           <Route path="cong-no" element={<CustomerDebtPage mode="loyal" />} />
           <Route path="cong-no-theo-xe" element={<CustomerDebtPage mode="vehicle" />} />
+          <Route path="in-cong-no-a4" element={<PrintCustomerDebtA4Page />} />
           <Route path="thu-tien-sg" element={<SgCashCollectionsPage />} />
           <Route path="thu-tien-hang" element={<PaymentCollectionsPage />} />
           <Route path="in-lich-su-thu-tien" element={<PrintPaymentCollectionHistoryPage />} />
