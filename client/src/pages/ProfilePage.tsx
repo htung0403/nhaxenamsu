@@ -23,6 +23,7 @@ import { uploadApi } from '../api/uploadApi';
 import { authApi } from '../api/authApi';
 import toast from 'react-hot-toast';
 import { cloudinaryThumb } from '../lib/cloudinaryUrl';
+import type { Customer, User as AppUser } from '../types';
 
 type ProfileFormState = {
   full_name: string;
@@ -42,7 +43,56 @@ type ProfileFormState = {
   address_line: string;
   temporary_address: string;
 };
+type AuthDisplayUser = {
+  id: string;
+  email?: string;
+  role: AppUser['role'];
+  full_name: string;
+  avatar_url?: string;
+  created_at?: string;
+};
 
+type DisplayUser = AuthDisplayUser | AppUser | Customer | null | undefined;
+
+const getDisplayName = (displayUser: DisplayUser) => {
+  if (!displayUser) return '';
+  return 'full_name' in displayUser ? displayUser.full_name : displayUser.name;
+};
+
+const getDisplayRole = (displayUser: DisplayUser) => {
+  if (!displayUser || !('role' in displayUser)) return undefined;
+  return displayUser.role;
+};
+
+const getDisplayEmail = (displayUser: DisplayUser) => {
+  if (!displayUser || !('email' in displayUser)) return undefined;
+  return displayUser.email;
+};
+
+const getDisplayAvatar = (displayUser: DisplayUser) => {
+  if (!displayUser || !('avatar_url' in displayUser)) return undefined;
+  return displayUser.avatar_url;
+};
+
+const getDisplayCreatedAt = (displayUser: DisplayUser) => displayUser?.created_at;
+
+const getErrorMessage = (err: unknown, fallback: string) => {
+  if (err && typeof err === 'object') {
+    const response = 'response' in err ? err.response : undefined;
+    if (response && typeof response === 'object' && 'data' in response) {
+      const data = response.data;
+      if (data && typeof data === 'object' && 'error' in data && typeof data.error === 'string') {
+        return data.error;
+      }
+    }
+
+    if ('message' in err && typeof err.message === 'string') {
+      return err.message;
+    }
+  }
+
+  return fallback;
+};
 const ProfilePage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -111,10 +161,11 @@ const ProfilePage: React.FC = () => {
 
   const isLoading = isCustomer ? loadingCustomer : loadingEmployee;
   const profileData = isCustomer ? customerData : employeeData;
-  const displayUser = (isCurrentUser ? user : (employeeData || customerData)) as any;
+  const displayUser: DisplayUser = isCurrentUser ? user : (employeeData || customerData);
 
-  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayUser?.full_name || 'User')}&background=random&color=random&size=128`;
-  const displayAvatar = isCurrentUser ? (user?.avatar_url || avatar || defaultAvatar) : ((displayUser as any)?.avatar_url || defaultAvatar);
+  const defaultAvatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(getDisplayName(displayUser) || 'User')}&background=random&color=random&size=128`;
+  const displayAvatar = isCurrentUser ? (user?.avatar_url || avatar || defaultAvatar) : (getDisplayAvatar(displayUser) || defaultAvatar);
+  const displayCreatedAt = getDisplayCreatedAt(displayUser);
 
   const toDateInput = (value?: string | null) => {
     if (!value) return '';
@@ -123,12 +174,13 @@ const ProfilePage: React.FC = () => {
     return date.toISOString().slice(0, 10);
   };
 
-  const employeeProfile = profileData as any;
+  const employeeProfile = isCustomer ? undefined : employeeData;
+  const customerProfile = isCustomer ? customerData : undefined;
 
   useEffect(() => {
     if (isCustomer || !employeeProfile) return;
     setProfileForm({
-      full_name: displayUser?.full_name || '',
+      full_name: getDisplayName(displayUser) || '',
       phone: employeeProfile?.phone || '',
       date_of_birth: toDateInput(employeeProfile?.date_of_birth),
       gender: (employeeProfile?.gender as ProfileFormState['gender']) || '',
@@ -148,11 +200,11 @@ const ProfilePage: React.FC = () => {
     if (canEditEmployeeRank) {
       setSalaryRankKeyDraft(String(employeeProfile?.role || 'staff'));
     }
-  }, [isCustomer, employeeProfile, displayUser?.full_name, canEditEmployeeRank]);
+  }, [isCustomer, employeeProfile, displayUser, canEditEmployeeRank]);
 
   const salaryRankSelectOptions = React.useMemo(() => {
     const base = (salaryRoles || []).map((r) => ({ value: r.role_key, label: r.role_name }));
-    const key = displayUser?.role as string | undefined;
+    const key = getDisplayRole(displayUser);
     if (key && !base.some((o) => o.value === key)) {
       return [{ value: key, label: translateRole(key) }, ...base];
     }
@@ -160,18 +212,18 @@ const ProfilePage: React.FC = () => {
       return [{ value: key, label: translateRole(key) }];
     }
     return base;
-  }, [salaryRoles, displayUser?.role]);
+  }, [salaryRoles, displayUser]);
 
   const employeeRankLabel = React.useMemo(() => {
-    const key = displayUser?.role as string | undefined;
+    const key = getDisplayRole(displayUser);
     if (!key) return '---';
     const match = salaryRoles?.find((r) => r.role_key === key);
     return match?.role_name || translateRole(key);
-  }, [displayUser?.role, salaryRoles]);
+  }, [displayUser, salaryRoles]);
 
   /** Chức vụ hiển thị: không dùng mã role_key (vd. tai_xe_xe_lon) — ưu tiên tên cấp bậc lương hoặc job_title do người nhập. */
   const jobTitleDisplay = React.useMemo(() => {
-    const roleKey = displayUser?.role as string | undefined;
+    const roleKey = getDisplayRole(displayUser);
     const raw = employeeProfile?.job_title?.trim();
     if (raw) {
       if (roleKey && raw === roleKey) return employeeRankLabel;
@@ -180,14 +232,15 @@ const ProfilePage: React.FC = () => {
       return raw;
     }
     return employeeRankLabel;
-  }, [employeeProfile?.job_title, displayUser?.role, employeeRankLabel, salaryRoles]);
+  }, [employeeProfile?.job_title, displayUser, employeeRankLabel, salaryRoles]);
 
   // Update breadcrumb label when user data is available
   useEffect(() => {
-    if (displayUser?.full_name) {
-      setDynamicLabel(location.pathname, displayUser.full_name);
+    const displayName = getDisplayName(displayUser);
+    if (displayName) {
+      setDynamicLabel(location.pathname, displayName);
     }
-  }, [displayUser?.full_name, location.pathname, setDynamicLabel]);
+  }, [displayUser, location.pathname, setDynamicLabel]);
 
   // Initialize preview avatar when modal opens
   useEffect(() => {
@@ -241,8 +294,8 @@ const ProfilePage: React.FC = () => {
         toast.success('Cập nhật ảnh đại diện thành công');
         setIsAvatarModalOpen(false);
       }
-    } catch (err: any) {
-      toast.error('Lỗi khi tải ảnh: ' + (err.message || 'Không xác định'));
+    } catch (err: unknown) {
+      toast.error('Lỗi khi tải ảnh: ' + getErrorMessage(err, 'Không xác định'));
     } finally {
       setIsUploading(false);
     }
@@ -300,8 +353,8 @@ const ProfilePage: React.FC = () => {
           payload: {
             ...profilePayload,
             role: canEditEmployeeRank
-              ? salaryRankKeyDraft || (displayUser?.role as string) || 'staff'
-              : (displayUser?.role as string) || 'staff',
+              ? salaryRankKeyDraft || getDisplayRole(displayUser) || 'staff'
+              : getDisplayRole(displayUser) || 'staff',
           },
         });
       }
@@ -313,8 +366,8 @@ const ProfilePage: React.FC = () => {
       await refetchCustomer();
       setIsEditingProfile(false);
       toast.success('Cập nhật hồ sơ thành công');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || err.message || 'Không thể cập nhật hồ sơ');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Không thể cập nhật hồ sơ'));
     } finally {
       setIsSavingProfile(false);
     }
@@ -361,8 +414,8 @@ const ProfilePage: React.FC = () => {
         toast.success('Đổi mật khẩu thành công');
       }
       handleCancelPasswordChange();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || err.message || 'Không thể đổi mật khẩu');
+    } catch (err: unknown) {
+      toast.error(getErrorMessage(err, 'Không thể đổi mật khẩu'));
     } finally {
       setIsSavingPassword(false);
     }
@@ -371,7 +424,7 @@ const ProfilePage: React.FC = () => {
   const handleCancelEditProfile = () => {
     if (isCustomer || !employeeProfile) return;
     setProfileForm({
-      full_name: displayUser?.full_name || '',
+      full_name: getDisplayName(displayUser) || '',
       phone: employeeProfile?.phone || '',
       date_of_birth: toDateInput(employeeProfile?.date_of_birth),
       gender: (employeeProfile?.gender as ProfileFormState['gender']) || '',
@@ -427,7 +480,7 @@ const ProfilePage: React.FC = () => {
                   </div>
 
                   <div className="mt-4 text-center">
-                    <h2 className="text-xl font-bold text-foreground">{displayUser?.full_name}</h2>
+                    <h2 className="text-xl font-bold text-foreground">{getDisplayName(displayUser)}</h2>
                     <div className="inline-flex items-center px-2.5 py-0.5 mt-1 rounded-full text-[11px] font-bold bg-primary/10 text-primary border border-primary/20">
                       {employeeRankLabel}
                     </div>
@@ -436,7 +489,7 @@ const ProfilePage: React.FC = () => {
                   <div className="w-full mt-8 space-y-4">
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <Mail size={16} className="text-primary/60 shrink-0" />
-                      <span className="truncate">{displayUser?.email || 'N/A'}</span>
+                      <span className="truncate">{getDisplayEmail(displayUser) || 'N/A'}</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <Phone size={16} className="text-primary/60 shrink-0" />
@@ -451,12 +504,12 @@ const ProfilePage: React.FC = () => {
                     {isCustomer && (
                       <div className="flex items-center gap-3 text-sm text-muted-foreground">
                         <MapPin size={16} className="text-primary/60 shrink-0" />
-                        <span className="truncate">{(profileData as any)?.address || 'Chưa cập nhật'}</span>
+                        <span className="truncate">{customerProfile?.address || 'Chưa cập nhật'}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-3 text-sm text-muted-foreground">
                       <Calendar size={16} className="text-primary/60 shrink-0" />
-                      <span>Tham gia {displayUser ? new Date((displayUser as any).created_at).toLocaleDateString() : '--/--/----'}</span>
+                      <span>Tham gia {displayCreatedAt ? new Date(displayCreatedAt).toLocaleDateString() : '--/--/----'}</span>
                     </div>
                     <div className="flex items-center gap-3 text-sm text-emerald-500 font-medium">
                       <ShieldCheck size={16} className="shrink-0" />
@@ -626,7 +679,7 @@ const ProfilePage: React.FC = () => {
                     onChange={(value) => handleProfileFieldChange('full_name', value)}
                   />
                 ) : (
-                  <InfoItem icon={User} label="Họ tên" value={displayUser?.full_name || '---'} />
+                  <InfoItem icon={User} label="Họ tên" value={getDisplayName(displayUser) || '---'} />
                 )}
                 {isEditingProfile && canEditProfile && !isCustomer ? (
                   <EditableInput
@@ -637,11 +690,11 @@ const ProfilePage: React.FC = () => {
                     onChange={(value) => handleProfileFieldChange('personal_email', value)}
                   />
                 ) : (
-                  <InfoItem icon={Mail} label="Email" value={employeeProfile?.personal_email || displayUser?.email || '---'} />
+                  <InfoItem icon={Mail} label="Email" value={employeeProfile?.personal_email || getDisplayEmail(displayUser) || '---'} />
                 )}
                 <InfoItem icon={Phone} label="Điện thoại" value={profileData?.phone || 'Chưa cập nhật'} />
                 {isCustomer && (
-                  <InfoItem icon={MapPin} label="Địa chỉ" value={(profileData as any)?.address || 'Chưa cập nhật'} cols={2} />
+                  <InfoItem icon={MapPin} label="Địa chỉ" value={customerProfile?.address || 'Chưa cập nhật'} cols={2} />
                 )}
                 {!isCustomer && (
                   <>
@@ -691,9 +744,9 @@ const ProfilePage: React.FC = () => {
             {isCustomer ? (
               <SectionContainer icon={WalletIcon} title="THÔNG TIN CHI TIÊU">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  <InfoItem icon={WalletIcon} label="Tổng đơn hàng" value={((profileData as any)?.total_orders || 0).toString()} highlight />
-                  <InfoItem icon={Landmark} label="Tổng doanh thu" value={((profileData as any)?.total_revenue || 0).toLocaleString() + ' đ'} highlight />
-                  <InfoItem icon={Shield} label="Công nợ hiện tại" value={((profileData as any)?.debt || 0).toLocaleString() + ' đ'} highlight />
+                  <InfoItem icon={WalletIcon} label="Tổng đơn hàng" value={(customerProfile?.total_orders || 0).toString()} highlight />
+                  <InfoItem icon={Landmark} label="Tổng doanh thu" value={(customerProfile?.total_revenue || 0).toLocaleString() + ' đ'} highlight />
+                  <InfoItem icon={Shield} label="Công nợ hiện tại" value={(customerProfile?.debt || 0).toLocaleString() + ' đ'} highlight />
                 </div>
               </SectionContainer>
             ) : (
