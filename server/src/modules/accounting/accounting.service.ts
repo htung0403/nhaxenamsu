@@ -8,6 +8,7 @@ export interface VehicleDebtRow {
   delivery_order_id: string;
   order_id: string;
   order_code: string;
+  product_name?: string | null;
   order_date?: string | null;
   delivery_date?: string | null;
   delivery_time?: string | null;
@@ -33,6 +34,33 @@ export interface VehicleDebtRow {
   expected_amount: number;
   export_payment_status: 'unpaid';
 }
+
+export interface VehicleDebtPaymentRow {
+  id: string;
+  delivery_vehicle_id?: string | null;
+  delivery_order_id: string;
+  order_code?: string | null;
+  product_name?: string | null;
+  customer?: { id?: string | null; name?: string | null } | null;
+  vehicle?: { id?: string | null; license_plate?: string | null } | null;
+  driver?: { id?: string | null; full_name?: string | null } | null;
+  paid_at: string;
+  quantity: number;
+  unit_price: number;
+  paid_amount: number;
+  expected_amount: number;
+  notes?: string | null;
+}
+
+export interface VehicleDebtPaymentPayload {
+  paid_at: string;
+  quantity: number;
+  unit_price: number;
+  paid_amount: number;
+  notes?: string;
+}
+
+const VEHICLE_DEBT_PAYMENT_NOTE_PREFIX = 'Thu tiền công nợ theo xe';
 
 export class AccountingService {
   static async getDebts() {
@@ -106,6 +134,7 @@ export class AccountingService {
         drivers:profiles!delivery_vehicles_driver_id_fkey(id, full_name, phone),
         delivery_orders!inner (
           id,
+          product_name,
           unit_price,
           delivery_date,
           delivery_time,
@@ -155,6 +184,7 @@ export class AccountingService {
           delivery_order_id: row.delivery_order_id,
           order_id: importOrder.id,
           order_code: importOrder.order_code || `#${String(importOrder.id).slice(0, 8).toUpperCase()}`,
+          product_name: deliveryOrder.product_name,
           order_date: importOrder.order_date,
           delivery_date: row.delivery_date || deliveryOrder.delivery_date,
           delivery_time: row.delivery_time || deliveryOrder.delivery_time,
@@ -182,6 +212,210 @@ export class AccountingService {
         };
       })
       .filter((row): row is VehicleDebtRow => row !== null);
+  }
+
+  static async recordVehicleDebtPayment(
+    deliveryVehicleId: string,
+    payload: VehicleDebtPaymentPayload,
+    userId?: string,
+  ): Promise<VehicleDebtPaymentRow> {
+    const { data: row, error } = await supabaseService
+      .from('delivery_vehicles')
+      .select(`
+        id,
+        delivery_order_id,
+        vehicle_id,
+        driver_id,
+        assigned_quantity,
+        expected_amount,
+        export_payment_status,
+        vehicles ( id, license_plate ),
+        drivers:profiles!delivery_vehicles_driver_id_fkey(id, full_name),
+        delivery_orders!inner (
+          id,
+          product_name,
+          unit_price,
+          import_orders!inner (
+            id,
+            order_code,
+            customer_id,
+            receiver_name,
+            customers!import_orders_customer_id_fkey(id, name)
+          )
+        )
+      `)
+      .eq('id', deliveryVehicleId)
+      .single();
+
+    if (error) throw error;
+    if (!row) throw new Error('Không tìm thấy phân xe');
+    if ((row as any).export_payment_status === 'paid') throw new Error('Phân xe này đã được ghi trả tiền');
+    if (!(row as any).vehicle_id) throw new Error('Phân xe chưa có xe, không thể ghi nhận thanh toán');
+
+    const deliveryOrder = Array.isArray((row as any).delivery_orders) ? (row as any).delivery_orders[0] : (row as any).delivery_orders;
+    const importOrder = Array.isArray(deliveryOrder?.import_orders) ? deliveryOrder.import_orders[0] : deliveryOrder?.import_orders;
+    const customer = Array.isArray(importOrder?.customers) ? importOrder.customers[0] : importOrder?.customers;
+    const customerId = customer?.id || importOrder?.customer_id || null;
+    const quantity = Number(payload.quantity || 0);
+    const unitPrice = Number(payload.unit_price || 0);
+    const paidAmount = Number(payload.paid_amount || 0);
+    const paidAt = new Date(payload.paid_at);
+
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Số lượng/số tiền phải lớn hơn 0');
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error('Đơn giá không hợp lệ');
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) throw new Error('Thành tiền phải lớn hơn 0');
+    if (Number.isNaN(paidAt.getTime())) throw new Error('Ngày giờ trả tiền không hợp lệ');
+
+    const notes = [
+      VEHICLE_DEBT_PAYMENT_NOTE_PREFIX,
+      `Mã đơn ${importOrder?.order_code || String(importOrder?.id || '').slice(0, 8)}`,
+      `SL ${quantity}`,
+      `Đơn giá ${unitPrice}`,
+      payload.notes?.trim(),
+    ].filter(Boolean).join(' - ');
+
+    const { data: payment, error: paymentError } = await supabaseService
+      .from('payment_collections')
+      .insert({
+        delivery_order_id: (row as any).delivery_order_id,
+        source_order_ids: [(row as any).delivery_order_id],
+        customer_id: customerId,
+        driver_id: (row as any).driver_id || userId,
+        vehicle_id: (row as any).vehicle_id,
+        delivery_vehicle_id: deliveryVehicleId,
+        expected_amount: Number((row as any).expected_amount || 0),
+        collected_amount: paidAmount,
+        collected_at: paidAt.toISOString(),
+        status: 'confirmed',
+        submitted_at: paidAt.toISOString(),
+        confirmed_at: paidAt.toISOString(),
+        receiver_id: userId || null,
+        receiver_type: 'staff',
+        notes,
+      })
+      .select('id, delivery_vehicle_id, delivery_order_id, expected_amount, collected_amount, collected_at, notes')
+      .single();
+
+    if (paymentError) throw paymentError;
+
+    const { error: updateError } = await supabaseService
+      .from('delivery_vehicles')
+      .update({ export_payment_status: 'paid' })
+      .eq('id', deliveryVehicleId);
+    if (updateError) throw updateError;
+
+    if (customerId) {
+      const { error: receiptError } = await supabaseService
+        .from('receipts')
+        .insert({
+          customer_id: customerId,
+          amount: paidAmount,
+          payment_date: paidAt.toISOString(),
+          notes,
+          created_by: userId || null,
+        });
+      if (receiptError) console.error('Failed to log vehicle debt receipt', receiptError);
+    }
+
+    return {
+      id: payment.id,
+      delivery_vehicle_id: payment.delivery_vehicle_id,
+      delivery_order_id: payment.delivery_order_id,
+      order_code: importOrder?.order_code,
+      product_name: deliveryOrder?.product_name,
+      customer: customer ? { id: customer.id, name: customer.name } : null,
+      vehicle: { id: (row as any).vehicles?.id || (row as any).vehicle_id, license_plate: (row as any).vehicles?.license_plate },
+      driver: { id: (row as any).drivers?.id || (row as any).driver_id, full_name: (row as any).drivers?.full_name },
+      paid_at: payment.collected_at,
+      quantity,
+      unit_price: unitPrice,
+      paid_amount: Number(payment.collected_amount || paidAmount),
+      expected_amount: Number(payment.expected_amount || 0),
+      notes: payment.notes,
+    };
+  }
+
+  static async recordVehicleDebtPayments(
+    items: Array<VehicleDebtPaymentPayload & { delivery_vehicle_id: string }>,
+    userId?: string,
+  ): Promise<VehicleDebtPaymentRow[]> {
+    if (!items || items.length === 0) throw new Error('Vui lòng chọn ít nhất 1 đơn');
+
+    const results: VehicleDebtPaymentRow[] = [];
+    for (const item of items) {
+      const { delivery_vehicle_id, ...payload } = item;
+      results.push(await this.recordVehicleDebtPayment(delivery_vehicle_id, payload, userId));
+    }
+    return results;
+  }
+
+  static async getVehicleDebtPayments(customerType: VehicleDebtCustomerType): Promise<VehicleDebtPaymentRow[]> {
+    const { data, error } = await supabaseService
+      .from('payment_collections')
+      .select(`
+        id,
+        delivery_vehicle_id,
+        delivery_order_id,
+        expected_amount,
+        collected_amount,
+        collected_at,
+        notes,
+        vehicles ( id, license_plate ),
+        drivers:profiles!payment_collections_driver_id_fkey(id, full_name),
+        delivery_orders!inner (
+          unit_price,
+          product_name,
+          delivery_vehicles ( id, assigned_quantity ),
+          import_orders!inner (
+            id,
+            order_code,
+            customer_id,
+            receiver_name,
+            customers!import_orders_customer_id_fkey(id, name, is_loyal)
+          )
+        )
+      `)
+      .eq('status', 'confirmed')
+      .ilike('notes', `%${VEHICLE_DEBT_PAYMENT_NOTE_PREFIX}%`)
+      .order('collected_at', { ascending: false })
+      .range(0, 9999);
+
+    if (error) throw error;
+
+    return (data || [])
+      .map((payment: any): VehicleDebtPaymentRow | null => {
+        const deliveryOrder = Array.isArray(payment.delivery_orders) ? payment.delivery_orders[0] : payment.delivery_orders;
+        const importOrder = Array.isArray(deliveryOrder?.import_orders) ? deliveryOrder.import_orders[0] : deliveryOrder?.import_orders;
+        const customer = Array.isArray(importOrder?.customers) ? importOrder.customers[0] : importOrder?.customers;
+        const isLoyal = customer?.is_loyal === true;
+        if (customerType === 'loyal' && !isLoyal) return null;
+        if (customerType === 'grocery_non_loyal' && isLoyal) return null;
+
+        const deliveryVehicles = Array.isArray(deliveryOrder?.delivery_vehicles) ? deliveryOrder.delivery_vehicles : [];
+        const matchedVehicle = deliveryVehicles.find((item: any) => item.id === payment.delivery_vehicle_id) || deliveryVehicles[0];
+        const quantityMatch = String(payment.notes || '').match(/SL\s+([0-9.,]+)/i);
+        const unitPriceMatch = String(payment.notes || '').match(/Đơn giá\s+([0-9.,]+)/i);
+        const quantity = quantityMatch ? Number(quantityMatch[1].replace(/,/g, '')) : Number(matchedVehicle?.assigned_quantity || 0);
+        const unitPrice = unitPriceMatch ? Number(unitPriceMatch[1].replace(/,/g, '')) : Number(deliveryOrder?.unit_price || 0);
+
+        return {
+          id: payment.id,
+          delivery_vehicle_id: payment.delivery_vehicle_id,
+          delivery_order_id: payment.delivery_order_id,
+          order_code: importOrder?.order_code,
+          product_name: deliveryOrder?.product_name,
+          customer: customer ? { id: customer.id || importOrder?.customer_id, name: customer.name || importOrder?.receiver_name } : null,
+          vehicle: { id: payment.vehicles?.id, license_plate: payment.vehicles?.license_plate },
+          driver: { id: payment.drivers?.id, full_name: payment.drivers?.full_name },
+          paid_at: payment.collected_at,
+          quantity,
+          unit_price: unitPrice,
+          paid_amount: Number(payment.collected_amount || 0),
+          expected_amount: Number(payment.expected_amount || 0),
+          notes: payment.notes,
+        };
+      })
+      .filter((row): row is VehicleDebtPaymentRow => row !== null);
   }
 
   static async getInvoiceOrders(filters: {

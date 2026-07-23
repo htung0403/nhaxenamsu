@@ -8,6 +8,7 @@ export interface VehicleDebt {
   delivery_order_id: string;
   order_id: string;
   order_code: string;
+  product_name?: string | null;
   order_date?: string | null;
   delivery_date?: string | null;
   delivery_time?: string | null;
@@ -34,6 +35,31 @@ export interface VehicleDebt {
   export_payment_status: 'unpaid';
 }
 
+export interface VehicleDebtPayment {
+  id: string;
+  delivery_vehicle_id?: string | null;
+  delivery_order_id: string;
+  order_code?: string | null;
+  product_name?: string | null;
+  customer?: { id?: string | null; name?: string | null } | null;
+  vehicle?: { id?: string | null; license_plate?: string | null } | null;
+  driver?: { id?: string | null; full_name?: string | null } | null;
+  paid_at: string;
+  quantity: number;
+  unit_price: number;
+  paid_amount: number;
+  expected_amount: number;
+  notes?: string | null;
+}
+
+export interface RecordVehicleDebtPaymentPayload {
+  paid_at: string;
+  quantity: number;
+  unit_price: number;
+  paid_amount: number;
+  notes?: string;
+}
+
 export const accountingApi = {
   getDebts: async () => {
     const { data } = await axiosClient.get('/accounting/debts');
@@ -54,6 +80,23 @@ export const accountingApi = {
     const { data } = await axiosClient.get<VehicleDebt[]>('/accounting/vehicle-debts', {
       params: { customerType },
     });
+    return data;
+  },
+
+  getVehicleDebtPayments: async (customerType: VehicleDebtCustomerType) => {
+    const { data } = await axiosClient.get<VehicleDebtPayment[]>('/accounting/vehicle-debt-payments', {
+      params: { customerType },
+    });
+    return data;
+  },
+
+  recordVehicleDebtPayment: async (deliveryVehicleId: string, payload: RecordVehicleDebtPaymentPayload) => {
+    const { data } = await axiosClient.post<VehicleDebtPayment>(`/accounting/vehicle-debts/${deliveryVehicleId}/payment`, payload);
+    return data;
+  },
+
+  recordVehicleDebtPayments: async (items: Array<RecordVehicleDebtPaymentPayload & { delivery_vehicle_id: string }>) => {
+    const { data } = await axiosClient.post<VehicleDebtPayment[]>('/accounting/vehicle-debts/payments', { items });
     return data;
   },
 
