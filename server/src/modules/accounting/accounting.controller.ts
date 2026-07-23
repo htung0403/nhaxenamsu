@@ -102,6 +102,16 @@ export class AccountingController {
     }
   }
 
+  static async updateVehicleDebtPayment(req: Request, res: Response) {
+    try {
+      const validated = vehicleDebtPaymentSchema.parse(req.body);
+      const data = await AccountingService.updateVehicleDebtPayment(req.params.id, validated as any, req.user?.id);
+      return res.status(200).json(successResponse(data, 'Đã cập nhật lịch sử nhập tiền'));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
   static async listSgImportCash(req: Request, res: Response) {
     try {
       if (!req.user) {

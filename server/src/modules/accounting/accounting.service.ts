@@ -44,6 +44,7 @@ export interface VehicleDebtPaymentRow {
   customer?: { id?: string | null; name?: string | null } | null;
   vehicle?: { id?: string | null; license_plate?: string | null } | null;
   driver?: { id?: string | null; full_name?: string | null } | null;
+  entered_by?: { id?: string | null; full_name?: string | null } | null;
   paid_at: string;
   quantity: number;
   unit_price: number;
@@ -326,6 +327,7 @@ export class AccountingService {
       customer: customer ? { id: customer.id, name: customer.name } : null,
       vehicle: { id: (row as any).vehicles?.id || (row as any).vehicle_id, license_plate: (row as any).vehicles?.license_plate },
       driver: { id: (row as any).drivers?.id || (row as any).driver_id, full_name: (row as any).drivers?.full_name },
+      entered_by: userId ? { id: userId, full_name: null } : null,
       paid_at: payment.collected_at,
       quantity,
       unit_price: unitPrice,
@@ -349,6 +351,67 @@ export class AccountingService {
     return results;
   }
 
+  static async updateVehicleDebtPayment(
+    paymentId: string,
+    payload: VehicleDebtPaymentPayload,
+    userId?: string,
+  ): Promise<VehicleDebtPaymentRow> {
+    const { data: current, error: currentError } = await supabaseService
+      .from('payment_collections')
+      .select('id, customer_id, collected_amount, delivery_vehicle_id')
+      .eq('id', paymentId)
+      .single();
+
+    if (currentError) throw currentError;
+    if (!current) throw new Error('Không tìm thấy lịch sử nhập tiền');
+
+    const quantity = Number(payload.quantity || 0);
+    const unitPrice = Number(payload.unit_price || 0);
+    const paidAmount = Number(payload.paid_amount || 0);
+    const paidAt = new Date(payload.paid_at);
+
+    if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('Số lượng/số tiền phải lớn hơn 0');
+    if (!Number.isFinite(unitPrice) || unitPrice < 0) throw new Error('Đơn giá không hợp lệ');
+    if (!Number.isFinite(paidAmount) || paidAmount <= 0) throw new Error('Thành tiền phải lớn hơn 0');
+    if (Number.isNaN(paidAt.getTime())) throw new Error('Ngày giờ trả tiền không hợp lệ');
+
+    const notes = [
+      VEHICLE_DEBT_PAYMENT_NOTE_PREFIX,
+      `SL ${quantity}`,
+      `Đơn giá ${unitPrice}`,
+      payload.notes?.trim(),
+    ].filter(Boolean).join(' - ');
+
+    const { error: updateError } = await supabaseService
+      .from('payment_collections')
+      .update({
+        collected_amount: paidAmount,
+        collected_at: paidAt.toISOString(),
+        confirmed_at: paidAt.toISOString(),
+        notes,
+      })
+      .eq('id', paymentId);
+    if (updateError) throw updateError;
+
+    const delta = paidAmount - Number((current as any).collected_amount || 0);
+    if ((current as any).customer_id && delta !== 0) {
+      const { error: ledgerError } = await supabaseService
+        .from('customer_debt_ledger')
+        .insert({
+          customer_id: (current as any).customer_id,
+          amount: -delta,
+          transaction_type: 'adjustment',
+          reference_id: paymentId,
+          notes: `Điều chỉnh lịch sử nhập tiền theo xe - ${paymentId}`,
+          created_by: userId || null,
+        });
+      if (ledgerError) console.error('Failed to adjust customer debt ledger for payment edit', ledgerError);
+    }
+
+    const rows = await this.getVehicleDebtPayments('grocery_non_loyal');
+    return rows.find((row) => row.id === paymentId) || (await this.getVehicleDebtPayments('loyal')).find((row) => row.id === paymentId) as VehicleDebtPaymentRow;
+  }
+
   static async getVehicleDebtPayments(customerType: VehicleDebtCustomerType): Promise<VehicleDebtPaymentRow[]> {
     const { data, error } = await supabaseService
       .from('payment_collections')
@@ -362,6 +425,7 @@ export class AccountingService {
         notes,
         vehicles ( id, license_plate ),
         drivers:profiles!payment_collections_driver_id_fkey(id, full_name),
+        receivers:profiles!payment_collections_receiver_id_fkey(id, full_name),
         delivery_orders!inner (
           unit_price,
           product_name,
@@ -407,6 +471,7 @@ export class AccountingService {
           customer: customer ? { id: customer.id || importOrder?.customer_id, name: customer.name || importOrder?.receiver_name } : null,
           vehicle: { id: payment.vehicles?.id, license_plate: payment.vehicles?.license_plate },
           driver: { id: payment.drivers?.id, full_name: payment.drivers?.full_name },
+          entered_by: payment.receivers ? { id: payment.receivers?.id, full_name: payment.receivers?.full_name } : null,
           paid_at: payment.collected_at,
           quantity,
           unit_price: unitPrice,

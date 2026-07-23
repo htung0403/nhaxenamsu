@@ -52,3 +52,18 @@ export function useRecordVehicleDebtPayments(customerType: VehicleDebtCustomerTy
     onError: (err: any) => toast.error(err.response?.data?.error || 'Lỗi khi ghi nhận tiền trả'),
   });
 }
+
+export function useUpdateVehicleDebtPayment(customerType: VehicleDebtCustomerType) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: RecordVehicleDebtPaymentPayload }) =>
+      accountingApi.updateVehicleDebtPayment(id, payload),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: accountingKeys.vehicleDebts(customerType) });
+      queryClient.invalidateQueries({ queryKey: accountingKeys.vehicleDebtPayments(customerType) });
+      toast.success('Đã cập nhật lịch sử nhập tiền');
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Lỗi khi cập nhật lịch sử nhập tiền'),
+  });
+}

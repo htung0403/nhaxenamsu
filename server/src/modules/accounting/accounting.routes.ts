@@ -11,6 +11,7 @@ router.get('/debts', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingControl
 router.get('/vehicle-debts', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingController.getVehicleDebts);
 router.get('/vehicle-debt-payments', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingController.getVehicleDebtPayments);
 router.post('/vehicle-debts/payments', requirePolicy('ACCOUNTING_DEBT_MANAGE'), AccountingController.recordVehicleDebtPayments);
+router.patch('/vehicle-debt-payments/:id', requirePolicy('ACCOUNTING_DEBT_MANAGE'), AccountingController.updateVehicleDebtPayment);
 router.post('/vehicle-debts/:id/payment', requirePolicy('ACCOUNTING_DEBT_MANAGE'), AccountingController.recordVehicleDebtPayment);
 router.get('/revenue/by-date', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingController.getRevenueByDate);
 router.get('/revenue/by-vehicle', requirePolicy('ACCOUNTING_REPORTS_VIEW'), AccountingController.getRevenueByVehicle);

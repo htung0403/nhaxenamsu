@@ -44,6 +44,7 @@ export interface VehicleDebtPayment {
   customer?: { id?: string | null; name?: string | null } | null;
   vehicle?: { id?: string | null; license_plate?: string | null } | null;
   driver?: { id?: string | null; full_name?: string | null } | null;
+  entered_by?: { id?: string | null; full_name?: string | null } | null;
   paid_at: string;
   quantity: number;
   unit_price: number;
@@ -97,6 +98,11 @@ export const accountingApi = {
 
   recordVehicleDebtPayments: async (items: Array<RecordVehicleDebtPaymentPayload & { delivery_vehicle_id: string }>) => {
     const { data } = await axiosClient.post<VehicleDebtPayment[]>('/accounting/vehicle-debts/payments', { items });
+    return data;
+  },
+
+  updateVehicleDebtPayment: async (paymentId: string, payload: RecordVehicleDebtPaymentPayload) => {
+    const { data } = await axiosClient.patch<VehicleDebtPayment>(`/accounting/vehicle-debt-payments/${paymentId}`, payload);
     return data;
   },
 
