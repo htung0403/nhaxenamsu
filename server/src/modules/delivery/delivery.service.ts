@@ -245,6 +245,8 @@ export class DeliveryService {
 
   private static getDeliveryScopeGroupKey(row: any): string {
     if (row?.status === 'hang_o_sg') return `single:${row?.id}`;
+    const src = this.pickDeliveryRelation(row?.import_orders) || this.pickDeliveryRelation(row?.vegetable_orders);
+    if (Number(src?.total_amount) > 0 && src?.payment_status !== 'paid') return `single:${row?.id}`;
     const deliveryDate = row?.delivery_date || 'N/A';
     const category = row?.order_category || 'standard';
     const receiver = this.getDeliveryReceiverForGroup(row);

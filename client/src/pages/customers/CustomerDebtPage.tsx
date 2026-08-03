@@ -815,8 +815,8 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
     const dateDebtTotal = dateDebts.reduce((sum, debt) => sum + Number(debt.expected_amount || 0), 0);
 
     return (
-      <div key={date} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
-        <div className="sticky top-0 z-10 border-b border-border bg-card/95 p-3 backdrop-blur">
+      <div key={date} className="w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+        <div className="sticky top-0 z-10 border-b border-border bg-card/95 px-3.5 py-3 backdrop-blur">
           <div className="flex items-center gap-2.5">
             <input
               type="checkbox"
@@ -850,7 +850,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
         </div>
         <div className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${isCollapsed ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr] opacity-100'}`}>
           <div className="min-h-0 overflow-hidden">
-            <div className={`space-y-2.5 bg-muted/20 p-2 transition-transform duration-300 ease-out ${isCollapsed ? '-translate-y-1' : 'translate-y-0'}`}>
+            <div className={`space-y-2.5 bg-muted/20 px-2.5 py-2 transition-transform duration-300 ease-out ${isCollapsed ? '-translate-y-1' : 'translate-y-0'}`}>
               {dateDebts.map(renderDebtMobileCard)}
             </div>
           </div>
@@ -1191,7 +1191,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
               </table>
             </div>
 
-            <div className="md:hidden space-y-3 px-4 py-3 pb-24">
+            <div className="md:hidden space-y-3 px-5 py-3 pb-24">
               {debtMobileGroups}
 
             </div>

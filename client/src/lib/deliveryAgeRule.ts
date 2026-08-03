@@ -8,13 +8,12 @@ export const getDeliveryRemainingQty = (order: DeliveryOrder): number => {
   return order.total_quantity - totalAssigned;
 };
 
-/** Trạng thái hiển thị/lọc: còn hàng chưa giao hết thì luôn là Cần giao, không hiện Đã giao. */
+/** Trạng thái hiển thị/lọc: chỉ còn hàng chưa phân hết mới là Cần giao. */
 export const getEffectiveDeliveryStatus = (order: DeliveryOrder, remainingQty?: number): DeliveryStatus => {
   if (order.status === 'hang_o_sg') return 'hang_o_sg';
   const remaining = remainingQty ?? getDeliveryRemainingQty(order);
   if (remaining > 0) return 'can_giao';
-  if (order.status === 'da_giao') return 'da_giao';
-  return 'can_giao';
+  return 'da_giao';
 };
 
 export const isOldOrderForAgeRule = (order: DeliveryOrder, anchorDate: string): boolean => {
