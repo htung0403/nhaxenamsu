@@ -632,30 +632,38 @@ const DeliveryPage: React.FC = () => {
     setCallDialog(null);
   };
 
-  const getTotalAssignedQuantity = (order: DeliveryOrder) =>
-    (order.delivery_vehicles || []).reduce((sum, dv) => sum + (dv.assigned_quantity || 0), 0);
+  const getTotalAssignedQuantity = React.useCallback(
+    (order: DeliveryOrder) =>
+      (order.delivery_vehicles || []).reduce((sum, dv) => sum + (dv.assigned_quantity || 0), 0),
+    []
+  );
 
-  const hasMyVehicleAssignment = (order: DeliveryOrder) =>
-    (order.delivery_vehicles || []).some((dv) =>
-      dv.vehicle_id && myVehicleIdSet.has(dv.vehicle_id) && (dv.assigned_quantity || 0) > 0
-    );
+  const hasMyVehicleAssignment = React.useCallback(
+    (order: DeliveryOrder) =>
+      (order.delivery_vehicles || []).some((dv) =>
+        dv.vehicle_id && myVehicleIdSet.has(dv.vehicle_id) && (dv.assigned_quantity || 0) > 0
+      ),
+    [myVehicleIdSet]
+  );
 
-  const hasDeliveredSourceStatus = (order: DeliveryOrder) => {
+  const hasDeliveredSourceStatus = React.useCallback((order: DeliveryOrder) => {
     if (order.status === 'da_giao') return true;
     if (!Array.isArray(order.source_orders)) return false;
     return order.source_orders.some((sourceOrder) => sourceOrder?.status === 'da_giao');
-  };
+  }, []);
 
-  const isDeliveredTabOrder = (order: DeliveryOrder) => {
+  const isDeliveredTabOrder = React.useCallback((order: DeliveryOrder) => {
     if (hasDeliveredSourceStatus(order)) return true;
     const eff = getEffectiveDeliveryStatus(order);
     if (eff === 'da_giao') return true;
     const totalAssigned = getTotalAssignedQuantity(order);
     return totalAssigned > 0 && totalAssigned < order.total_quantity;
-  };
+  }, [getTotalAssignedQuantity, hasDeliveredSourceStatus]);
 
-  const isAdminCanGiaoOrder = (order: DeliveryOrder) =>
-    adminCanGiaoGroupKeySet.has(getDeliveryViewGroupKey(order));
+  const isAdminCanGiaoOrder = React.useCallback((order: DeliveryOrder) =>
+    adminCanGiaoGroupKeySet.has(getDeliveryViewGroupKey(order)),
+    [adminCanGiaoGroupKeySet]
+  );
 
   const anchorStr = getDeliveryAnchorDateString();
 
@@ -700,13 +708,15 @@ const DeliveryPage: React.FC = () => {
 
       return true;
     });
-  }, [groupedOrdersView, ageFilter, anchorStr, searchQuery, filterCustomer, filterReceiver, filterDeliveryDate, filterVehicleIds, filterHasExcess]);
+  }, [groupedOrdersView, ageFilter, anchorStr, searchQuery, filterCustomer, filterReceiver, filterDeliveryDate, filterVehicleIds, filterHasExcess, getTotalAssignedQuantity]);
 
   const statusCounts = React.useMemo(() => ({
     all: filteredOrders.length,
     hang_o_sg: filteredOrders.filter((o) => getEffectiveDeliveryStatus(o) === 'hang_o_sg').length,
     can_giao: filteredOrders.filter((o) => {
-      const eff = getEffectiveDeliveryStatus(o);
+      const remainingQty = o.total_quantity - getTotalAssignedQuantity(o);
+      if (remainingQty <= 0) return false;
+      const eff = getEffectiveDeliveryStatus(o, remainingQty);
       if (eff !== 'can_giao') return false;
       if (isDriverOrLoader && !isAdminCanGiaoOrder(o)) return false;
       return true;
@@ -716,7 +726,7 @@ const DeliveryPage: React.FC = () => {
       if (!isDriverOrLoader) return true;
       return hasMyVehicleAssignment(o);
     }).length,
-  }), [filteredOrders, isDriverOrLoader, adminCanGiaoGroupKeySet, myVehicleIdSet]);
+  }), [filteredOrders, isDriverOrLoader, getTotalAssignedQuantity, hasMyVehicleAssignment, isAdminCanGiaoOrder, isDeliveredTabOrder]);
 
   const { customerOptions, receiverOptions } = React.useMemo(() => {
     if (!groupedOrdersView) return { customerOptions: [], receiverOptions: [] };
@@ -753,7 +763,9 @@ const DeliveryPage: React.FC = () => {
         const eff = getEffectiveDeliveryStatus(o);
         if (statusFilter === 'hang_o_sg') return eff === 'hang_o_sg';
         if (statusFilter === 'can_giao') {
-          if (eff !== 'can_giao') return false;
+          const remainingQty = o.total_quantity - getTotalAssignedQuantity(o);
+          if (remainingQty <= 0) return false;
+          if (getEffectiveDeliveryStatus(o, remainingQty) !== 'can_giao') return false;
           if (isDriverOrLoader && !isAdminCanGiaoOrder(o)) return false;
           return true;
         }
@@ -770,7 +782,7 @@ const DeliveryPage: React.FC = () => {
       });
 
     return [...statusFiltered].sort(compareOrderCreatedDesc);
-  }, [filteredOrders, statusFilter, isDriverOrLoader, adminCanGiaoGroupKeySet, myVehicleIdSet]);
+  }, [filteredOrders, statusFilter, isDriverOrLoader, getTotalAssignedQuantity, hasMyVehicleAssignment, isAdminCanGiaoOrder, isDeliveredTabOrder]);
 
   const isAllSelected = displayedOrders.length > 0 && displayedOrders.every(o => selectedIds.has(o.id));
   const isSomeSelected = !isAllSelected && displayedOrders.some(o => selectedIds.has(o.id));
