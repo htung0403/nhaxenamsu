@@ -47,6 +47,11 @@ type EditableCustomer = {
   customer_type?: string;
 };
 
+const pickRelation = <T,>(relation: T | T[] | null | undefined): T | undefined => {
+  if (Array.isArray(relation)) return relation[0];
+  return relation || undefined;
+};
+
 const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose }) => {
   const queryClient = useQueryClient();
   const isVeg = order?.order_category === 'vegetable' || !!order?.vegetable_order_id;
@@ -105,6 +110,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
     image_url: '',
     image_urls: [] as string[]
   });
+  const initialFormDataRef = useRef<typeof formData | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -112,6 +118,8 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
 
   useEffect(() => {
     if (order && isOpen) {
+      const importOrder = pickRelation(order.import_orders);
+      const vegetableOrder = pickRelation(order.vegetable_orders);
       const displayProductName = order.product_name.includes(' - ') 
         ? order.product_name.split(' - ').slice(1).join(' - ') 
         : order.product_name;
@@ -127,21 +135,23 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
       const initialImages = collectDeliveryOrderImageUrlsForEdit(order);
       const legacyImage = initialImages[0] || order.image_url || '';
 
-      setFormData({
+      const nextFormData = {
         product_name: displayProductName,
         total_quantity: Math.max(1, Math.round(Number(order.total_quantity) || 0)),
         unit_price: uPrice || 0,
         delivery_date: order.delivery_date || '',
         delivery_time: deliveryTimeToInputValue(order.delivery_time),
-        sender_id: order.import_orders?.sender_id || order.vegetable_orders?.sender_id || null,
-        sender_name: order.import_orders?.sender_name || order.vegetable_orders?.sender_name || order.import_orders?.sender_customers?.name || order.vegetable_orders?.sender_customers?.name || '',
-        customer_id: order.import_orders?.customer_id || order.vegetable_orders?.customer_id || null,
-        receiver_name: order.import_orders?.receiver_name || order.vegetable_orders?.receiver_name || order.import_orders?.customers?.name || order.vegetable_orders?.customers?.name || '',
-        payment_status: order.import_orders?.payment_status === 'paid' || order.vegetable_orders?.payment_status === 'paid' ? 'paid' : 'unpaid',
-        total_amount: order.import_orders?.total_amount || order.vegetable_orders?.total_amount || 0,
+        sender_id: importOrder?.sender_id || vegetableOrder?.sender_id || null,
+        sender_name: importOrder?.sender_name || vegetableOrder?.sender_name || importOrder?.sender_customers?.name || vegetableOrder?.sender_customers?.name || '',
+        customer_id: importOrder?.customer_id || vegetableOrder?.customer_id || null,
+        receiver_name: importOrder?.receiver_name || vegetableOrder?.receiver_name || importOrder?.customers?.name || vegetableOrder?.customers?.name || '',
+        payment_status: (importOrder?.payment_status === 'paid' || vegetableOrder?.payment_status === 'paid' ? 'paid' : 'unpaid') as 'paid' | 'unpaid',
+        total_amount: importOrder?.total_amount || vegetableOrder?.total_amount || 0,
         image_url: legacyImage,
         image_urls: initialImages
-      });
+      };
+      setFormData(nextFormData);
+      initialFormDataRef.current = nextFormData;
     }
   }, [order, isOpen, products]);
 
@@ -193,6 +203,16 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
       const groupedOriginalTotalQuantity = Math.max(0, Math.round(Number(order.total_quantity) || 0));
       const shouldUpdateMergedQuantity = isMergedEdit && requestedTotalQuantity !== groupedOriginalTotalQuantity;
       const quantityByOrderId = new Map<string, number>();
+      const initialFormData = initialFormDataRef.current;
+      const changedProduct = !initialFormData || formData.product_name !== initialFormData.product_name;
+      const changedUnitPrice = !initialFormData || formData.unit_price !== initialFormData.unit_price;
+      const changedDeliveryDate = !initialFormData || formData.delivery_date !== initialFormData.delivery_date;
+      const changedDeliveryTime = !initialFormData || formData.delivery_time !== initialFormData.delivery_time;
+      const changedImages = !initialFormData || JSON.stringify(formData.image_urls || []) !== JSON.stringify(initialFormData.image_urls || []);
+      const changedLegacyImage = !initialFormData || formData.image_url !== initialFormData.image_url;
+      const changedSenderFields = !initialFormData || formData.sender_id !== initialFormData.sender_id || formData.sender_name !== initialFormData.sender_name;
+      const changedReceiverFields = !initialFormData || formData.customer_id !== initialFormData.customer_id || formData.receiver_name !== initialFormData.receiver_name;
+      const changedPaymentFields = !initialFormData || formData.payment_status !== initialFormData.payment_status || formData.total_amount !== initialFormData.total_amount;
 
       if (shouldUpdateMergedQuantity) {
         if (requestedTotalQuantity < targetOrders.length) {
@@ -248,7 +268,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
             ? targetOrder.product_name.split(' - ').slice(1).join(' - ')
             : targetOrder.product_name;
 
-          if (formData.product_name !== oldDisplayProductName) {
+          if (changedProduct && formData.product_name !== oldDisplayProductName) {
             const prefix = targetOrder.product_name.includes(' - ') ? targetOrder.product_name.split(' - ')[0] + ' - ' : '';
             payload.product_name = prefix + formData.product_name;
 
@@ -275,20 +295,20 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
 
           const rawPrice = Number(formData.unit_price) || 0;
           const normalizedPrice = rawPrice;
-          if (normalizedPrice !== targetOrder.unit_price) payload.unit_price = normalizedPrice;
-          if (formData.delivery_date && formData.delivery_date !== targetOrder.delivery_date) payload.delivery_date = formData.delivery_date;
+          if (changedUnitPrice && normalizedPrice !== targetOrder.unit_price) payload.unit_price = normalizedPrice;
+          if (changedDeliveryDate && formData.delivery_date && formData.delivery_date !== targetOrder.delivery_date) payload.delivery_date = formData.delivery_date;
           const prevTime = deliveryTimeToInputValue(targetOrder.delivery_time);
           const nextTime = (formData.delivery_time || '').trim();
-          if (nextTime !== prevTime) {
+          if (changedDeliveryTime && nextTime !== prevTime) {
             payload.delivery_time = nextTime || null;
           }
 
           const currentImageUrls = formData.image_urls || [];
           const oldImageUrls = targetOrder.image_urls || [];
-          if (JSON.stringify(currentImageUrls) !== JSON.stringify(oldImageUrls)) {
+          if (changedImages && JSON.stringify(currentImageUrls) !== JSON.stringify(oldImageUrls)) {
             payload.image_urls = currentImageUrls;
             payload.image_url = currentImageUrls.length > 0 ? currentImageUrls[0] : null;
-          } else if (formData.image_url && formData.image_url !== targetOrder.image_url) {
+          } else if (changedLegacyImage && formData.image_url && formData.image_url !== targetOrder.image_url) {
             payload.image_url = formData.image_url;
           }
 
@@ -298,14 +318,14 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
           }
 
           const sourceId = targetOrder.import_order_id || targetOrder.vegetable_order_id;
-          const orderData = targetOrder.import_orders || targetOrder.vegetable_orders;
+          const orderData = pickRelation(targetOrder.import_orders) || pickRelation(targetOrder.vegetable_orders);
           if (!sourceId || !orderData) return;
 
-          const changedSender = formData.sender_id !== orderData.sender_id || formData.sender_name !== orderData.sender_name;
-          const changedReceiver = formData.customer_id !== orderData.customer_id || formData.receiver_name !== orderData.receiver_name;
-          const changedPaymentStatus = formData.payment_status !== (orderData.payment_status === 'paid' ? 'paid' : 'unpaid');
+          const changedSender = changedSenderFields && (formData.sender_id !== orderData.sender_id || formData.sender_name !== orderData.sender_name);
+          const changedReceiver = changedReceiverFields && (formData.customer_id !== orderData.customer_id || formData.receiver_name !== orderData.receiver_name);
+          const changedPaymentStatus = changedPaymentFields && formData.payment_status !== (orderData.payment_status === 'paid' ? 'paid' : 'unpaid');
           const normalizedTotalAmount = Number(formData.total_amount) || 0;
-          const changedTotalAmount = normalizedTotalAmount !== (Number(orderData.total_amount) || 0);
+          const changedTotalAmount = changedPaymentFields && normalizedTotalAmount !== (Number(orderData.total_amount) || 0);
           if (!changedSender && !changedReceiver && !changedPaymentStatus && !changedTotalAmount) return;
 
           if (!sourceOrderUpdates[sourceId]) {

@@ -20,11 +20,6 @@ export const getReceiverDisplayName = (order: DeliveryOrder) => {
   return orderObj.customers?.name || orderObj.receiver_name?.trim() || orderObj.profiles?.full_name || '-';
 };
 
-const hasUnpaidSgFreight = (order: DeliveryOrder) => {
-  const orderObj = pickRelation(order.import_orders) || pickRelation(order.vegetable_orders);
-  return Number(orderObj?.total_amount) > 0 && orderObj?.payment_status !== 'paid';
-};
-
 export const getDeliveryGroupKey = (order: DeliveryOrder) => {
   const deliveryDate = order.delivery_date || 'N/A';
   const category = order.order_category || 'standard';
@@ -34,7 +29,7 @@ export const getDeliveryGroupKey = (order: DeliveryOrder) => {
 };
 
 export const getDeliveryViewGroupKey = (order: DeliveryOrder) =>
-  order.status === 'hang_o_sg' || hasUnpaidSgFreight(order) ? `single:${order.id}` : getDeliveryGroupKey(order);
+  order.status === 'hang_o_sg' ? `single:${order.id}` : getDeliveryGroupKey(order);
 
 export const groupDeliveryOrderBuckets = (orders: DeliveryOrder[]) => {
   const grouped = new Map<string, DeliveryOrder[]>();
