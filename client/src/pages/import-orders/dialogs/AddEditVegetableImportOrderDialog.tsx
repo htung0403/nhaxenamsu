@@ -79,6 +79,7 @@ const normalizePersonName = (value?: string | null) =>
     .trim();
 
 const waitFor = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const CUSTOMER_DIALOG_LIMIT = 2000;
 
 const importOrderItemSchema = z.object({
   product_id: z.string().min(1, 'Chọn hàng hóa'),
@@ -131,7 +132,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
   const createCustomerMutation = useCreateCustomer();
   const { data: vehicles, isError: isVehiclesError } = useVehicles(isOpen);
   const { data: products } = useProducts(isOpen, 'vegetable');
-  const { data: customers } = useCustomers(undefined, isOpen);
+  const { data: customers } = useCustomers(undefined, isOpen, CUSTOMER_DIALOG_LIMIT);
   const { data: employees } = useEmployees(isOpen);
 
   // Inline add-new-customer state

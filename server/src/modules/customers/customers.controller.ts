@@ -118,7 +118,10 @@ export class CustomerController {
       if (req.query.is_loyal !== undefined) {
         isLoyal = req.query.is_loyal === 'true';
       }
-      const data = await CustomerService.getAll(type, isLoyal);
+      const limit = req.query.limit !== undefined
+        ? z.coerce.number().int().positive().max(2000).parse(req.query.limit)
+        : undefined;
+      const data = await CustomerService.getAll(type, isLoyal, limit);
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));

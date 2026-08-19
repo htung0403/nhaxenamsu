@@ -104,7 +104,7 @@ export class CustomerService {
     return loadOrder('vegetable_orders', 'vegetable');
   }
 
-  static async getAll(type?: string, isLoyal?: boolean) {
+  private static buildCustomerListQuery(type?: string, isLoyal?: boolean) {
     let query = supabaseService.from('customers').select('*').is('deleted_at', null);
     if (type) {
       query = query.eq('customer_type', type);
@@ -112,9 +112,28 @@ export class CustomerService {
     if (isLoyal !== undefined) {
       query = query.eq('is_loyal', isLoyal);
     }
-    const { data, error } = await query;
-    if (error) throw error;
-    return data;
+    return query;
+  }
+
+  static async getAll(type?: string, isLoyal?: boolean, limit?: number) {
+    if (!limit) {
+      const { data, error } = await this.buildCustomerListQuery(type, isLoyal);
+      if (error) throw error;
+      return data;
+    }
+
+    const customers: any[] = [];
+    const pageSize = 1000;
+
+    for (let from = 0; from < limit; from += pageSize) {
+      const to = Math.min(from + pageSize, limit) - 1;
+      const { data, error } = await this.buildCustomerListQuery(type, isLoyal).range(from, to);
+      if (error) throw error;
+      customers.push(...(data || []));
+      if (!data || data.length < to - from + 1) break;
+    }
+
+    return customers;
   }
 
   static async getVegetableReceiverCustomersBySender(senderId: string) {

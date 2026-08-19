@@ -56,8 +56,8 @@ export interface DeliveryOrderPriceUpdate {
 }
 
 export const customersApi = {
-  getAll: async (type?: string) => {
-    const { data } = await axiosClient.get<Customer[]>('/customers', { params: { type } });
+  getAll: async (type?: string, limit?: number) => {
+    const { data } = await axiosClient.get<Customer[]>('/customers', { params: { type, limit } });
     return data;
   },
 

@@ -101,6 +101,7 @@ type ImportOrderSubmitPayload = Omit<Partial<ImportOrderCreatePayload>, 'items' 
 
 const PACKAGE_ONLY_PREFIX = 'package-only:';
 const RECEIVER_ONLY_PREFIX = 'receiver-only__';
+const CUSTOMER_DIALOG_LIMIT = 2000;
 
 const toPackageOnlyValue = (name?: string | null) => `${PACKAGE_ONLY_PREFIX}${name || ''}`;
 const isPackageOnlyValue = (value?: string | null) => Boolean(value?.startsWith(PACKAGE_ONLY_PREFIX));
@@ -129,7 +130,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
   const createProductMutation = useCreateProduct();
   const createCustomerMutation = useCreateCustomer();
   const { data: products } = useProducts(isOpen, 'standard');
-  const { data: customers } = useCustomers(undefined, isOpen);
+  const { data: customers } = useCustomers(undefined, isOpen, CUSTOMER_DIALOG_LIMIT);
   const { data: employees } = useEmployees(isOpen);
 
   // Inline add-new-customer state
