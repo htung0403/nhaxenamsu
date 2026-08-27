@@ -20,7 +20,9 @@ export const customerKeys = {
   receipts: (id: string) => [...customerKeys.all, 'receipts', id] as const,
 };
 
-export function useCustomers(type?: string, enabled = true, limit?: number) {
+export const DEFAULT_CUSTOMER_LIST_LIMIT = 2000;
+
+export function useCustomers(type?: string, enabled = true, limit = DEFAULT_CUSTOMER_LIST_LIMIT) {
   return useQuery({
     queryKey: customerKeys.list(type, limit),
     queryFn: () => customersApi.getAll(type, limit),

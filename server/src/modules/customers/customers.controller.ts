@@ -110,6 +110,8 @@ const createMyOrderSchema = z.object({
 
 const updateMyOrderSchema = createMyOrderSchema.partial();
 
+const DEFAULT_CUSTOMER_LIST_LIMIT = 2000;
+
 export class CustomerController {
   static async getAll(req: Request, res: Response) {
     try {
@@ -120,7 +122,7 @@ export class CustomerController {
       }
       const limit = req.query.limit !== undefined
         ? z.coerce.number().int().positive().max(2000).parse(req.query.limit)
-        : undefined;
+        : DEFAULT_CUSTOMER_LIST_LIMIT;
       const data = await CustomerService.getAll(type, isLoyal, limit);
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
