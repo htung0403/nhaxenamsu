@@ -6,8 +6,8 @@ import { useProducts } from '../../../hooks/queries/useProducts';
 import { CreatableSearchableSelect } from '../../../components/ui/CreatableSearchableSelect';
 import VnUnitPriceInput from '../../../components/shared/VnUnitPriceInput';
 import { uploadApi } from '../../../api/uploadApi';
-import type { DeliveryOrder, Product } from '../../../types';
-import { useCustomers } from '../../../hooks/queries/useCustomers';
+import type { Customer, DeliveryOrder, Product } from '../../../types';
+import { useCustomers, useCreateCustomer } from '../../../hooks/queries/useCustomers';
 import { importOrdersApi } from '../../../api/importOrdersApi';
 import toast from 'react-hot-toast';
 import { collectDeliveryOrderImageUrlsForEdit } from '../../../lib/deliveryOrderImages';
@@ -24,6 +24,13 @@ interface Props {
 const pickRelation = <T,>(relation: any): T | undefined => {
   if (Array.isArray(relation)) return relation[0];
   return relation || undefined;
+};
+
+type CustomerMutationResponse = Customer | { data?: Customer };
+
+const unwrapCustomerMutationData = (response: CustomerMutationResponse): Customer | undefined => {
+  if ('id' in response) return response;
+  return response.data;
 };
 
 const getOrderPreviewImage = (order: any, localUrl?: string) => {
@@ -80,6 +87,7 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
 
   const { data: products } = useProducts(isOpen, isVeg ? 'vegetable' : 'standard');
   const { data: allCustomers } = useCustomers(undefined, isOpen);
+  const createCustomerMutation = useCreateCustomer();
 
   const productOptions = useMemo(() => {
     if (!products) return [];
@@ -313,10 +321,20 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
      }
   };
 
-  const handleSenderChange = (id: string, val: string, isCreate: boolean) => {
+  const handleSenderChange = async (id: string, val: string, isCreate: boolean) => {
     if (isCreate) {
-       updateRow(id, 'sender_id', null);
-       updateRow(id, 'sender_name', val);
+       const name = val.trim();
+       if (!name) return;
+
+       try {
+          const customerType = isVeg ? 'vegetable_sender' : 'grocery_sender';
+          const response = await createCustomerMutation.mutateAsync({ name, customer_type: customerType });
+          const customer = unwrapCustomerMutationData(response);
+          updateRow(id, 'sender_id', customer?.id || null);
+          updateRow(id, 'sender_name', customer?.name || name);
+       } catch {
+          // handled by mutation
+       }
     } else {
        updateRow(id, 'sender_id', val);
        const found = allCustomers?.find((c: any) => c.id === val);
@@ -324,10 +342,20 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
     }
   };
 
-  const handleReceiverChange = (id: string, val: string, isCreate: boolean) => {
+  const handleReceiverChange = async (id: string, val: string, isCreate: boolean) => {
     if (isCreate) {
-       updateRow(id, 'customer_id', null);
-       updateRow(id, 'receiver_name', val);
+       const name = val.trim();
+       if (!name) return;
+
+       try {
+          const customerType = isVeg ? 'vegetable_receiver' : 'grocery_receiver';
+          const response = await createCustomerMutation.mutateAsync({ name, customer_type: customerType });
+          const customer = unwrapCustomerMutationData(response);
+          updateRow(id, 'customer_id', customer?.id || null);
+          updateRow(id, 'receiver_name', customer?.name || name);
+       } catch {
+          // handled by mutation
+       }
     } else {
        updateRow(id, 'customer_id', val);
        const found = allCustomers?.find((c: any) => c.id === val);
@@ -437,7 +465,7 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
                           onCreate={(val) => handleSenderChange(order.id, val, true)}
                           placeholder="Chọn người gửi..."
                           className="w-full bg-card border border-border rounded-xl min-w-[120px]"
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || createCustomerMutation.isPending}
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -449,7 +477,7 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
                           onCreate={(val) => handleReceiverChange(order.id, val, true)}
                           placeholder="Chọn người nhận..."
                           className="w-full bg-card border border-border rounded-xl min-w-[120px]"
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || createCustomerMutation.isPending}
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -460,7 +488,7 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
                           onCreate={(val) => handleProductChange(order.id, val)}
                           placeholder="Nhập tên hàng..."
                           className="w-full bg-card border border-border rounded-xl"
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || createCustomerMutation.isPending}
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -472,7 +500,7 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
                           className="w-full h-11 px-3 border border-border rounded-xl text-[14px] focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all disabled:opacity-50"
                           value={rowData.total_quantity}
                           onChange={e => updateRow(order.id, 'total_quantity', parseFloat(e.target.value) || 0)}
-                          disabled={isSubmitting}
+                          disabled={isSubmitting || createCustomerMutation.isPending}
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -636,7 +664,7 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
+            disabled={isSubmitting || createCustomerMutation.isPending}
             className="px-4 py-2.5 text-[14px] font-bold text-muted-foreground bg-card border border-border rounded-xl hover:bg-muted transition-colors disabled:opacity-50"
           >
             Hủy
@@ -644,11 +672,11 @@ const BulkEditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, orders, hi
           <button
             form="bulk-edit-form"
             type="submit"
-            disabled={isSubmitting || orders.length === 0}
+            disabled={isSubmitting || createCustomerMutation.isPending || orders.length === 0}
             className="px-4 py-2.5 text-[14px] font-bold text-white bg-primary rounded-xl hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
           >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-            {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+            {(isSubmitting || createCustomerMutation.isPending) && <Loader2 size={16} className="animate-spin" />}
+            {createCustomerMutation.isPending ? 'Đang tạo khách...' : isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
           </button>
         </div>
       </div>

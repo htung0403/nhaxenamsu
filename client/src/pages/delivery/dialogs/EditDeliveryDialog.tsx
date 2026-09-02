@@ -4,7 +4,7 @@ import { X, Loader2, Camera, ImagePlus } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { deliveryKeys } from '../../../hooks/queries/useDelivery';
 import { useProducts } from '../../../hooks/queries/useProducts';
-import { useCustomers } from '../../../hooks/queries/useCustomers';
+import { useCustomers, useCreateCustomer } from '../../../hooks/queries/useCustomers';
 
 import { importOrdersApi } from '../../../api/importOrdersApi';
 import { deliveryApi } from '../../../api/deliveryApi';
@@ -47,9 +47,16 @@ type EditableCustomer = {
   customer_type?: string;
 };
 
+type CustomerMutationResponse = EditableCustomer | { data?: EditableCustomer };
+
 const pickRelation = <T,>(relation: T | T[] | null | undefined): T | undefined => {
   if (Array.isArray(relation)) return relation[0];
   return relation || undefined;
+};
+
+const unwrapCustomerMutationData = (response: CustomerMutationResponse): EditableCustomer | undefined => {
+  if ('id' in response) return response;
+  return response.data;
 };
 
 const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose }) => {
@@ -58,6 +65,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
 
   const { data: products } = useProducts(isOpen, isVeg ? 'vegetable' : 'standard');
   const { data: allCustomers } = useCustomers(undefined, isOpen);
+  const createCustomerMutation = useCreateCustomer();
   const customers = useMemo<EditableCustomer[]>(() => (allCustomers || []) as EditableCustomer[], [allCustomers]);
 
   const productOptions = useMemo(() => {
@@ -379,18 +387,38 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
      setFormData(prev => ({ ...prev, product_name: val, unit_price: newPrice }));
   };
 
-  const handleSenderChange = (val: string, isCreate: boolean) => {
+  const handleSenderChange = async (val: string, isCreate: boolean) => {
     if (isCreate) {
-       setFormData(prev => ({ ...prev, sender_id: null, sender_name: val }));
+       const name = val.trim();
+       if (!name) return;
+
+       try {
+        const customerType = isVeg ? 'vegetable_sender' : 'grocery_sender';
+        const response = await createCustomerMutation.mutateAsync({ name, customer_type: customerType });
+        const customer = unwrapCustomerMutationData(response);
+        setFormData(prev => ({ ...prev, sender_id: customer?.id || null, sender_name: customer?.name || name }));
+       } catch {
+        // handled by mutation
+       }
     } else {
        const found = customers.find((customer) => customer.id === val);
        setFormData(prev => ({ ...prev, sender_id: val, sender_name: found?.name || '' }));
     }
   };
 
-  const handleReceiverChange = (val: string, isCreate: boolean) => {
+  const handleReceiverChange = async (val: string, isCreate: boolean) => {
     if (isCreate) {
-       setFormData(prev => ({ ...prev, customer_id: null, receiver_name: val }));
+       const name = val.trim();
+       if (!name) return;
+
+       try {
+        const customerType = isVeg ? 'vegetable_receiver' : 'grocery_receiver';
+        const response = await createCustomerMutation.mutateAsync({ name, customer_type: customerType });
+        const customer = unwrapCustomerMutationData(response);
+        setFormData(prev => ({ ...prev, customer_id: customer?.id || null, receiver_name: customer?.name || name }));
+       } catch {
+        // handled by mutation
+       }
     } else {
        const found = customers.find((customer) => customer.id === val);
        setFormData(prev => ({ ...prev, customer_id: val, receiver_name: found?.name || '' }));
@@ -483,7 +511,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
                 onCreate={handleProductChange}
                 placeholder="Chọn hoặc nhập tên hàng..."
                 className="w-full bg-card border border-border rounded-xl"
-                disabled={isSubmitting}
+                disabled={isSubmitting || createCustomerMutation.isPending}
               />
             </div>
 
@@ -562,7 +590,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
                 onCreate={(val) => handleSenderChange(val, true)}
                 placeholder="Chọn hoặc tạo người gửi..."
                 className="w-full bg-card border border-border rounded-xl"
-                disabled={isSubmitting}
+                disabled={isSubmitting || createCustomerMutation.isPending}
               />
             </div>
 
@@ -576,7 +604,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
                 onCreate={(val) => handleReceiverChange(val, true)}
                 placeholder="Chọn hoặc tạo người nhận..."
                 className="w-full bg-card border border-border rounded-xl"
-                disabled={isSubmitting}
+                disabled={isSubmitting || createCustomerMutation.isPending}
               />
             </div>
           </form>
@@ -586,7 +614,7 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
           <button
             type="button"
             onClick={onClose}
-            disabled={isSubmitting}
+            disabled={isSubmitting || createCustomerMutation.isPending}
             className="px-4 py-2.5 text-[14px] font-bold text-muted-foreground bg-card border border-border rounded-xl hover:bg-muted transition-colors disabled:opacity-50"
           >
             Hủy
@@ -594,11 +622,11 @@ const EditDeliveryDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose
           <button
             form="edit-delivery-form"
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || createCustomerMutation.isPending}
             className="px-4 py-2.5 text-[14px] font-bold text-white bg-primary rounded-xl hover:bg-primary/90 transition-colors shadow-sm disabled:opacity-50 flex items-center gap-2"
           >
-            {isSubmitting && <Loader2 size={16} className="animate-spin" />}
-            {isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
+            {(isSubmitting || createCustomerMutation.isPending) && <Loader2 size={16} className="animate-spin" />}
+            {createCustomerMutation.isPending ? 'Đang tạo khách...' : isSubmitting ? 'Đang lưu...' : 'Lưu thay đổi'}
           </button>
         </div>
       </div>
