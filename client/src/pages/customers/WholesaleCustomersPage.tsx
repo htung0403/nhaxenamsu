@@ -5,7 +5,7 @@ import { useCustomers, useDeleteCustomer } from '../../hooks/queries/useCustomer
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
 import ErrorState from '../../components/shared/ErrorState';
-import { Plus, Pencil, Trash2, GitMerge, UserPlus } from 'lucide-react';
+import { Plus, Pencil, Trash2, GitMerge, UserPlus, Boxes } from 'lucide-react';
 import AddEditCustomerDialog from './dialogs/AddEditCustomerDialog';
 import MergeCustomerDialog from './dialogs/MergeCustomerDialog';
 import CreateCustomerAccountDialog from './dialogs/CreateCustomerAccountDialog';
@@ -14,6 +14,10 @@ import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { SearchInput } from '../../components/ui/SearchInput';
 import { matchesSearch } from '../../lib/str-utils';
 import type { Customer } from '../../types';
+import { cratesApi } from '../../api/cratesApi';
+import toast from 'react-hot-toast';
+
+const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
 
 const formatCurrency = (value?: number | null) => {
   if (value == null) return '-';
@@ -124,6 +128,18 @@ const WholesaleCustomersPage: React.FC<Props> = ({ type = 'vegetable_receiver' }
     }
   };
 
+  const handleAddSelectedToCrates = async () => {
+    const selectedArray = Array.from(selectedIds);
+    if (!selectedArray.length) return;
+    try {
+      await cratesApi.setRoles({ customer_ids: selectedArray, role: 'receiver', enabled: true });
+      toast.success(`Đã thêm ${selectedArray.length} khách vào DS nhận két`);
+      setSelectedIds(new Set());
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || 'Không thêm được khách nhận két');
+    }
+  };
+
   const openMergeDialog = () => {
     const selectedArray = Array.from(selectedIds);
     if (selectedArray.length !== 2) return;
@@ -190,6 +206,15 @@ const WholesaleCustomersPage: React.FC<Props> = ({ type = 'vegetable_receiver' }
           <span className="text-[13px] font-bold text-amber-800">
             Đã chọn {selectedIds.size} khách hàng
           </span>
+          {type === 'vegetable_receiver' && (
+            <button
+              onClick={handleAddSelectedToCrates}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-[13px] font-bold hover:bg-emerald-700 shadow-sm transition-all"
+            >
+              <Boxes size={14} />
+              Thêm vào DS nhận két
+            </button>
+          )}
           {selectedIds.size === 2 && (
             <button
               onClick={openMergeDialog}
@@ -469,3 +494,6 @@ const WholesaleCustomersPage: React.FC<Props> = ({ type = 'vegetable_receiver' }
 };
 
 export default WholesaleCustomersPage;
+
+
+

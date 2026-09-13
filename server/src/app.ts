@@ -29,6 +29,8 @@ import publicDeliveryRoutes from './modules/delivery/public.routes';
 import driverTrackingRoutes from './modules/driver-tracking/driver-tracking.routes';
 import driverDeliveriesRoutes from './modules/driver-deliveries/driver-deliveries.routes';
 import routingRoutes from './modules/routing/routing.routes';
+import cratesRoutes from './modules/crates/crates.routes';
+import publicCratesRoutes from './modules/crates/public.routes';
 
 const app = express();
 
@@ -62,6 +64,7 @@ app.use('/api', limiter);
 // 4. Public API Routes (no auth)
 app.use('/api/public/delivery', publicDeliveryRoutes);
 app.use('/api/public/summary', require('./modules/notifications/public.routes').default);
+app.use('/api/public/crates', publicCratesRoutes);
 
 // 5. API Routes
 app.use('/api/auth', authRoutes);
@@ -84,6 +87,7 @@ app.use('/api/notifications', notificationsRoutes);
 app.use('/api/driver-tracking', driverTrackingRoutes);
 app.use('/api/driver-deliveries', driverDeliveriesRoutes);
 app.use('/api/routing', routingRoutes);
+app.use('/api/crates', cratesRoutes);
 
 
 
@@ -110,3 +114,4 @@ initZaloScheduler();
 initDriverTrackingScheduler();
 
 export default app;
+

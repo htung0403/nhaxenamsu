@@ -32,6 +32,7 @@ const DRIVER_LIKE_LEGACY_PATHS: string[] = [
   '/app/hang-hoa',
   '/app/hang-hoa/giao-hang',
   '/app/hang-hoa/giao-hang-rau',
+  '/app/hang-hoa/giao-ket',
   '/app/hanh-chinh-nhan-su',
   '/app/hanh-chinh-nhan-su/nghi-phep',
   '/app/hanh-chinh-nhan-su/cham-cong',
@@ -51,6 +52,8 @@ const DRIVER_LIKE_LEGACY_PATHS: string[] = [
   '/app/khach-hang',
   '/app/khach-hang/nguoi-gui-rau',
   '/app/khach-hang/vua-rau',
+  '/app/khach-hang/nguoi-gui-ket',
+  '/app/khach-hang/nguoi-nhan-ket',
   '/app/khach-hang/nguoi-gui-tap-hoa',
   '/app/khach-hang/nguoi-nhan-tap-hoa',
 ];
@@ -70,6 +73,8 @@ const LEGACY_ALLOWED_PATHS_BY_ROLE: Record<string, string[]> = {
     '/app/khach-hang',
     '/app/khach-hang/nguoi-gui-rau',
     '/app/khach-hang/vua-rau',
+    '/app/khach-hang/nguoi-gui-ket',
+    '/app/khach-hang/nguoi-nhan-ket',
     '/app/khach-hang/nguoi-gui-tap-hoa',
     '/app/khach-hang/nguoi-nhan-tap-hoa',
   ],
@@ -84,6 +89,10 @@ const LEGACY_ALLOWED_PATHS_BY_ROLE: Record<string, string[]> = {
     '/app/hang-hoa/hang-rau',
     '/app/hang-hoa/giao-hang-rau',
     '/app/hang-hoa/kho-rau',
+    '/app/hang-hoa/quan-ly-ket',
+    '/app/hang-hoa/chia-ket',
+    '/app/hang-hoa/giao-ket',
+    '/app/hang-hoa/in-phieu-ket',
     '/app/hang-hoa/xuat-hang',
     '/app/hang-hoa/giao-hang',
     '/app/hang-hoa/kho',
@@ -108,6 +117,8 @@ const LEGACY_ALLOWED_PATHS_BY_ROLE: Record<string, string[]> = {
     '/app/khach-hang',
     '/app/khach-hang/nguoi-gui-rau',
     '/app/khach-hang/vua-rau',
+    '/app/khach-hang/nguoi-gui-ket',
+    '/app/khach-hang/nguoi-nhan-ket',
     '/app/khach-hang/nguoi-gui-tap-hoa',
     '/app/khach-hang/nguoi-nhan-tap-hoa',
   ],
@@ -166,4 +177,8 @@ export const canAccessModuleRoute = (
 
   return canAccessAnyRoute(moduleChildPaths, role, allowedSet);
 };
+
+
+
+
 

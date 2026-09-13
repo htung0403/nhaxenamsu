@@ -47,6 +47,7 @@ import VegetableCustomersPage from './pages/customers/VegetableCustomersPage';
 import VegetableSenderCustomersPage from './pages/customers/VegetableSenderCustomersPage';
 import VegetableSenderCustomerOrdersPage from './pages/customers/VegetableSenderCustomerOrdersPage';
 import WholesaleCustomersPage from './pages/customers/WholesaleCustomersPage';
+import CrateCustomersPage from './pages/customers/CrateCustomersPage';
 import LoyalCustomersPage from './pages/customers/LoyalCustomersPage';
 import SalarySettingsPage from './pages/hr/SalarySettingsPage';
 import RolePermissionsPage from './pages/hr/RolePermissionsPage';
@@ -69,6 +70,10 @@ import VegetableSummaryPublicPage from './pages/notifications/VegetableSummaryPu
 import ZaloGrocerySummaryManagePage from './pages/notifications/ZaloGrocerySummaryManagePage';
 import ZaloSupplierSummaryManagePage from './pages/notifications/ZaloSupplierSummaryManagePage';
 import ZaloSenderSummaryManagePage from './pages/notifications/ZaloSenderSummaryManagePage';
+import CrateManagementPage from './pages/crates/CrateManagementPage';
+import CrateAllocationPage from './pages/crates/CrateAllocationPage';
+import CrateDeliveryPage from './pages/crates/CrateDeliveryPage';
+import PrintCrateReceiptPage from './pages/crates/PrintCrateReceiptPage';
 import ZaloVegetableArrivalManagePage from './pages/notifications/ZaloVegetableArrivalManagePage';
 import React from 'react';
 
@@ -123,6 +128,7 @@ function AppRoutes() {
       <Route path="/don-giao/:id" element={<DeliveryPublicPage />} />
       <Route path="/public/summary/:type/:id/:date/:token" element={<SummaryPublicPage />} />
       <Route path="/public/vegetable-orders/:type/:id/:date/:token" element={<VegetableSummaryPublicPage />} />
+      <Route path="/public/crates/:type/:id/:token" element={<PrintCrateReceiptPage />} />
 
       {/* Protected Routes */}
       <Route
@@ -155,6 +161,10 @@ function AppRoutes() {
         <Route path="/app/hang-hoa/hang-rau" element={<VegetablesPage />} />
         <Route path="/app/hang-hoa/in-phieu-rau" element={<PrintVegetableOrdersPage />} />
         <Route path="/app/hang-hoa/giao-hang-rau" element={<VegetableDeliveryPage />} />
+        <Route path="/app/hang-hoa/quan-ly-ket" element={<CrateManagementPage />} />
+        <Route path="/app/hang-hoa/chia-ket" element={<CrateAllocationPage />} />
+        <Route path="/app/hang-hoa/giao-ket" element={<CrateDeliveryPage />} />
+        <Route path="/app/hang-hoa/in-phieu-ket" element={<PrintCrateReceiptPage />} />
         <Route path="/app/hang-hoa/kho-rau" element={<VegetableWarehousePage />} />
         <Route path="/app/hang-hoa/xuat-hang" element={<ExportOrdersPage />} />
         <Route path="/app/hang-hoa/giao-hang" element={<DeliveryPage />} />
@@ -198,6 +208,8 @@ function AppRoutes() {
             <Route index element={<WholesaleCustomersPage type="vegetable_receiver" />} />
             <Route path=":id" element={<CustomerDetailPage />} />
           </Route>
+          <Route path="nguoi-gui-ket" element={<CrateCustomersPage role="sender" />} />
+          <Route path="nguoi-nhan-ket" element={<CrateCustomersPage role="receiver" />} />
           <Route path="nguoi-gui-tap-hoa">
             <Route index element={<GroceryCustomersPage type="grocery_sender" />} />
             <Route path=":id" element={<CustomerDetailPage />} />

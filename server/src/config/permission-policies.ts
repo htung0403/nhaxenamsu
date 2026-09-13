@@ -5,7 +5,14 @@ export const PAGE_POLICIES = {
 
   PRODUCTS_IMPORT_ACCESS: ['/hang-hoa/nhap-hang', '/hang-hoa/xac-nhan-hang-gui', '/hang-hoa/hang-gui-sg', '/hang-hoa/nhap-hang-rau'],
   PRODUCTS_EXPORT_ACCESS: ['/hang-hoa/xuat-hang'],
-  PRODUCTS_DELIVERY_ACCESS: ['/hang-hoa/giao-hang', '/hang-hoa/giao-hang-rau'],
+  PRODUCTS_DELIVERY_ACCESS: [
+    '/hang-hoa/giao-hang',
+    '/hang-hoa/giao-hang-rau',
+    '/hang-hoa/giao-ket',
+    '/hang-hoa/quan-ly-ket',
+    '/hang-hoa/chia-ket',
+    '/hang-hoa/in-phieu-ket',
+  ],
   PRODUCTS_WAREHOUSE_ACCESS: ['/hang-hoa/kho', '/hang-hoa/kho-rau'],
   PRODUCTS_SETTINGS: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau'],
   PRODUCTS_CATALOG_ACCESS: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau', '/hang-hoa/nhap-hang', '/hang-hoa/nhap-hang-rau'],
@@ -14,6 +21,8 @@ export const PAGE_POLICIES = {
     '/khach-hang/nguoi-gui-tap-hoa',
     '/khach-hang/nguoi-gui-rau',
     '/khach-hang/vua-rau',
+    '/khach-hang/nguoi-gui-ket',
+    '/khach-hang/nguoi-nhan-ket',
     '/ke-toan/khach-hang-tap-hoa',
     '/ke-toan/khach-hang-rau',
     '/ke-toan/vua-rau',
@@ -31,6 +40,8 @@ export const PAGE_POLICIES = {
     '/khach-hang/nguoi-gui-tap-hoa',
     '/khach-hang/nguoi-gui-rau',
     '/khach-hang/vua-rau',
+    '/khach-hang/nguoi-gui-ket',
+    '/khach-hang/nguoi-nhan-ket',
     '/ke-toan/khach-hang-tap-hoa',
     '/ke-toan/khach-hang-rau',
     '/ke-toan/vua-rau',
@@ -49,6 +60,7 @@ export const PAGE_POLICIES = {
     '/hang-hoa/nhap-hang-rau',
     '/hang-hoa/giao-hang',
     '/hang-hoa/giao-hang-rau',
+    '/hang-hoa/giao-ket',
   ],
   VEHICLES_PAYMENT_COLLECTIONS: ['/app/ke-toan/thu-tien-hang', '/ke-toan/thu-tien-hang', '/app/quan-ly-xe/thu-tien', '/quan-ly-xe/thu-tien'],
 
@@ -73,3 +85,6 @@ export const PAGE_POLICIES = {
 } as const;
 
 export type PermissionPolicyName = keyof typeof PAGE_POLICIES;
+
+
+

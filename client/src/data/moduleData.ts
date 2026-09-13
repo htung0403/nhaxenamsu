@@ -3,7 +3,7 @@ import {
   Warehouse, Download, Upload, Truck as DeliveryIcon,
   Banknote, Car, CalendarDays, ClipboardList, ClipboardCheck, DollarSign, FileText, Settings, Settings2, MapPin,
   Send, Store, Receipt, History, Heart,
-  CirclePlus, CheckCircle2,
+  CirclePlus, CheckCircle2, Boxes,
 } from 'lucide-react';
 import type { ModuleCardProps } from '../components/ui/ModuleCard';
 
@@ -35,6 +35,9 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
         { icon: History, title: 'Lịch sử nhập hàng rau', description: 'Xem toàn bộ lịch sử đơn nhập hàng rau.', colorScheme: 'slate', path: '/app/hang-hoa/nhap-hang-rau/lich-su' },
         { icon: ClipboardList, title: 'Bảng Hàng Rau', description: 'Bảng xem chi tiết các mặt hàng rau nhập.', colorScheme: 'purple', path: '/app/hang-hoa/hang-rau' },
         { icon: DeliveryIcon, title: 'Giao hàng rau', description: 'Danh sách các đơn hàng rau cần giao.', colorScheme: 'orange', path: '/app/hang-hoa/giao-hang-rau' },
+        { icon: Boxes, title: 'Quản lý két', description: 'Theo dõi khách gửi két, nhận két và lịch sử két.', colorScheme: 'emerald', path: '/app/hang-hoa/quan-ly-ket' },
+        { icon: Send, title: 'Chia két', description: 'Chia két từ khách gửi sang khách nhận.', colorScheme: 'blue', path: '/app/hang-hoa/chia-ket' },
+        { icon: DeliveryIcon, title: 'Giao két', description: 'Tài xế xác nhận giao két cho khách nhận.', colorScheme: 'orange', path: '/app/hang-hoa/giao-ket' },
         { icon: Settings2, title: 'Cài đặt hàng rau', description: 'Quản lý từ điển hàng vựa rau.', colorScheme: 'slate', path: '/app/hang-hoa/cai-dat-rau' },
       ]
     },
@@ -73,6 +76,8 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
       items: [
         { icon: Send, title: 'DS người gửi rau', description: 'Danh sách khách hàng gửi rau.', colorScheme: 'green', path: '/app/khach-hang/nguoi-gui-rau' },
         { icon: Store, title: 'DS người nhận rau (Vựa)', description: 'Danh sách vựa nhận rau.', colorScheme: 'emerald', path: '/app/khach-hang/vua-rau' },
+        { icon: Boxes, title: 'DS người gửi két', description: 'Danh sách khách hàng gửi két.', colorScheme: 'teal', path: '/app/khach-hang/nguoi-gui-ket' },
+        { icon: Boxes, title: 'DS người nhận két', description: 'Danh sách khách hàng nhận két.', colorScheme: 'cyan', path: '/app/khach-hang/nguoi-nhan-ket' },
       ]
     },
     {
@@ -183,3 +188,4 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
     },
   ],
 };
+
