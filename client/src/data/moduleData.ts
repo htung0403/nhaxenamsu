@@ -81,8 +81,8 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
       items: [
         { icon: Send, title: 'DS người gửi rau', description: 'Danh sách khách hàng gửi rau.', colorScheme: 'green', path: '/app/khach-hang/nguoi-gui-rau' },
         { icon: Store, title: 'DS người nhận rau (Vựa)', description: 'Danh sách vựa nhận rau.', colorScheme: 'emerald', path: '/app/khach-hang/vua-rau' },
-        { icon: Boxes, title: 'DS người gửi két', description: 'Danh sách khách hàng gửi két.', colorScheme: 'teal', path: '/app/khach-hang/nguoi-gui-ket' },
-        { icon: Boxes, title: 'DS người nhận két', description: 'Danh sách khách hàng nhận két.', colorScheme: 'cyan', path: '/app/khach-hang/nguoi-nhan-ket' },
+        { icon: Boxes, title: 'DS người gửi két', description: 'Từ danh sách người nhận rau/vựa.', colorScheme: 'teal', path: '/app/khach-hang/nguoi-gui-ket' },
+        { icon: Boxes, title: 'DS người nhận két', description: 'Từ danh sách người gửi rau.', colorScheme: 'cyan', path: '/app/khach-hang/nguoi-nhan-ket' },
       ]
     },
     {

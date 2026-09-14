@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Boxes, ChevronLeft, History, PackagePlus, RefreshCw, Send, X } from 'lucide-react';
+import { Boxes, ChevronLeft, History, PackagePlus, RefreshCw, RotateCcw, Send, X } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateHistory } from '../../api/cratesApi';
 
 const formatNumber = (value?: number | null) => new Intl.NumberFormat('vi-VN').format(value || 0);
@@ -41,6 +41,9 @@ const CrateManagementPage: React.FC = () => {
   useEffect(() => { void loadData(); }, []);
 
   const currentRows = activeTab === 'senders' ? senders : receivers;
+  const wrongSenderRows = useMemo(() => senders.filter(row => row.customer?.customer_type === 'vegetable_sender'), [senders]);
+  const wrongReceiverRows = useMemo(() => receivers.filter(row => row.customer?.customer_type === 'vegetable_receiver'), [receivers]);
+  const misassignedCount = wrongSenderRows.length + wrongReceiverRows.length;
 
   const openIntakeModal = (customer: CrateAccount) => {
     setIntakeModal(customer);
@@ -75,6 +78,35 @@ const CrateManagementPage: React.FC = () => {
     }
   };
 
+  const handleFixMisassignedRoles = async (target?: CrateAccount) => {
+    const senderToReceiverIds = target
+      ? (target.customer?.customer_type === 'vegetable_sender' ? [target.customer_id] : [])
+      : wrongSenderRows.map(row => row.customer_id);
+    const receiverToSenderIds = target
+      ? (target.customer?.customer_type === 'vegetable_receiver' ? [target.customer_id] : [])
+      : wrongReceiverRows.map(row => row.customer_id);
+
+    if (!senderToReceiverIds.length && !receiverToSenderIds.length) {
+      toast.success('Không có khách két bị đảo nhầm');
+      return;
+    }
+
+    try {
+      if (senderToReceiverIds.length) {
+        await cratesApi.setRoles({ customer_ids: senderToReceiverIds, role: 'receiver', enabled: true });
+        await cratesApi.setRoles({ customer_ids: senderToReceiverIds, role: 'sender', enabled: false });
+      }
+      if (receiverToSenderIds.length) {
+        await cratesApi.setRoles({ customer_ids: receiverToSenderIds, role: 'sender', enabled: true });
+        await cratesApi.setRoles({ customer_ids: receiverToSenderIds, role: 'receiver', enabled: false });
+      }
+      toast.success(`Đã đảo lại ${senderToReceiverIds.length + receiverToSenderIds.length} khách về đúng danh sách két`);
+      await loadData();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || 'Không đảo lại được danh sách két');
+    }
+  };
+
   const recentEvents = useMemo(() => [
     ...history.intakes.map(item => ({ id: item.id, type: 'Nhập két', at: item.created_at, text: `${item.sender?.name || 'Khách gửi'} gửi ${formatNumber(item.quantity)} két`, href: `/app/hang-hoa/in-phieu-ket?type=intake&id=${item.id}` })),
     ...history.allocations.map(item => ({ id: item.id, type: 'Chia két', at: item.created_at, text: `${item.sender?.name || 'Khách gửi'} → ${item.receiver?.name || 'Khách nhận'}: ${formatNumber(item.quantity)} két`, href: `/app/hang-hoa/in-phieu-ket?type=allocation&id=${item.id}` })),
@@ -92,6 +124,9 @@ const CrateManagementPage: React.FC = () => {
           </div>
         </div>
         <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2">
+          {misassignedCount > 0 && (
+            <button onClick={() => void handleFixMisassignedRoles()} className="col-span-2 justify-center px-3 md:px-4 py-2.5 md:py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs md:text-sm font-bold hover:bg-amber-100 flex items-center gap-2 md:col-span-1"><RotateCcw size={16} /> Đảo lại ({misassignedCount})</button>
+          )}
           <button onClick={() => navigate('/app/hang-hoa/chia-ket')} className="justify-center px-3 md:px-4 py-2.5 md:py-2 rounded-xl bg-primary text-white text-xs md:text-sm font-bold hover:bg-primary/90 flex items-center gap-2"><Send size={16} /> Chia két</button>
           <button onClick={() => void loadData()} className="justify-center px-3 md:px-4 py-2.5 md:py-2 rounded-xl border border-border text-xs md:text-sm font-bold hover:bg-muted flex items-center gap-2"><RefreshCw size={16} /> Tải lại</button>
         </div>
@@ -150,11 +185,15 @@ const CrateManagementPage: React.FC = () => {
                   <td className="px-4 py-3 text-right">
                     {activeTab === 'senders' ? (
                       <div className="flex flex-wrap items-center justify-end gap-2">
+                        {row.customer?.customer_type === 'vegetable_sender' && <button onClick={() => void handleFixMisassignedRoles(row)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100">Đảo sang nhận két</button>}
                         <button onClick={() => openIntakeModal(row)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 flex items-center gap-1"><PackagePlus size={14} /> Nhập két</button>
                         <button onClick={() => navigate(`/app/hang-hoa/chia-ket?senderId=${row.customer_id}`)} className="rounded-xl border border-border px-3 py-2 text-xs font-bold transition hover:bg-muted">Chia két</button>
                       </div>
                     ) : (
-                      <button onClick={() => navigate(`/app/hang-hoa/chia-ket?receiverId=${row.customer_id}`)} className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary/90">Chia cho khách này</button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        {row.customer?.customer_type === 'vegetable_receiver' && <button onClick={() => void handleFixMisassignedRoles(row)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100">Đảo sang gửi két</button>}
+                        <button onClick={() => navigate(`/app/hang-hoa/chia-ket?receiverId=${row.customer_id}`)} className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary/90">Chia cho khách này</button>
+                      </div>
                     )}
                   </td>
                 </tr>
@@ -187,11 +226,15 @@ const CrateManagementPage: React.FC = () => {
               </div>
               {activeTab === 'senders' ? (
                 <div className="grid grid-cols-2 gap-2">
+                  {row.customer?.customer_type === 'vegetable_sender' && <button onClick={() => void handleFixMisassignedRoles(row)} className="col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-black text-amber-700">Đảo sang nhận két</button>}
                   <button onClick={() => openIntakeModal(row)} className="rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-black text-white flex items-center justify-center gap-1"><PackagePlus size={14} /> Nhập két</button>
                   <button onClick={() => navigate(`/app/hang-hoa/chia-ket?senderId=${row.customer_id}`)} className="rounded-xl border border-border px-3 py-2.5 text-sm font-black text-foreground">Chia két</button>
                 </div>
               ) : (
-                <button onClick={() => navigate('/app/hang-hoa/giao-ket')} className="w-full rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm font-black text-orange-600">Đi giao két</button>
+                <div className="grid grid-cols-1 gap-2">
+                  {row.customer?.customer_type === 'vegetable_receiver' && <button onClick={() => void handleFixMisassignedRoles(row)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-black text-amber-700">Đảo sang gửi két</button>}
+                  <button onClick={() => navigate('/app/hang-hoa/giao-ket')} className="w-full rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm font-black text-orange-600">Đi giao két</button>
+                </div>
               )}
             </div>
           ))}

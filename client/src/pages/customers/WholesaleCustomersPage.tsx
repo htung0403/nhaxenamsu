@@ -132,11 +132,11 @@ const WholesaleCustomersPage: React.FC<Props> = ({ type = 'vegetable_receiver' }
     const selectedArray = Array.from(selectedIds);
     if (!selectedArray.length) return;
     try {
-      await cratesApi.setRoles({ customer_ids: selectedArray, role: 'receiver', enabled: true });
-      toast.success(`Đã thêm ${selectedArray.length} khách vào DS nhận két`);
+      await cratesApi.setRoles({ customer_ids: selectedArray, role: 'sender', enabled: true });
+      toast.success(`Đã thêm ${selectedArray.length} khách vào DS gửi két`);
       setSelectedIds(new Set());
     } catch (error: unknown) {
-      toast.error(getErrorMessage(error) || 'Không thêm được khách nhận két');
+      toast.error(getErrorMessage(error) || 'Không thêm được khách gửi két');
     }
   };
 
@@ -212,7 +212,7 @@ const WholesaleCustomersPage: React.FC<Props> = ({ type = 'vegetable_receiver' }
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-[13px] font-bold hover:bg-emerald-700 shadow-sm transition-all"
             >
               <Boxes size={14} />
-              Thêm vào DS nhận két
+              Thêm vào DS gửi két
             </button>
           )}
           {selectedIds.size === 2 && (

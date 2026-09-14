@@ -149,11 +149,11 @@ const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) 
     const selectedArray = Array.from(selectedIds);
     if (!selectedArray.length) return;
     try {
-      await cratesApi.setRoles({ customer_ids: selectedArray, role: 'sender', enabled: true });
-      toast.success(`Đã thêm ${selectedArray.length} khách vào DS gửi két`);
+      await cratesApi.setRoles({ customer_ids: selectedArray, role: 'receiver', enabled: true });
+      toast.success(`Đã thêm ${selectedArray.length} khách vào DS nhận két`);
       setSelectedIds(new Set());
     } catch (error: unknown) {
-      toast.error(getErrorMessage(error) || 'Không thêm được khách gửi két');
+      toast.error(getErrorMessage(error) || 'Không thêm được khách nhận két');
     }
   };
   const openMergeDialog = () => {
@@ -228,7 +228,7 @@ const VegetableCustomersPage: React.FC<Props> = ({ type = 'vegetable_sender' }) 
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 text-white text-[13px] font-bold hover:bg-emerald-700 shadow-sm transition-all"
             >
               <Boxes size={14} />
-              Thêm vào DS gửi két
+              Thêm vào DS nhận két
             </button>
           )}
           {selectedIds.size === 2 && (

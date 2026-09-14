@@ -20,12 +20,12 @@ const getErrorMessage = (error: unknown) => error instanceof Error ? error.messa
 const pageCopyByRole: Record<CrateRole, { title: string; description: string; empty: string }> = {
   sender: {
     title: 'DS người gửi két',
-    description: 'Danh sách khách hàng rau đã được đánh dấu là người gửi két.',
+    description: 'Danh sách người nhận rau/vựa đã được đánh dấu là người gửi két.',
     empty: 'Chưa có người gửi két',
   },
   receiver: {
     title: 'DS người nhận két',
-    description: 'Danh sách vựa/khách nhận rau đã được đánh dấu là người nhận két.',
+    description: 'Danh sách người gửi rau đã được đánh dấu là người nhận két.',
     empty: 'Chưa có người nhận két',
   },
 };
