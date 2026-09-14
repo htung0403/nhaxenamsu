@@ -92,6 +92,7 @@ const LEGACY_ALLOWED_PATHS_BY_ROLE: Record<string, string[]> = {
     '/app/hang-hoa/quan-ly-ket',
     '/app/hang-hoa/chia-ket',
     '/app/hang-hoa/giao-ket',
+    '/app/hang-hoa/lich-su-ket',
     '/app/hang-hoa/in-phieu-ket',
     '/app/hang-hoa/xuat-hang',
     '/app/hang-hoa/giao-hang',

@@ -2,6 +2,7 @@ import { env } from '../../config/env';
 import { supabaseService } from '../../config/supabase';
 import { zaloService } from '../notifications/zalo.service';
 import { logger } from '../../utils/logger';
+import { DeliveryNoteGenerator, type CrateReceiptNoteData } from '../../utils/deliveryNoteGenerator';
 
 export type CrateRole = 'sender' | 'receiver';
 export type CrateReceiptType = 'intake' | 'allocation' | 'delivery';
@@ -18,6 +19,13 @@ type NotifyOptions = {
   target: NotifyTarget;
   caption: string;
   triggeredBy?: string | null;
+  receiptImage?: CrateReceiptNoteData;
+};
+
+type NotificationAttachment = {
+  data: Buffer;
+  filename: `${string}.${string}`;
+  metadata: { totalSize: number; width?: number; height?: number };
 };
 
 const receiptTokenDate = 'receipt';
@@ -42,6 +50,119 @@ export class CratesService {
     return data;
   }
 
+  private static async getProfileName(userId?: string | null) {
+    if (!userId) return null;
+    const { data, error } = await supabaseService
+      .from('profiles')
+      .select('full_name')
+      .eq('id', userId)
+      .maybeSingle();
+    if (error) {
+      logger.warn('[CratesService] Failed to load profile name:', error);
+      return null;
+    }
+    return data?.full_name || null;
+  }
+
+  private static async getVehiclePlate(vehicleId?: string | null) {
+    if (!vehicleId) return null;
+    const { data, error } = await supabaseService
+      .from('vehicles')
+      .select('license_plate')
+      .eq('id', vehicleId)
+      .maybeSingle();
+    if (error) {
+      logger.warn('[CratesService] Failed to load vehicle plate:', error);
+      return null;
+    }
+    return data?.license_plate || null;
+  }
+
+  private static formatNoteDateTime(value?: string | null) {
+    const date = value ? new Date(value) : new Date();
+    return date.toLocaleString('vi-VN', { timeZone: 'Asia/Bangkok', hour12: false });
+  }
+
+  private static formatNoteTime(value?: string | null) {
+    const date = value ? new Date(value) : new Date();
+    return date.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Bangkok', hour12: false });
+  }
+
+  private static buildIntakeReceiptImage(record: any): CrateReceiptNoteData {
+    const createdAt = record.created_at;
+    return {
+      title: 'Phiếu nhập két',
+      customerName: record.sender?.name || '-',
+      date: this.formatNoteDateTime(createdAt),
+      staffName: record.creator?.full_name || 'Quản trị viên',
+      receiptType: 'Nhập két',
+      rows: [{
+        time: this.formatNoteTime(createdAt),
+        quantity: record.quantity,
+        content: 'Nhập két',
+        partner: record.sender?.name || '-',
+        balance: `Đang gửi ${record.sender_balance_after} két`,
+        note: record.notes || '-',
+      }],
+    };
+  }
+
+  private static buildAllocationReceiptImage(record: any, target: 'sender' | 'receiver'): CrateReceiptNoteData {
+    const createdAt = record.created_at;
+    const isReceiver = target === 'receiver';
+    return {
+      title: isReceiver ? 'Phiếu nhận két' : 'Phiếu chia két',
+      customerName: (isReceiver ? record.receiver?.name : record.sender?.name) || '-',
+      date: this.formatNoteDateTime(createdAt),
+      staffName: record.creator?.full_name || 'Quản trị viên',
+      receiptType: isReceiver ? 'Nhận két' : 'Chia két',
+      rows: [{
+        time: this.formatNoteTime(createdAt),
+        quantity: record.quantity,
+        content: isReceiver ? 'Nhận két' : 'Chia két',
+        partner: isReceiver ? `Từ ${record.sender?.name || '-'}` : `Cho ${record.receiver?.name || '-'}`,
+        balance: isReceiver
+          ? `Chờ ${record.receiver_pending_after}, nợ ${record.receiver_debt_after}`
+          : `Còn gửi ${record.sender_balance_after} két`,
+        note: record.notes || (isReceiver ? `Tăng chờ ${record.pending_added} két` : `Bù nợ ${record.debt_applied} két`),
+      }],
+    };
+  }
+
+  private static buildDeliveryReceiptImage(record: any): CrateReceiptNoteData {
+    const deliveredAt = record.delivered_at || record.created_at;
+    return {
+      title: 'Phiếu giao két',
+      customerName: record.receiver?.name || '-',
+      date: this.formatNoteDateTime(deliveredAt),
+      staffName: record.driver?.full_name || 'Tài xế',
+      receiptType: record.vehicle?.license_plate ? `Xe ${record.vehicle.license_plate}` : 'Giao két',
+      rows: [{
+        time: this.formatNoteTime(deliveredAt),
+        quantity: record.quantity,
+        content: 'Giao két',
+        partner: record.receiver?.name || '-',
+        balance: `Chờ ${record.receiver_pending_after}, nợ ${record.receiver_debt_after}`,
+        note: record.notes || (record.debt_created > 0 ? `Nợ phát sinh ${record.debt_created} két` : '-'),
+      }],
+    };
+  }
+
+  private static async buildReceiptAttachment(type: CrateReceiptType, transactionId: string, receiptImage?: CrateReceiptNoteData): Promise<NotificationAttachment[]> {
+    if (!receiptImage) return [];
+    try {
+      const pngBuffer = await DeliveryNoteGenerator.generateCrateReceiptPng(receiptImage);
+      return [{
+        data: pngBuffer,
+        filename: `phieu-ket-${type}-${transactionId}.png`,
+        metadata: { totalSize: pngBuffer.length },
+      }];
+    } catch (error) {
+      logger.warn('[CratesService] Failed to generate crate receipt image:', error);
+      return [];
+    }
+  }
+
   private static async logAndSendNotification(options: NotifyOptions) {
     const publicLink = this.buildPublicLink(options.type, options.transactionId);
     const phone = options.target.phone || null;
@@ -53,9 +174,11 @@ export class CratesService {
       errorMessage = 'Khách hàng chưa có số điện thoại';
     } else {
       try {
+        const attachments = await this.buildReceiptAttachment(options.type, options.transactionId, options.receiptImage);
         const result = await zaloService.sendImageMessage({
           recipientPhone: phone,
           imageUrls: [],
+          attachments,
           caption: `${options.caption}\n\nXem phiếu: ${publicLink}`,
         });
         status = result.success ? 'sent' : 'failed';
@@ -139,12 +262,29 @@ export class CratesService {
     if (error) throw error;
 
     const sender = await this.getCustomer(payload.sender_customer_id);
+    const staffName = await this.getProfileName(userId);
+    const createdAt = data.intake?.created_at;
     const notification = await this.logAndSendNotification({
       type: 'intake',
       transactionId: data.intake.id,
       target: { customerId: sender.id, name: sender.name, phone: sender.phone },
       caption: `Phiếu nhập két: ${sender.name} gửi ${payload.quantity} két. Số két đang gửi: ${data.account.sender_balance}.`,
       triggeredBy: userId,
+      receiptImage: {
+        title: 'Phiếu nhập két',
+        customerName: sender.name,
+        date: this.formatNoteDateTime(createdAt),
+        staffName: staffName || 'Quản trị viên',
+        receiptType: 'Nhập két',
+        rows: [{
+          time: this.formatNoteTime(createdAt),
+          quantity: payload.quantity,
+          content: 'Nhập két',
+          partner: sender.name,
+          balance: `Đang gửi ${data.account.sender_balance} két`,
+          note: payload.notes || '-',
+        }],
+      },
     });
 
     return { ...data, notification };
@@ -164,12 +304,29 @@ export class CratesService {
       this.getCustomer(payload.sender_customer_id),
       this.getCustomer(payload.receiver_customer_id),
     ]);
+    const staffName = await this.getProfileName(userId);
+    const createdAt = data.allocation?.created_at;
     const senderNotification = await this.logAndSendNotification({
       type: 'allocation',
       transactionId: data.allocation.id,
       target: { customerId: sender.id, name: sender.name, phone: sender.phone },
       caption: `Phiếu chia két: đã chia ${payload.quantity} két từ ${sender.name} cho ${receiver.name}. Số két còn gửi: ${data.sender_account.sender_balance}.`,
       triggeredBy: userId,
+      receiptImage: {
+        title: 'Phiếu chia két',
+        customerName: sender.name,
+        date: this.formatNoteDateTime(createdAt),
+        staffName: staffName || 'Quản trị viên',
+        receiptType: 'Chia két',
+        rows: [{
+          time: this.formatNoteTime(createdAt),
+          quantity: payload.quantity,
+          content: 'Chia két',
+          partner: `Cho ${receiver.name}`,
+          balance: `Còn gửi ${data.sender_account.sender_balance} két`,
+          note: payload.notes || `Bù nợ ${data.allocation.debt_applied} két`,
+        }],
+      },
     });
     const receiverNotification = await this.logAndSendNotification({
       type: 'allocation',
@@ -177,6 +334,21 @@ export class CratesService {
       target: { customerId: receiver.id, name: receiver.name, phone: receiver.phone },
       caption: `Phiếu nhận két: ${receiver.name} được chia ${payload.quantity} két từ ${sender.name}. Chờ giao: ${data.receiver_account.receiver_pending}, nợ két: ${data.receiver_account.receiver_debt}.`,
       triggeredBy: userId,
+      receiptImage: {
+        title: 'Phiếu nhận két',
+        customerName: receiver.name,
+        date: this.formatNoteDateTime(createdAt),
+        staffName: staffName || 'Quản trị viên',
+        receiptType: 'Nhận két',
+        rows: [{
+          time: this.formatNoteTime(createdAt),
+          quantity: payload.quantity,
+          content: 'Nhận két',
+          partner: `Từ ${sender.name}`,
+          balance: `Chờ ${data.receiver_account.receiver_pending}, nợ ${data.receiver_account.receiver_debt}`,
+          note: payload.notes || `Tăng chờ ${data.allocation.pending_added} két`,
+        }],
+      },
     });
 
     return { ...data, notifications: [senderNotification, receiverNotification] };
@@ -189,17 +361,37 @@ export class CratesService {
       p_notes: payload.notes || null,
       p_image_urls: payload.image_urls || [],
       p_driver_id: userId || null,
-          p_vehicle_id: payload.vehicle_id || null,
+      p_vehicle_id: payload.vehicle_id || null,
     });
     if (error) throw error;
 
-    const receiver = await this.getCustomer(payload.receiver_customer_id);
+    const [receiver, driverName, vehiclePlate] = await Promise.all([
+      this.getCustomer(payload.receiver_customer_id),
+      this.getProfileName(userId),
+      this.getVehiclePlate(payload.vehicle_id),
+    ]);
+    const deliveredAt = data.delivery?.delivered_at || data.delivery?.created_at;
     const notification = await this.logAndSendNotification({
       type: 'delivery',
       transactionId: data.delivery.id,
       target: { customerId: receiver.id, name: receiver.name, phone: receiver.phone },
       caption: `Phiếu giao két: đã giao ${payload.quantity} két cho ${receiver.name}. Chờ giao còn: ${data.receiver_account.receiver_pending}, nợ két: ${data.receiver_account.receiver_debt}.`,
       triggeredBy: userId,
+      receiptImage: {
+        title: 'Phiếu giao két',
+        customerName: receiver.name,
+        date: this.formatNoteDateTime(deliveredAt),
+        staffName: driverName || 'Tài xế',
+        receiptType: vehiclePlate ? `Xe ${vehiclePlate}` : 'Giao két',
+        rows: [{
+          time: this.formatNoteTime(deliveredAt),
+          quantity: payload.quantity,
+          content: 'Giao két',
+          partner: receiver.name,
+          balance: `Chờ ${data.receiver_account.receiver_pending}, nợ ${data.receiver_account.receiver_debt}`,
+          note: payload.notes || (data.delivery.debt_created > 0 ? `Nợ phát sinh ${data.delivery.debt_created} két` : '-'),
+        }],
+      },
     });
 
     return { ...data, notification };
@@ -275,16 +467,44 @@ export class CratesService {
       target = { customerId: record.sender.id, name: record.sender.name, phone: record.sender.phone };
       caption = `Phiếu nhập két: ${record.sender.name} gửi ${record.quantity} két.`;
     } else if (type === 'allocation') {
+      if (!targetCustomerId) {
+        const senderNotification = await this.logAndSendNotification({
+          type,
+          transactionId,
+          target: { customerId: record.sender.id, name: record.sender.name, phone: record.sender.phone },
+          caption: `Phiếu chia két: đã chia ${record.quantity} két từ ${record.sender.name} cho ${record.receiver.name}.`,
+          triggeredBy: userId,
+          receiptImage: this.buildAllocationReceiptImage(record, 'sender'),
+        });
+        const receiverNotification = await this.logAndSendNotification({
+          type,
+          transactionId,
+          target: { customerId: record.receiver.id, name: record.receiver.name, phone: record.receiver.phone },
+          caption: `Phiếu nhận két: ${record.receiver.name} được chia ${record.quantity} két từ ${record.sender.name}.`,
+          triggeredBy: userId,
+          receiptImage: this.buildAllocationReceiptImage(record, 'receiver'),
+        });
+        return [senderNotification, receiverNotification];
+      }
+
       const isReceiver = targetCustomerId === record.receiver.id;
       const customer = isReceiver ? record.receiver : record.sender;
       target = { customerId: customer.id, name: customer.name, phone: customer.phone };
-      caption = `Phiếu chia két: ${record.quantity} két từ ${record.sender.name} cho ${record.receiver.name}.`;
+      caption = isReceiver
+        ? `Phiếu nhận két: ${record.receiver.name} được chia ${record.quantity} két từ ${record.sender.name}.`
+        : `Phiếu chia két: đã chia ${record.quantity} két từ ${record.sender.name} cho ${record.receiver.name}.`;
     } else {
       target = { customerId: record.receiver.id, name: record.receiver.name, phone: record.receiver.phone };
       caption = `Phiếu giao két: đã giao ${record.quantity} két cho ${record.receiver.name}.`;
     }
 
-    return this.logAndSendNotification({ type, transactionId, target, caption, triggeredBy: userId });
+    const receiptImage = type === 'intake'
+      ? this.buildIntakeReceiptImage(record)
+      : type === 'allocation'
+        ? this.buildAllocationReceiptImage(record, targetCustomerId === record.receiver.id ? 'receiver' : 'sender')
+        : this.buildDeliveryReceiptImage(record);
+
+    return this.logAndSendNotification({ type, transactionId, target, caption, triggeredBy: userId, receiptImage });
   }
 }
 

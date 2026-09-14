@@ -44,6 +44,7 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
         { icon: Boxes, title: 'Quản lý két', description: 'Theo dõi khách gửi két, nhận két và lịch sử két.', colorScheme: 'emerald', path: '/app/hang-hoa/quan-ly-ket' },
         { icon: Send, title: 'Chia két', description: 'Chia két từ khách gửi sang khách nhận.', colorScheme: 'blue', path: '/app/hang-hoa/chia-ket' },
         { icon: DeliveryIcon, title: 'Giao két', description: 'Tài xế xác nhận giao két cho khách nhận.', colorScheme: 'orange', path: '/app/hang-hoa/giao-ket' },
+        { icon: History, title: 'Lịch sử két', description: 'Tra cứu toàn bộ nhập, chia và giao két.', colorScheme: 'slate', path: '/app/hang-hoa/lich-su-ket' },
       ]
     },
     {

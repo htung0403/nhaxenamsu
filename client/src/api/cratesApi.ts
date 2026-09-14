@@ -76,6 +76,16 @@ export interface CrateReceipt {
   record: CrateIntake | CrateAllocation | CrateDelivery;
 }
 
+export interface CrateNotificationLog {
+  id?: string;
+  target_name?: string | null;
+  target_phone?: string | null;
+  status: 'sent' | 'failed' | 'skipped';
+  error_message?: string | null;
+  message_id?: string | null;
+  public_link?: string | null;
+}
+
 export const cratesApi = {
   getAccounts: async (role?: CrateRole) => {
     const { data } = await axiosClient.get<CrateAccount[]>('/crates/accounts', { params: { role } });
@@ -113,7 +123,7 @@ export const cratesApi = {
   },
 
   resendZalo: async (type: CrateReceiptType, id: string, targetCustomerId?: string) => {
-    const { data } = await axiosClient.post(`/crates/receipts/${type}/${id}/resend-zalo`, { target_customer_id: targetCustomerId });
+    const { data } = await axiosClient.post<CrateNotificationLog | CrateNotificationLog[]>(`/crates/receipts/${type}/${id}/resend-zalo`, { target_customer_id: targetCustomerId });
     return data;
   },
 };

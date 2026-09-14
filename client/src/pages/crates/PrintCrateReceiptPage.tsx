@@ -3,20 +3,34 @@ import axios from 'axios';
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Printer, Send } from 'lucide-react';
-import { cratesApi, type CrateAllocation, type CrateDelivery, type CrateIntake, type CrateReceipt, type CrateReceiptType } from '../../api/cratesApi';
+import { cratesApi, type CrateAllocation, type CrateDelivery, type CrateIntake, type CrateNotificationLog, type CrateReceipt, type CrateReceiptType } from '../../api/cratesApi';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3009/api';
 const formatNumber = (value?: number | null) => new Intl.NumberFormat('vi-VN').format(value || 0);
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString('vi-VN') : '-';
+const formatTime = (value?: string | null) => value ? new Date(value).toLocaleTimeString('vi-VN', { hour12: false }) : '-';
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
 
 const isReceiptType = (value?: string | null): value is CrateReceiptType => value === 'intake' || value === 'allocation' || value === 'delivery';
 
+type ReceiptTableRow = {
+  time: string;
+  quantity: string;
+  content: string;
+  partner: string;
+  balance: string;
+  note: string;
+};
+
 type ReceiptView = {
   title: string;
   customerLabel: string;
-  customer?: { name?: string; phone?: string; address?: string } | null;
-  rows: Array<[string, string]>;
+  customerName: string;
+  customerPhone?: string;
+  date: string;
+  staffName: string;
+  receiptType: string;
+  rows: ReceiptTableRow[];
   images?: string[];
 };
 
@@ -49,56 +63,73 @@ const PrintCrateReceiptPage: React.FC = () => {
     if (!receipt) return null;
     if (receipt.type === 'intake') {
       const record = receipt.record as CrateIntake;
+      const createdAt = record.created_at;
       return {
         title: 'Phiếu nhập két',
-        customerLabel: 'Khách gửi',
-        customer: record.sender,
-        rows: [
-          ['Số két gửi', `${formatNumber(record.quantity)} két`],
-          ['Số két đang gửi sau nhập', `${formatNumber(record.sender_balance_after)} két`],
-          ['Ghi chú', record.notes || '-'],
-          ['Người tạo', record.creator?.full_name || '-'],
-          ['Thời gian', formatDateTime(record.created_at)],
-        ],
+        customerLabel: 'Khách gửi két',
+        customerName: record.sender?.name || '-',
+        customerPhone: record.sender?.phone || undefined,
+        date: formatDateTime(createdAt),
+        staffName: record.creator?.full_name || '-',
+        receiptType: 'Nhập két',
+        rows: [{
+          time: formatTime(createdAt),
+          quantity: `${formatNumber(record.quantity)} két`,
+          content: 'Nhập két',
+          partner: record.sender?.name || '-',
+          balance: `Đang gửi ${formatNumber(record.sender_balance_after)} két`,
+          note: record.notes || '-',
+        }],
       };
     }
     if (receipt.type === 'allocation') {
       const record = receipt.record as CrateAllocation;
+      const createdAt = record.created_at;
+      const senderName = record.sender?.name || '-';
+      const receiverName = record.receiver?.name || '-';
+      const allocationNote = [
+        `Bù nợ ${formatNumber(record.debt_applied)} két`,
+        `Tăng chờ ${formatNumber(record.pending_added)} két`,
+        record.notes || '',
+      ].filter(Boolean).join(' • ');
       return {
         title: 'Phiếu chia két',
-        customerLabel: 'Khách nhận',
-        customer: record.receiver,
-        rows: [
-          ['Khách gửi', record.sender?.name || '-'],
-          ['Khách nhận', record.receiver?.name || '-'],
-          ['Số két chia', `${formatNumber(record.quantity)} két`],
-          ['Bù nợ két', `${formatNumber(record.debt_applied)} két`],
-          ['Tăng chờ giao', `${formatNumber(record.pending_added)} két`],
-          ['Khách gửi còn', `${formatNumber(record.sender_balance_after)} két`],
-          ['Khách nhận chờ giao', `${formatNumber(record.receiver_pending_after)} két`],
-          ['Khách nhận nợ két', `${formatNumber(record.receiver_debt_after)} két`],
-          ['Ghi chú', record.notes || '-'],
-          ['Người tạo', record.creator?.full_name || '-'],
-          ['Thời gian', formatDateTime(record.created_at)],
-        ],
+        customerLabel: 'Luồng chia két',
+        customerName: `${senderName} → ${receiverName}`,
+        customerPhone: [record.sender?.phone && `Gửi: ${record.sender.phone}`, record.receiver?.phone && `Nhận: ${record.receiver.phone}`].filter(Boolean).join(' • ') || undefined,
+        date: formatDateTime(createdAt),
+        staffName: record.creator?.full_name || '-',
+        receiptType: 'Chia két',
+        rows: [{
+          time: formatTime(createdAt),
+          quantity: `${formatNumber(record.quantity)} két`,
+          content: 'Chia két',
+          partner: `${senderName} → ${receiverName}`,
+          balance: `Gửi còn ${formatNumber(record.sender_balance_after)}; nhận chờ ${formatNumber(record.receiver_pending_after)}; nợ ${formatNumber(record.receiver_debt_after)}`,
+          note: allocationNote || '-',
+        }],
       };
     }
 
     const record = receipt.record as CrateDelivery;
+    const deliveredAt = record.delivered_at || record.created_at;
+    const deliveryNote = record.notes || (record.debt_created > 0 ? `Nợ phát sinh ${formatNumber(record.debt_created)} két` : '-');
     return {
       title: 'Phiếu giao két',
-      customerLabel: 'Khách nhận',
-      customer: record.receiver,
-      rows: [
-        ['Số két giao', `${formatNumber(record.quantity)} két`],
-        ['Chờ giao trước đó', `${formatNumber(record.pending_before)} két`],
-        ['Nợ phát sinh', `${formatNumber(record.debt_created)} két`],
-        ['Chờ giao còn lại', `${formatNumber(record.receiver_pending_after)} két`],
-        ['Nợ két sau giao', `${formatNumber(record.receiver_debt_after)} két`],
-        ['Ghi chú', record.notes || '-'],
-        ['Tài xế', record.driver?.full_name || '-'],
-        ['Thời gian giao', formatDateTime(record.delivered_at || record.created_at)],
-      ],
+      customerLabel: 'Khách nhận két',
+      customerName: record.receiver?.name || '-',
+      customerPhone: record.receiver?.phone || undefined,
+      date: formatDateTime(deliveredAt),
+      staffName: record.driver?.full_name || '-',
+      receiptType: record.vehicle?.license_plate ? `Xe ${record.vehicle.license_plate}` : 'Giao két',
+      rows: [{
+        time: formatTime(deliveredAt),
+        quantity: `${formatNumber(record.quantity)} két`,
+        content: 'Giao két',
+        partner: record.receiver?.name || '-',
+        balance: `Trước ${formatNumber(record.pending_before)}; còn ${formatNumber(record.receiver_pending_after)}; nợ ${formatNumber(record.receiver_debt_after)}`,
+        note: deliveryNote,
+      }],
       images: record.image_urls || [],
     };
   }, [receipt]);
@@ -106,8 +137,26 @@ const PrintCrateReceiptPage: React.FC = () => {
   const handleResend = async () => {
     if (!receipt || !id) return;
     try {
-      await cratesApi.resendZalo(receipt.type, id);
-      toast.success('Đã gửi lại phiếu Zalo');
+      const result = await cratesApi.resendZalo(receipt.type, id);
+      const logs = (Array.isArray(result) ? result : [result]).filter(Boolean) as CrateNotificationLog[];
+      const sent = logs.filter((log) => log.status === 'sent');
+      const failed = logs.filter((log) => log.status !== 'sent');
+
+      if (sent.length > 0 && failed.length === 0) {
+        toast.success(logs.length > 1 ? `Đã gửi Zalo ${sent.length}/${logs.length} khách` : 'Đã gửi lại phiếu Zalo');
+        return;
+      }
+
+      const firstFailed = failed[0];
+      const failedTarget = firstFailed?.target_name || firstFailed?.target_phone || 'khách hàng';
+      const failedReason = firstFailed?.error_message || 'Zalo chưa xác nhận đã gửi';
+
+      if (sent.length > 0) {
+        toast.error(`Gửi được ${sent.length}/${logs.length}. Lỗi ${failedTarget}: ${failedReason}`);
+        return;
+      }
+
+      toast.error(`Chưa gửi được Zalo cho ${failedTarget}: ${failedReason}`);
     } catch (err: unknown) {
       toast.error(getErrorMessage(err) || 'Gửi lại Zalo thất bại');
     }
@@ -117,84 +166,70 @@ const PrintCrateReceiptPage: React.FC = () => {
   if (loading) return <div className="min-h-screen grid place-items-center text-muted-foreground">Đang tải phiếu két...</div>;
   if (error || !view) return <div className="min-h-screen grid place-items-center text-red-600 font-bold">{error || 'Không có dữ liệu phiếu két'}</div>;
 
-  const receiptDate = receipt?.type === 'delivery'
-    ? (receipt.record as CrateDelivery).delivered_at || (receipt.record as CrateDelivery).created_at
-    : receipt?.type === 'allocation'
-      ? (receipt.record as CrateAllocation).created_at
-      : (receipt?.record as CrateIntake | undefined)?.created_at;
-
   return (
-    <div className="h-full min-h-screen overflow-y-auto bg-[#e8edf3] px-3 py-5 md:px-8 md:py-8 print:h-auto print:bg-white print:p-0">
+    <div className="h-full min-h-0 flex-1 overflow-y-auto bg-[#e8edf3] px-3 pb-5 md:px-6 md:pb-6 print:h-auto print:overflow-visible print:bg-white print:p-0">
       <style>{`
-        @page { size: A4; margin: 12mm; }
+        @page { margin: 8mm; }
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .receipt-page { width: 100% !important; min-height: auto !important; box-shadow: none !important; border: 0 !important; }
+          .receipt-page { max-width: none !important; box-shadow: none !important; border-radius: 0 !important; }
+          .receipt-scroll { overflow: visible !important; }
         }
       `}</style>
 
-      <div className="mb-4 flex w-full items-center justify-between gap-3 print:hidden">
+      <div className="sticky top-0 z-20 -mx-3 mb-4 bg-[#e8edf3]/95 px-3 pb-4 pt-5 backdrop-blur md:-mx-6 md:px-6 md:pt-6 print:hidden">
+        <div className="mx-auto flex w-full max-w-[920px] items-center justify-between gap-3">
         <button onClick={() => navigate(-1)} className="px-4 py-3 rounded-xl bg-white text-slate-900 font-bold shadow-sm border border-slate-200 flex items-center gap-2 hover:bg-slate-50"><ArrowLeft size={16} /> Quay lại</button>
         <div className="flex items-center gap-2">
           {!isPublic && <button onClick={() => void handleResend()} className="px-4 py-3 rounded-xl bg-blue-600 text-white font-bold shadow-sm flex items-center gap-2 hover:bg-blue-700"><Send size={16} /> Gửi Zalo</button>}
           <button onClick={() => window.print()} className="px-4 py-3 rounded-xl bg-slate-900 text-white font-bold shadow-sm flex items-center gap-2 hover:bg-slate-800"><Printer size={16} /> In phiếu</button>
         </div>
+        </div>
       </div>
 
-      <div className="receipt-page mx-auto min-h-[297mm] w-full max-w-[210mm] bg-white p-8 md:p-10 shadow-md border border-slate-300 print:p-0" style={{ fontFamily: 'Times New Roman, Times, serif' }}>
-        <div className="grid grid-cols-2 gap-6 text-[13px] leading-tight">
-          <div className="text-center uppercase font-bold">
-            <p>NHÀ XE NĂM SỰ</p>
-            <p className="mt-1 normal-case font-normal">Bộ phận quản lý két</p>
-          </div>
-          <div className="text-center font-bold">
-            <p className="uppercase">CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM</p>
-            <p className="mt-1 underline underline-offset-4">Độc lập - Tự do - Hạnh phúc</p>
-          </div>
+      <div className="receipt-page mx-auto w-full max-w-[920px] overflow-hidden rounded-xl border border-slate-900 bg-white shadow-md" style={{ fontFamily: 'Arial, Helvetica, sans-serif' }}>
+        <div className="border-b border-slate-900 px-3 py-3 text-center text-[18px] font-bold md:text-[21px]">
+          {view.title} Nhà xe Năm Sự
+        </div>
+        <div className="border-b border-slate-900 px-3 py-3 text-center text-[15px] md:text-[16px]">
+          <span className="font-semibold">{view.customerLabel}: </span>{view.customerName}
+          {view.customerPhone ? <span className="ml-2 text-slate-600">({view.customerPhone})</span> : null}
+        </div>
+        <div className="grid border-b border-slate-900 text-[13px] md:grid-cols-[1.1fr_1fr_0.9fr] md:text-[15px]">
+          <div className="border-b border-slate-900 px-3 py-2 md:border-b-0 md:border-r"><span className="font-semibold">Ngày: </span>{view.date}</div>
+          <div className="border-b border-slate-900 px-3 py-2 md:border-b-0 md:border-r"><span className="font-semibold">Tên NV: </span>{view.staffName}</div>
+          <div className="px-3 py-2 text-left font-bold md:text-center">{view.receiptType}</div>
         </div>
 
-        <div className="mt-8 text-center">
-          <h1 className="text-[24px] font-bold uppercase tracking-wide">{view.title}</h1>
-          <p className="mt-2 text-[14px] italic">Ngày lập: {formatDateTime(receiptDate)}</p>
-        </div>
-
-        <table className="mt-8 w-full border-collapse text-[14px]">
-          <tbody>
-            <tr>
-              <td className="w-36 border border-slate-900 px-3 py-2 font-bold bg-slate-100">Đối tượng</td>
-              <td className="border border-slate-900 px-3 py-2 font-bold">{view.customerLabel}</td>
-            </tr>
-            <tr>
-              <td className="border border-slate-900 px-3 py-2 font-bold bg-slate-100">Tên khách hàng</td>
-              <td className="border border-slate-900 px-3 py-2 font-bold">{view.customer?.name || '-'}</td>
-            </tr>
-            <tr>
-              <td className="border border-slate-900 px-3 py-2 font-bold bg-slate-100">Điện thoại</td>
-              <td className="border border-slate-900 px-3 py-2">{view.customer?.phone || '-'}</td>
-            </tr>
-            <tr>
-              <td className="border border-slate-900 px-3 py-2 font-bold bg-slate-100">Địa chỉ</td>
-              <td className="border border-slate-900 px-3 py-2">{view.customer?.address || 'Chưa có địa chỉ'}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div className="mt-6">
-          <p className="mb-2 text-[15px] font-bold uppercase">I. Nội dung phiếu</p>
-          <table className="w-full border-collapse text-[14px]">
+        <div className="receipt-scroll overflow-x-auto">
+          <table className="w-full min-w-[900px] border-collapse text-[14px] md:text-[15px]">
+            <colgroup>
+              <col className="w-[95px]" />
+              <col className="w-[90px]" />
+              <col className="w-[150px]" />
+              <col className="w-[220px]" />
+              <col className="w-[245px]" />
+              <col className="w-[100px]" />
+            </colgroup>
             <thead>
               <tr className="bg-slate-100">
-                <th className="w-14 border border-slate-900 px-2 py-2 text-center font-bold">STT</th>
-                <th className="border border-slate-900 px-3 py-2 text-left font-bold">Nội dung</th>
-                <th className="w-52 border border-slate-900 px-3 py-2 text-left font-bold">Giá trị</th>
+                <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Giờ</th>
+                <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Số két</th>
+                <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Nội dung</th>
+                <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Liên quan</th>
+                <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Số dư sau</th>
+                <th className="border-b border-slate-900 px-2 py-3 text-center font-bold">Ghi chú</th>
               </tr>
             </thead>
             <tbody>
-              {view.rows.map(([label, value], index) => (
-                <tr key={label}>
-                  <td className="border border-slate-900 px-2 py-2 text-center">{index + 1}</td>
-                  <td className="border border-slate-900 px-3 py-2 font-medium">{label}</td>
-                  <td className="border border-slate-900 px-3 py-2 font-bold">{value}</td>
+              {view.rows.map((row, index) => (
+                <tr key={`${row.content}-${index}`}>
+                  <td className="border-r border-slate-900 px-2 py-3 text-center">{row.time}</td>
+                  <td className="border-r border-slate-900 px-2 py-3 text-center font-bold">{row.quantity}</td>
+                  <td className="border-r border-slate-900 px-2 py-3 text-center">{row.content}</td>
+                  <td className="border-r border-slate-900 px-2 py-3">{row.partner}</td>
+                  <td className="border-r border-slate-900 px-2 py-3">{row.balance}</td>
+                  <td className="px-2 py-3">{row.note}</td>
                 </tr>
               ))}
             </tbody>
@@ -202,34 +237,16 @@ const PrintCrateReceiptPage: React.FC = () => {
         </div>
 
         {view.images?.length ? (
-          <div className="mt-6 print:break-inside-avoid">
-            <p className="mb-2 text-[15px] font-bold uppercase">II. Hình ảnh xác nhận</p>
-            <div className="grid grid-cols-2 gap-3">
-              {view.images.map((url) => <img key={url} src={url} alt="Ảnh giao két" className="h-44 w-full border border-slate-900 object-cover" />)}
+          <div className="border-t border-slate-900 p-3 print:break-inside-avoid">
+            <p className="mb-2 text-[14px] font-bold uppercase">Ảnh xác nhận</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {view.images.map((url) => <img key={url} src={url} alt="Ảnh giao két" className="h-44 w-full rounded-lg border border-slate-900 object-cover" />)}
             </div>
           </div>
         ) : null}
 
-        <div className="mt-8 text-[14px]">
-          <p><span className="font-bold">Ghi chú:</span> Phiếu này được lập tự động từ hệ thống quản lý két và là căn cứ đối chiếu số lượng két giữa các bên.</p>
-        </div>
-
-        <div className="mt-10 grid grid-cols-3 gap-6 text-center text-[14px] print:break-inside-avoid">
-          <div>
-            <p className="font-bold uppercase">Người lập phiếu</p>
-            <p className="mt-1 italic">(Ký, ghi rõ họ tên)</p>
-            <div className="h-20" />
-          </div>
-          <div>
-            <p className="font-bold uppercase">Bên giao</p>
-            <p className="mt-1 italic">(Ký, ghi rõ họ tên)</p>
-            <div className="h-20" />
-          </div>
-          <div>
-            <p className="font-bold uppercase">Bên nhận</p>
-            <p className="mt-1 italic">(Ký, ghi rõ họ tên)</p>
-            <div className="h-20" />
-          </div>
+        <div className="border-t border-slate-900 px-3 py-2 text-[12px] text-slate-600 md:text-[13px]">
+          Phiếu được lập tự động từ hệ thống quản lý két, dùng để đối chiếu nhanh số lượng két giữa các bên.
         </div>
       </div>
     </div>

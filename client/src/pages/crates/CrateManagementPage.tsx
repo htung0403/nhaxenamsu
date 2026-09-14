@@ -2,12 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Boxes, ChevronLeft, History, PackagePlus, RefreshCw, RotateCcw, Send, X } from 'lucide-react';
+import { Boxes, ChevronLeft, History, PackagePlus, RefreshCw, Send, X } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateHistory } from '../../api/cratesApi';
+import { buildCrateHistoryEvents } from './crateHistoryEvents';
 
 const formatNumber = (value?: number | null) => new Intl.NumberFormat('vi-VN').format(value || 0);
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString('vi-VN') : '-';
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
+const HISTORY_PAGE_SIZE = 10;
 
 const CrateManagementPage: React.FC = () => {
   const navigate = useNavigate();
@@ -19,6 +21,7 @@ const CrateManagementPage: React.FC = () => {
   const [intakeModal, setIntakeModal] = useState<CrateAccount | null>(null);
   const [intakeForm, setIntakeForm] = useState({ quantity: '', notes: '' });
   const [intakeSubmitting, setIntakeSubmitting] = useState(false);
+  const [historyPage, setHistoryPage] = useState(1);
 
   const loadData = async () => {
     setLoading(true);
@@ -41,9 +44,6 @@ const CrateManagementPage: React.FC = () => {
   useEffect(() => { void loadData(); }, []);
 
   const currentRows = activeTab === 'senders' ? senders : receivers;
-  const wrongSenderRows = useMemo(() => senders.filter(row => row.customer?.customer_type === 'vegetable_sender'), [senders]);
-  const wrongReceiverRows = useMemo(() => receivers.filter(row => row.customer?.customer_type === 'vegetable_receiver'), [receivers]);
-  const misassignedCount = wrongSenderRows.length + wrongReceiverRows.length;
 
   const openIntakeModal = (customer: CrateAccount) => {
     setIntakeModal(customer);
@@ -78,40 +78,17 @@ const CrateManagementPage: React.FC = () => {
     }
   };
 
-  const handleFixMisassignedRoles = async (target?: CrateAccount) => {
-    const senderToReceiverIds = target
-      ? (target.customer?.customer_type === 'vegetable_sender' ? [target.customer_id] : [])
-      : wrongSenderRows.map(row => row.customer_id);
-    const receiverToSenderIds = target
-      ? (target.customer?.customer_type === 'vegetable_receiver' ? [target.customer_id] : [])
-      : wrongReceiverRows.map(row => row.customer_id);
+  const recentEvents = useMemo(() => buildCrateHistoryEvents(history), [history]);
+  const historyPageCount = Math.max(1, Math.ceil(recentEvents.length / HISTORY_PAGE_SIZE));
+  const visibleHistoryEvents = recentEvents.slice((historyPage - 1) * HISTORY_PAGE_SIZE, historyPage * HISTORY_PAGE_SIZE);
 
-    if (!senderToReceiverIds.length && !receiverToSenderIds.length) {
-      toast.success('Không có khách két bị đảo nhầm');
-      return;
-    }
+  useEffect(() => {
+    setHistoryPage(1);
+  }, [history]);
 
-    try {
-      if (senderToReceiverIds.length) {
-        await cratesApi.setRoles({ customer_ids: senderToReceiverIds, role: 'receiver', enabled: true });
-        await cratesApi.setRoles({ customer_ids: senderToReceiverIds, role: 'sender', enabled: false });
-      }
-      if (receiverToSenderIds.length) {
-        await cratesApi.setRoles({ customer_ids: receiverToSenderIds, role: 'sender', enabled: true });
-        await cratesApi.setRoles({ customer_ids: receiverToSenderIds, role: 'receiver', enabled: false });
-      }
-      toast.success(`Đã đảo lại ${senderToReceiverIds.length + receiverToSenderIds.length} khách về đúng danh sách két`);
-      await loadData();
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error) || 'Không đảo lại được danh sách két');
-    }
-  };
-
-  const recentEvents = useMemo(() => [
-    ...history.intakes.map(item => ({ id: item.id, type: 'Nhập két', at: item.created_at, text: `${item.sender?.name || 'Khách gửi'} gửi ${formatNumber(item.quantity)} két`, href: `/app/hang-hoa/in-phieu-ket?type=intake&id=${item.id}` })),
-    ...history.allocations.map(item => ({ id: item.id, type: 'Chia két', at: item.created_at, text: `${item.sender?.name || 'Khách gửi'} → ${item.receiver?.name || 'Khách nhận'}: ${formatNumber(item.quantity)} két`, href: `/app/hang-hoa/in-phieu-ket?type=allocation&id=${item.id}` })),
-    ...history.deliveries.map(item => ({ id: item.id, type: 'Giao két', at: item.created_at, text: `${item.receiver?.name || 'Khách nhận'} nhận ${formatNumber(item.quantity)} két`, href: `/app/hang-hoa/in-phieu-ket?type=delivery&id=${item.id}` })),
-  ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 20), [history]);
+  useEffect(() => {
+    if (historyPage > historyPageCount) setHistoryPage(historyPageCount);
+  }, [historyPage, historyPageCount]);
 
   return (
     <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -124,9 +101,6 @@ const CrateManagementPage: React.FC = () => {
           </div>
         </div>
         <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2">
-          {misassignedCount > 0 && (
-            <button onClick={() => void handleFixMisassignedRoles()} className="col-span-2 justify-center px-3 md:px-4 py-2.5 md:py-2 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-xs md:text-sm font-bold hover:bg-amber-100 flex items-center gap-2 md:col-span-1"><RotateCcw size={16} /> Đảo lại ({misassignedCount})</button>
-          )}
           <button onClick={() => navigate('/app/hang-hoa/chia-ket')} className="justify-center px-3 md:px-4 py-2.5 md:py-2 rounded-xl bg-primary text-white text-xs md:text-sm font-bold hover:bg-primary/90 flex items-center gap-2"><Send size={16} /> Chia két</button>
           <button onClick={() => void loadData()} className="justify-center px-3 md:px-4 py-2.5 md:py-2 rounded-xl border border-border text-xs md:text-sm font-bold hover:bg-muted flex items-center gap-2"><RefreshCw size={16} /> Tải lại</button>
         </div>
@@ -185,13 +159,11 @@ const CrateManagementPage: React.FC = () => {
                   <td className="px-4 py-3 text-right">
                     {activeTab === 'senders' ? (
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        {row.customer?.customer_type === 'vegetable_sender' && <button onClick={() => void handleFixMisassignedRoles(row)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100">Đảo sang nhận két</button>}
                         <button onClick={() => openIntakeModal(row)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 flex items-center gap-1"><PackagePlus size={14} /> Nhập két</button>
                         <button onClick={() => navigate(`/app/hang-hoa/chia-ket?senderId=${row.customer_id}`)} className="rounded-xl border border-border px-3 py-2 text-xs font-bold transition hover:bg-muted">Chia két</button>
                       </div>
                     ) : (
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        {row.customer?.customer_type === 'vegetable_receiver' && <button onClick={() => void handleFixMisassignedRoles(row)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-bold text-amber-700 transition hover:bg-amber-100">Đảo sang gửi két</button>}
                         <button onClick={() => navigate(`/app/hang-hoa/chia-ket?receiverId=${row.customer_id}`)} className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary/90">Chia cho khách này</button>
                       </div>
                     )}
@@ -226,13 +198,11 @@ const CrateManagementPage: React.FC = () => {
               </div>
               {activeTab === 'senders' ? (
                 <div className="grid grid-cols-2 gap-2">
-                  {row.customer?.customer_type === 'vegetable_sender' && <button onClick={() => void handleFixMisassignedRoles(row)} className="col-span-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-black text-amber-700">Đảo sang nhận két</button>}
                   <button onClick={() => openIntakeModal(row)} className="rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-black text-white flex items-center justify-center gap-1"><PackagePlus size={14} /> Nhập két</button>
                   <button onClick={() => navigate(`/app/hang-hoa/chia-ket?senderId=${row.customer_id}`)} className="rounded-xl border border-border px-3 py-2.5 text-sm font-black text-foreground">Chia két</button>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 gap-2">
-                  {row.customer?.customer_type === 'vegetable_receiver' && <button onClick={() => void handleFixMisassignedRoles(row)} className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm font-black text-amber-700">Đảo sang gửi két</button>}
                   <button onClick={() => navigate('/app/hang-hoa/giao-ket')} className="w-full rounded-xl border border-orange-200 bg-orange-50 px-3 py-2.5 text-sm font-black text-orange-600">Đi giao két</button>
                 </div>
               )}
@@ -242,9 +212,12 @@ const CrateManagementPage: React.FC = () => {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-3 md:p-4">
-        <h2 className="font-black flex items-center gap-2 mb-3"><History size={18} /> Lịch sử gần đây</h2>
+        <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="font-black flex items-center gap-2"><History size={18} /> Lịch sử gần đây</h2>
+          <button onClick={() => navigate('/app/hang-hoa/lich-su-ket')} className="self-start rounded-xl border border-border px-3 py-2 text-xs font-black text-foreground transition hover:bg-muted sm:self-auto">Xem toàn bộ</button>
+        </div>
         <div className="space-y-2">
-          {recentEvents.map(event => (
+          {visibleHistoryEvents.map(event => (
             <button key={`${event.type}-${event.id}`} onClick={() => navigate(event.href)} className="w-full text-left p-3 rounded-xl border border-border hover:bg-muted/40 transition-colors">
               <div className="flex justify-between gap-3"><span className="font-bold text-sm">{event.type}</span><span className="text-xs text-muted-foreground">{formatDateTime(event.at)}</span></div>
               <p className="text-sm text-muted-foreground mt-1">{event.text}</p>
@@ -252,6 +225,15 @@ const CrateManagementPage: React.FC = () => {
           ))}
           {recentEvents.length === 0 && <p className="text-xs md:text-sm text-muted-foreground">Chưa có lịch sử két.</p>}
         </div>
+        {recentEvents.length > HISTORY_PAGE_SIZE && (
+          <div className="mt-3 flex flex-col gap-2 border-t border-border pt-3 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+            <span>Hiển thị {visibleHistoryEvents.length} / {recentEvents.length} dòng • Trang {historyPage}/{historyPageCount}</span>
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <button onClick={() => setHistoryPage(page => Math.max(1, page - 1))} disabled={historyPage <= 1} className="rounded-xl border border-border px-3 py-2 font-bold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">Trước</button>
+              <button onClick={() => setHistoryPage(page => Math.min(historyPageCount, page + 1))} disabled={historyPage >= historyPageCount} className="rounded-xl border border-border px-3 py-2 font-bold text-foreground transition hover:bg-muted disabled:cursor-not-allowed disabled:opacity-50">Sau</button>
+            </div>
+          </div>
+        )}
       </div>
 
       {intakeModal && createPortal(

@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Boxes, RefreshCw, Send, Truck } from 'lucide-react';
+import { Boxes, RefreshCw, Send, Trash2, Truck } from 'lucide-react';
 import PageHeader from '../../components/shared/PageHeader';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
@@ -36,6 +36,8 @@ const CrateCustomersPage: React.FC<Props> = ({ role }) => {
   const [loading, setLoading] = useState(true);
   const [isError, setIsError] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkRemoving, setBulkRemoving] = useState(false);
   const copy = pageCopyByRole[role];
   const isSender = role === 'sender';
 
@@ -54,6 +56,7 @@ const CrateCustomersPage: React.FC<Props> = ({ role }) => {
   }, [role]);
 
   useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => { setSelectedIds(new Set()); }, [role]);
 
   const filteredAccounts = useMemo(() => accounts
     .filter((account) => {
@@ -61,6 +64,46 @@ const CrateCustomersPage: React.FC<Props> = ({ role }) => {
       return matchesSearch([customer?.name, customer?.phone, customer?.address].filter(Boolean).join(' '), searchTerm);
     })
     .sort((a, b) => (a.customer?.name || '').localeCompare(b.customer?.name || '', 'vi', { sensitivity: 'base' })), [accounts, searchTerm]);
+
+  const selectedCount = selectedIds.size;
+  const allFilteredSelected = filteredAccounts.length > 0 && filteredAccounts.every(account => selectedIds.has(account.customer_id));
+
+  const toggleSelect = (customerId: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(customerId)) next.delete(customerId);
+      else next.add(customerId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filteredAccounts.forEach(account => next.delete(account.customer_id));
+      } else {
+        filteredAccounts.forEach(account => next.add(account.customer_id));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkRemove = async () => {
+    const customerIds = Array.from(selectedIds);
+    if (!customerIds.length) return;
+    setBulkRemoving(true);
+    try {
+      await cratesApi.setRoles({ customer_ids: customerIds, role, enabled: false });
+      toast.success(`Đã xóa ${customerIds.length} khách khỏi ${copy.title}`);
+      setSelectedIds(new Set());
+      await loadData();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || 'Không xóa được khách khỏi danh sách két');
+    } finally {
+      setBulkRemoving(false);
+    }
+  };
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
@@ -84,6 +127,16 @@ const CrateCustomersPage: React.FC<Props> = ({ role }) => {
       <div className="md:hidden px-3 mb-3">
         <SearchInput placeholder="Tìm khách két..." onSearch={setSearchTerm} />
       </div>
+
+      {selectedCount > 0 && (
+        <div className="mb-3 flex flex-col gap-2 rounded-2xl border border-red-200 bg-red-50 px-3 py-3 md:flex-row md:items-center md:justify-between">
+          <div className="text-sm font-bold text-red-700">Đã chọn {selectedCount} khách trong {copy.title}</div>
+          <div className="flex gap-2">
+            <button onClick={() => setSelectedIds(new Set())} disabled={bulkRemoving} className="flex-1 rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-bold text-red-700 hover:bg-red-50 disabled:opacity-60 md:flex-none">Bỏ chọn</button>
+            <button onClick={() => void handleBulkRemove()} disabled={bulkRemoving} className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 disabled:opacity-60 md:flex-none"><Trash2 size={16} /> {bulkRemoving ? 'Đang xóa...' : 'Xóa khỏi DS két'}</button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3 mb-4 px-3 md:px-0">
         <div className="rounded-2xl border border-border bg-card p-3 md:p-4">
@@ -110,9 +163,12 @@ const CrateCustomersPage: React.FC<Props> = ({ role }) => {
         ) : (
           <>
           <div className="hidden md:block flex-1 overflow-auto custom-scrollbar">
-            <table className="w-full border-collapse min-w-[920px]">
+            <table className="w-full border-collapse min-w-[960px]">
               <thead className="sticky top-0 z-10">
                 <tr className="bg-muted/30 border-b border-border">
+                  <th className="w-12 px-4 py-3 text-left">
+                    <input type="checkbox" checked={allFilteredSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20" aria-label="Chọn tất cả khách két" />
+                  </th>
                   <th className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left">Tên KH</th>
                   <th className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left">SĐT</th>
                   <th className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left">Địa chỉ</th>
@@ -125,6 +181,9 @@ const CrateCustomersPage: React.FC<Props> = ({ role }) => {
               <tbody className="divide-y divide-border/50">
                 {filteredAccounts.map((account) => (
                   <tr key={account.customer_id} className="hover:bg-muted/20 transition-colors">
+                    <td className="px-4 py-3">
+                      <input type="checkbox" checked={selectedIds.has(account.customer_id)} onChange={() => toggleSelect(account.customer_id)} className="h-4 w-4 rounded border-border text-primary focus:ring-primary/20" aria-label={`Chọn ${account.customer?.name || 'khách két'}`} />
+                    </td>
                     <td className="px-4 py-3 text-[13px] font-bold text-foreground">{account.customer?.name || '-'}</td>
                     <td className="px-4 py-3 text-[12px] text-muted-foreground">{account.customer?.phone || '-'}</td>
                     <td className="px-4 py-3 text-[12px] text-muted-foreground max-w-64 truncate" title={account.customer?.address || ''}>{account.customer?.address || '-'}</td>
@@ -155,10 +214,13 @@ const CrateCustomersPage: React.FC<Props> = ({ role }) => {
             {filteredAccounts.map((account) => (
               <div key={account.customer_id} className="rounded-2xl border border-border bg-card p-4 shadow-sm space-y-3">
                 <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
+                  <div className="flex min-w-0 gap-3">
+                    <input type="checkbox" checked={selectedIds.has(account.customer_id)} onChange={() => toggleSelect(account.customer_id)} className="mt-1 h-4 w-4 shrink-0 rounded border-border text-primary focus:ring-primary/20" aria-label={`Chọn ${account.customer?.name || 'khách két'}`} />
+                    <div className="min-w-0">
                     <h3 className="font-black text-foreground truncate">{account.customer?.name || '-'}</h3>
                     <p className="text-sm text-muted-foreground">{account.customer?.phone || '-'}</p>
                     <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{account.customer?.address || 'Chưa có địa chỉ'}</p>
+                    </div>
                   </div>
                   <Boxes className="shrink-0 text-primary" size={22} />
                 </div>

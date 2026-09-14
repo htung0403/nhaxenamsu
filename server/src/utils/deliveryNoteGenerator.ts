@@ -68,9 +68,121 @@ export interface SenderSummaryData {
   items: SenderSummaryItem[];
 }
 
+export interface CrateReceiptNoteRow {
+  time: string;
+  quantity: string | number;
+  content: string;
+  partner?: string;
+  balance: string;
+  note?: string;
+}
+
+export interface CrateReceiptNoteData {
+  shopName?: string;
+  title: string;
+  customerName: string;
+  date: string;
+  staffName?: string;
+  receiptType: string;
+  rows: CrateReceiptNoteRow[];
+}
+
 export class DeliveryNoteGenerator {
+  private static escapeXml(unsafe: string): string {
+    return String(unsafe || '').replace(/[<>&"']/g, (c) => {
+      switch (c) {
+        case '<': return '&lt;';
+        case '>': return '&gt;';
+        case '&': return '&amp;';
+        case '"': return '&quot;';
+        case "'": return '&apos;';
+        default: return c;
+      }
+    });
+  }
+
+  private static fitCellText(value: string | number | undefined | null, maxLength: number): string {
+    const text = String(value ?? '-').trim() || '-';
+    return text.length > maxLength ? `${text.slice(0, Math.max(maxLength - 1, 0))}…` : text;
+  }
+
   private static formatPaymentStatus(status?: string): string {
     return status === 'paid' ? 'Đã TT' : 'Chưa TT';
+  }
+
+  /**
+   * Generates a compact crate receipt image for Zalo and simple print preview.
+   * Layout intentionally follows the existing delivery note table style.
+   */
+  static async generateCrateReceiptPng(data: CrateReceiptNoteData): Promise<Buffer> {
+    const width = 920;
+    const margin = 10;
+    const tableWidth = width - margin * 2;
+    const rowHeight = 40;
+    const rows = data.rows.length ? data.rows.slice(0, 4) : [{ time: '-', quantity: '-', content: '-', partner: '-', balance: '-', note: '-' }];
+    const height = margin + rowHeight * (4 + rows.length) + margin;
+    const font = "'DejaVu Sans', Arial, sans-serif";
+    const titleFontSize = 21;
+    const fontSize = 16;
+    const smallFontSize = 15;
+    const colWidths = [95, 85, 170, 220, 220, 110];
+    const colXs = colWidths.reduce<number[]>((acc, current, index) => {
+      acc.push(index === 0 ? margin : acc[index - 1] + colWidths[index - 1]);
+      return acc;
+    }, []);
+
+    const cell = (x: number, y: number, w: number, h: number, text: string | number, options: { anchor?: 'start' | 'middle' | 'end'; bold?: boolean; max?: number; size?: number } = {}) => {
+      const anchor = options.anchor || 'middle';
+      const textX = anchor === 'start' ? x + 10 : anchor === 'end' ? x + w - 10 : x + w / 2;
+      const value = this.escapeXml(this.fitCellText(text, options.max || 22));
+      return `
+        <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#111" stroke-width="1" />
+        <text x="${textX}" y="${y + h / 2 + 6}" font-family="${font}" font-size="${options.size || fontSize}" ${options.bold ? 'font-weight="700"' : ''} text-anchor="${anchor}">${value}</text>
+      `;
+    };
+
+    const rowSvg = rows.map((row, rowIndex) => {
+      const y = margin + rowHeight * (4 + rowIndex);
+      const values = [
+        this.fitCellText(row.time, 10),
+        this.fitCellText(row.quantity, 8),
+        this.fitCellText(row.content, 18),
+        this.fitCellText(row.partner || '-', 24),
+        this.fitCellText(row.balance, 26),
+        this.fitCellText(row.note || '-', 14),
+      ];
+      return values.map((value, index) => cell(colXs[index], y, colWidths[index], rowHeight, value, { max: [10, 8, 18, 24, 26, 14][index] })).join('');
+    }).join('');
+
+    const headerY = margin + rowHeight * 3;
+    const headers = ['Giờ', 'Số két', 'Nội dung', 'Liên quan', 'Số dư sau', 'Ghi chú'];
+    const headerSvg = headers.map((header, index) => cell(colXs[index], headerY, colWidths[index], rowHeight, header, { bold: true, max: 12 })).join('');
+    const shopName = this.escapeXml(data.shopName || 'Nhà xe Năm Sự');
+    const title = this.escapeXml(data.title || 'Phiếu két');
+    const customerName = this.escapeXml(this.fitCellText(data.customerName, 58));
+    const date = this.escapeXml(this.fitCellText(data.date, 24));
+    const staffName = this.escapeXml(this.fitCellText(data.staffName || '-', 26));
+    const receiptType = this.escapeXml(this.fitCellText(data.receiptType, 24));
+
+    const svg = `
+      <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+        <rect x="0" y="0" width="${width}" height="${height}" fill="white" />
+        <rect x="${margin}" y="${margin}" width="${tableWidth}" height="${rowHeight}" fill="none" stroke="#111" stroke-width="1" />
+        <text x="${width / 2}" y="${margin + rowHeight / 2 + 8}" font-family="${font}" font-size="${titleFontSize}" font-weight="700" text-anchor="middle">${title} ${shopName}</text>
+
+        <rect x="${margin}" y="${margin + rowHeight}" width="${tableWidth}" height="${rowHeight}" fill="none" stroke="#111" stroke-width="1" />
+        <text x="${width / 2}" y="${margin + rowHeight + rowHeight / 2 + 6}" font-family="${font}" font-size="${fontSize}" text-anchor="middle">Khách Hàng : ${customerName}</text>
+
+        ${cell(margin, margin + rowHeight * 2, 330, rowHeight, `Ngày: ${date}`, { anchor: 'start', size: smallFontSize, max: 34 })}
+        ${cell(margin + 330, margin + rowHeight * 2, 300, rowHeight, `Tên NV: ${staffName}`, { anchor: 'start', size: smallFontSize, max: 32 })}
+        ${cell(margin + 630, margin + rowHeight * 2, tableWidth - 630, rowHeight, receiptType, { anchor: 'middle', size: smallFontSize, bold: true, max: 24 })}
+
+        ${headerSvg}
+        ${rowSvg}
+      </svg>
+    `;
+
+    return await sharp(Buffer.from(svg)).png().toBuffer();
   }
 
   private static buildSupplierPriceKey(item: SupplierSummaryItem): string {
