@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Boxes, History, PackagePlus, RefreshCw, Send, X } from 'lucide-react';
+import { Boxes, ChevronLeft, History, PackagePlus, RefreshCw, Send, X } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateHistory } from '../../api/cratesApi';
 
 const formatNumber = (value?: number | null) => new Intl.NumberFormat('vi-VN').format(value || 0);
@@ -82,11 +82,14 @@ const CrateManagementPage: React.FC = () => {
   ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 20), [history]);
 
   return (
-    <div className="px-3 pb-24 pt-3 md:p-6 space-y-4 md:space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-        <div>
-          <h1 className="text-xl md:text-2xl font-black text-foreground flex items-center gap-2"><Boxes className="text-primary" /> Quản lý két</h1>
-          <p className="text-xs md:text-sm text-muted-foreground">Theo dõi khách gửi két, khách nhận két, nhập két và lịch sử phát sinh.</p>
+    <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <button onClick={() => navigate('/app/hang-hoa')} className="p-2 rounded-xl border border-border bg-card text-muted-foreground hover:bg-muted transition-colors shrink-0" title="Quay lại"><ChevronLeft size={18} /></button>
+          <div>
+            <h1 className="text-xl md:text-2xl font-black text-foreground flex items-center gap-2"><Boxes className="text-primary" /> Quản lý két</h1>
+            <p className="text-xs md:text-sm text-muted-foreground">Theo dõi khách gửi két, khách nhận két, nhập két và lịch sử phát sinh.</p>
+          </div>
         </div>
         <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2">
           <button onClick={() => navigate('/app/hang-hoa/chia-ket')} className="justify-center px-3 md:px-4 py-2.5 md:py-2 rounded-xl bg-primary text-white text-xs md:text-sm font-bold hover:bg-primary/90 flex items-center gap-2"><Send size={16} /> Chia két</button>
@@ -106,38 +109,57 @@ const CrateManagementPage: React.FC = () => {
           <button onClick={() => setActiveTab('receivers')} className={`rounded-xl px-3 md:px-5 py-2.5 md:py-3 text-sm font-bold ${activeTab === 'receivers' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}>Khách nhận két</button>
         </div>
         <div className="hidden md:block overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left">
-            <thead className="bg-muted/30 text-xs uppercase text-muted-foreground">
+          <table className="w-full min-w-[760px] table-fixed text-left">
+            <thead className="bg-muted/30 text-[11px] uppercase tracking-wide text-muted-foreground">
               <tr>
-                <th className="px-4 py-3">Khách hàng</th>
-                <th className="px-4 py-3">Điện thoại</th>
-                <th className="px-4 py-3">Đang gửi</th>
-                <th className="px-4 py-3">Chờ giao</th>
-                <th className="px-4 py-3">Nợ két</th>
-                <th className="px-4 py-3">Thao tác</th>
+                <th className="w-[34%] px-4 py-3">Khách hàng</th>
+                <th className="w-[18%] px-4 py-3">Điện thoại</th>
+                {activeTab === 'senders' ? (
+                  <th className="w-[16%] px-4 py-3 text-center">Đang gửi</th>
+                ) : (
+                  <>
+                    <th className="w-[14%] px-4 py-3 text-center">Chờ giao</th>
+                    <th className="w-[14%] px-4 py-3 text-center">Nợ két</th>
+                  </>
+                )}
+                <th className="w-[32%] px-4 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {loading ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={6}>Đang tải...</td></tr> : currentRows.map(row => (
-                <tr key={row.customer_id} className="hover:bg-muted/20">
-                  <td className="px-4 py-3 font-bold">{row.customer?.name || '-'}</td>
-                  <td className="px-4 py-3 text-sm">{row.customer?.phone || '-'}</td>
-                  <td className="px-4 py-3 font-black text-emerald-600">{formatNumber(row.sender_balance)}</td>
-                  <td className="px-4 py-3 font-black text-blue-600">{formatNumber(row.receiver_pending)}</td>
-                  <td className="px-4 py-3 font-black text-red-600">{formatNumber(row.receiver_debt)}</td>
+              {loading ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={activeTab === 'senders' ? 4 : 5}>Đang tải...</td></tr> : currentRows.map(row => (
+                <tr key={row.customer_id} className="group hover:bg-muted/20">
                   <td className="px-4 py-3">
+                    <div className="font-black text-foreground">{row.customer?.name || '-'}</div>
+                    {row.customer?.address && <div className="mt-0.5 max-w-[360px] truncate text-xs text-muted-foreground">{row.customer.address}</div>}
+                  </td>
+                  <td className="px-4 py-3 text-sm font-medium text-muted-foreground">{row.customer?.phone || '-'}</td>
+                  {activeTab === 'senders' ? (
+                    <td className="px-4 py-3 text-center">
+                      <span className="inline-flex min-w-16 justify-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-black text-emerald-600">{formatNumber(row.sender_balance)}</span>
+                    </td>
+                  ) : (
+                    <>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex min-w-16 justify-center rounded-full bg-blue-500/10 px-3 py-1 text-sm font-black text-blue-600">{formatNumber(row.receiver_pending)}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex min-w-16 justify-center rounded-full bg-red-500/10 px-3 py-1 text-sm font-black text-red-600">{formatNumber(row.receiver_debt)}</span>
+                      </td>
+                    </>
+                  )}
+                  <td className="px-4 py-3 text-right">
                     {activeTab === 'senders' ? (
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button onClick={() => openIntakeModal(row)} className="px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold flex items-center gap-1"><PackagePlus size={14} /> Nhập két</button>
-                        <button onClick={() => navigate(`/app/hang-hoa/chia-ket?senderId=${row.customer_id}`)} className="px-3 py-2 rounded-xl border border-border text-xs font-bold hover:bg-muted">Chia két</button>
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <button onClick={() => openIntakeModal(row)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 flex items-center gap-1"><PackagePlus size={14} /> Nhập két</button>
+                        <button onClick={() => navigate(`/app/hang-hoa/chia-ket?senderId=${row.customer_id}`)} className="rounded-xl border border-border px-3 py-2 text-xs font-bold transition hover:bg-muted">Chia két</button>
                       </div>
                     ) : (
-                      <button onClick={() => navigate(`/app/hang-hoa/chia-ket?receiverId=${row.customer_id}`)} className="px-3 py-2 rounded-xl bg-primary text-white text-xs font-bold">Chia cho khách này</button>
+                      <button onClick={() => navigate(`/app/hang-hoa/chia-ket?receiverId=${row.customer_id}`)} className="rounded-xl bg-primary px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-primary/90">Chia cho khách này</button>
                     )}
                   </td>
                 </tr>
               ))}
-              {!loading && currentRows.length === 0 && <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={6}>Chưa có khách trong danh sách này.</td></tr>}
+              {!loading && currentRows.length === 0 && <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={activeTab === 'senders' ? 4 : 5}>Chưa có khách trong danh sách này.</td></tr>}
             </tbody>
           </table>
         </div>

@@ -35,10 +35,15 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
         { icon: History, title: 'Lịch sử nhập hàng rau', description: 'Xem toàn bộ lịch sử đơn nhập hàng rau.', colorScheme: 'slate', path: '/app/hang-hoa/nhap-hang-rau/lich-su' },
         { icon: ClipboardList, title: 'Bảng Hàng Rau', description: 'Bảng xem chi tiết các mặt hàng rau nhập.', colorScheme: 'purple', path: '/app/hang-hoa/hang-rau' },
         { icon: DeliveryIcon, title: 'Giao hàng rau', description: 'Danh sách các đơn hàng rau cần giao.', colorScheme: 'orange', path: '/app/hang-hoa/giao-hang-rau' },
+        { icon: Settings2, title: 'Cài đặt hàng rau', description: 'Quản lý từ điển hàng vựa rau.', colorScheme: 'slate', path: '/app/hang-hoa/cai-dat-rau' },
+      ]
+    },
+    {
+      section: 'Két',
+      items: [
         { icon: Boxes, title: 'Quản lý két', description: 'Theo dõi khách gửi két, nhận két và lịch sử két.', colorScheme: 'emerald', path: '/app/hang-hoa/quan-ly-ket' },
         { icon: Send, title: 'Chia két', description: 'Chia két từ khách gửi sang khách nhận.', colorScheme: 'blue', path: '/app/hang-hoa/chia-ket' },
         { icon: DeliveryIcon, title: 'Giao két', description: 'Tài xế xác nhận giao két cho khách nhận.', colorScheme: 'orange', path: '/app/hang-hoa/giao-ket' },
-        { icon: Settings2, title: 'Cài đặt hàng rau', description: 'Quản lý từ điển hàng vựa rau.', colorScheme: 'slate', path: '/app/hang-hoa/cai-dat-rau' },
       ]
     },
     {

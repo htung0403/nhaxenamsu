@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { Camera, CheckCircle, Package, RefreshCw, Truck, X } from 'lucide-react';
+import { AlertCircle, Camera, CheckCircle, ImagePlus, Package, RefreshCw, Truck, X } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateDelivery } from '../../api/cratesApi';
 import { uploadApi } from '../../api/uploadApi';
 import EmptyState from '../../components/shared/EmptyState';
@@ -57,6 +57,8 @@ const CrateDeliveryPage: React.FC = () => {
   const [deliveryModal, setDeliveryModal] = useState<DeliveryModalState | null>(null);
   const [deliveryForm, setDeliveryForm] = useState<DeliveryForm>(getDefaultForm());
   const [submitting, setSubmitting] = useState(false);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -432,85 +434,129 @@ const CrateDeliveryPage: React.FC = () => {
       </div>
 
       {deliveryModal && createPortal(
-        <div className="fixed inset-0 z-99999 flex items-end md:items-center justify-center p-0 md:p-4">
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in" onClick={closeDeliveryModal} />
-          <div className="relative w-full max-w-xl rounded-t-3xl md:rounded-2xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-6 md:zoom-in-95 fade-in duration-200">
-            <div className="flex items-start justify-between gap-4 border-b border-border p-5">
-              <div>
-                <h3 className="text-lg font-black text-foreground flex items-center gap-2">
-                  <Truck className="text-primary" size={20} /> Giao két
-                </h3>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Người nhận: <b className="text-foreground">{deliveryModal.receiver.customer?.name || '-'}</b>
-                  {selectedVehicle ? <> · Xe: <b className="text-foreground">{selectedVehicle.license_plate}</b></> : null}
-                </p>
+        <div className="fixed inset-0 z-[99999] flex items-end justify-center sm:items-center sm:p-4">
+          <div className="fixed inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300" onClick={closeDeliveryModal} />
+          <div className="relative flex h-dvh w-full flex-col rounded-none bg-background shadow-2xl animate-in slide-in-from-bottom-full duration-300 sm:h-auto sm:max-h-[90vh] sm:max-w-5xl sm:rounded-3xl sm:slide-in-from-bottom-0 sm:zoom-in-95">
+            <div className="flex shrink-0 items-center justify-between border-b border-border bg-card px-5 py-4 shadow-sm sm:rounded-t-3xl sm:px-6">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-blue-100 text-primary">
+                  <Truck size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-foreground">Giao két</h3>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Người nhận: <span className="font-black text-foreground">{deliveryModal.receiver.customer?.name || '-'}</span>
+                  </p>
+                </div>
               </div>
-              <button onClick={closeDeliveryModal} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground">
-                <X size={18} />
+              <button onClick={closeDeliveryModal} className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+                <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-4 p-5">
-              <div className="grid grid-cols-2 gap-3">
-                <div className="rounded-xl border border-border bg-muted/30 p-3">
-                  <p className="text-xs font-bold uppercase text-muted-foreground">Chờ giao</p>
-                  <p className="text-2xl font-black text-primary">{formatNumber(deliveryModal.receiver.receiver_pending)}</p>
-                </div>
-                <div className="rounded-xl border border-border bg-muted/30 p-3">
-                  <p className="text-xs font-bold uppercase text-muted-foreground">Nợ két</p>
-                  <p className="text-2xl font-black text-red-600">{formatNumber(deliveryModal.receiver.receiver_debt)}</p>
-                </div>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-[160px_1fr]">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase text-muted-foreground">Số két giao</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={deliveryForm.quantity}
-                    onChange={event => setDeliveryForm(prev => ({ ...prev, quantity: event.target.value }))}
-                    placeholder="Số két"
-                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-bold outline-none focus:border-primary"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase text-muted-foreground">Ghi chú</label>
-                  <input
-                    value={deliveryForm.notes}
-                    onChange={event => setDeliveryForm(prev => ({ ...prev, notes: event.target.value }))}
-                    placeholder="Ghi chú giao két"
-                    className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary"
-                  />
+            <div className="flex-1 space-y-5 overflow-y-auto p-5 custom-scrollbar sm:p-6">
+              <div className="rounded-2xl border border-border bg-muted/50 p-4">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Chờ giao</p>
+                    <p className="text-xl font-black tabular-nums text-primary">{formatNumber(deliveryModal.receiver.receiver_pending)}</p>
+                  </div>
+                  <div className="hidden h-8 w-px bg-border sm:block" />
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-red-400">Nợ két</p>
+                    <p className="text-xl font-black tabular-nums text-red-600">{formatNumber(deliveryModal.receiver.receiver_debt)}</p>
+                  </div>
+                  <div className="hidden h-8 w-px bg-border sm:block" />
+                  <div className="sm:text-right">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Xe giao</p>
+                    <p className="text-xl font-black tabular-nums text-foreground">{selectedVehicle?.license_plate || 'Chưa chọn'}</p>
+                  </div>
                 </div>
               </div>
 
-              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 py-3 text-sm font-bold text-muted-foreground hover:bg-muted">
-                <Camera size={16} />
-                {deliveryForm.files.length ? `${deliveryForm.files.length} ảnh đã chọn` : 'Chọn ảnh xác nhận'}
-                <input
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={event => setDeliveryForm(prev => ({ ...prev, files: Array.from(event.target.files || []) }))}
-                />
-              </label>
+              <div>
+                <h4 className="mb-3 text-sm font-black uppercase text-foreground">Thông tin giao két</h4>
+                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-[180px_1fr]">
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Số két giao</label>
+                      <input
+                        type="number"
+                        min={1}
+                        value={deliveryForm.quantity}
+                        onChange={event => setDeliveryForm(prev => ({ ...prev, quantity: event.target.value }))}
+                        placeholder="Số két"
+                        className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-black outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/10"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Ghi chú</label>
+                      <input
+                        value={deliveryForm.notes}
+                        onChange={event => setDeliveryForm(prev => ({ ...prev, notes: event.target.value }))}
+                        placeholder="Ghi chú giao két"
+                        className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/10"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="mt-5 border-t border-dashed border-border pt-4">
+                    <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
+                      Ảnh xác nhận {selectedVehicle ? `/ ${selectedVehicle.license_plate}` : ''}
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex h-20 w-20 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-[12px] font-bold text-orange-600 transition-colors hover:bg-orange-50">
+                        <Camera size={20} />
+                        Chụp ảnh
+                      </button>
+                      <button type="button" onClick={() => fileInputRef.current?.click()} className="flex h-20 w-20 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-[12px] font-bold text-primary transition-colors hover:bg-primary/5">
+                        <ImagePlus size={20} />
+                        Chọn ảnh
+                      </button>
+                      {deliveryForm.files.length > 0 && (
+                        <div className="flex min-h-20 flex-1 items-center rounded-2xl border border-blue-100 bg-blue-50 px-4 text-sm font-bold text-blue-700">
+                          Đã chọn {deliveryForm.files.length} ảnh xác nhận
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
 
               {modalDebtWillCreate > 0 && (
-                <div className="rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-medium text-red-700">
-                  Giao vượt chờ giao {formatNumber(modalDebtWillCreate)} két; hệ thống sẽ ghi nợ két cho khách.
+                <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-700">
+                  <AlertCircle size={16} className="mt-0.5 shrink-0" />
+                  <span>Giao vượt chờ giao {formatNumber(modalDebtWillCreate)} két; hệ thống sẽ ghi nợ két cho khách.</span>
                 </div>
               )}
+
+              <input
+                ref={cameraInputRef}
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                onChange={event => setDeliveryForm(prev => ({ ...prev, files: [...prev.files, ...Array.from(event.target.files || [])] }))}
+              />
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={event => setDeliveryForm(prev => ({ ...prev, files: [...prev.files, ...Array.from(event.target.files || [])] }))}
+              />
             </div>
 
-            <div className="flex flex-col-reverse gap-2 border-t border-border p-5 md:flex-row md:justify-end">
-              <button onClick={closeDeliveryModal} disabled={submitting} className="rounded-xl border border-border px-4 py-2.5 text-sm font-bold hover:bg-muted disabled:opacity-60">
-                Hủy
-              </button>
-              <button onClick={() => void handleDeliver()} disabled={submitting} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-black text-white hover:bg-primary/90 disabled:opacity-60">
-                {submitting ? 'Đang giao...' : 'Xác nhận giao két'}
-              </button>
+            <div className="shrink-0 border-t border-border bg-card p-5 sm:rounded-b-3xl sm:p-6">
+              <div className="flex items-center gap-3">
+                <button onClick={closeDeliveryModal} disabled={submitting} className="flex-1 rounded-xl border border-border py-3 text-sm font-bold text-foreground transition-all hover:bg-muted disabled:opacity-60">
+                  Hủy bỏ
+                </button>
+                <button onClick={() => void handleDeliver()} disabled={submitting} className="flex-[2] rounded-xl bg-primary py-3 text-sm font-black text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-primary/30 disabled:pointer-events-none disabled:opacity-60">
+                  {submitting ? 'Đang giao...' : 'Xác nhận giao két'}
+                </button>
+              </div>
             </div>
           </div>
         </div>,

@@ -11,7 +11,8 @@ const MainLayout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { mustCheckIn, isLocked } = useAttendanceGate();
   const location = useLocation();
-  const isFullscreenContent = location.pathname === '/app/quan-ly-xe/dang-giao';
+  const isFullscreenContent = location.pathname === '/app/quan-ly-xe/dang-giao'
+    || location.pathname === '/app/hang-hoa/in-phieu-ket';
 
   useEffect(() => {
     authApi.getMe().catch(() => undefined);
