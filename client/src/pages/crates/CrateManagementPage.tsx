@@ -1,8 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Boxes, ChevronLeft, History, PackagePlus, RefreshCw, Send, X } from 'lucide-react';
+import { Boxes, ChevronLeft, History, PackagePlus, RefreshCw, Send } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateHistory } from '../../api/cratesApi';
 import { buildCrateHistoryEvents } from './crateHistoryEvents';
 
@@ -18,9 +17,6 @@ const CrateManagementPage: React.FC = () => {
   const [receivers, setReceivers] = useState<CrateAccount[]>([]);
   const [history, setHistory] = useState<CrateHistory>({ intakes: [], allocations: [], deliveries: [] });
   const [loading, setLoading] = useState(true);
-  const [intakeModal, setIntakeModal] = useState<CrateAccount | null>(null);
-  const [intakeForm, setIntakeForm] = useState({ quantity: '', notes: '' });
-  const [intakeSubmitting, setIntakeSubmitting] = useState(false);
   const [historyPage, setHistoryPage] = useState(1);
 
   const loadData = async () => {
@@ -44,39 +40,6 @@ const CrateManagementPage: React.FC = () => {
   useEffect(() => { void loadData(); }, []);
 
   const currentRows = activeTab === 'senders' ? senders : receivers;
-
-  const openIntakeModal = (customer: CrateAccount) => {
-    setIntakeModal(customer);
-    setIntakeForm({ quantity: '', notes: '' });
-  };
-
-  const closeIntakeModal = () => {
-    if (intakeSubmitting) return;
-    setIntakeModal(null);
-    setIntakeForm({ quantity: '', notes: '' });
-  };
-
-  const handleIntake = async () => {
-    if (!intakeModal) return;
-    const quantity = Number(intakeForm.quantity || 0);
-    if (!Number.isInteger(quantity) || quantity <= 0) {
-      toast.error('Số két nhập phải là số nguyên dương');
-      return;
-    }
-    setIntakeSubmitting(true);
-    try {
-      const result = await cratesApi.createIntake({ sender_customer_id: intakeModal.customer_id, quantity, notes: intakeForm.notes || null });
-      toast.success(result?.notification?.status === 'sent' ? 'Đã nhập két và gửi Zalo' : 'Đã nhập két, phiếu Zalo được ghi log');
-      setIntakeModal(null);
-      setIntakeForm({ quantity: '', notes: '' });
-      await loadData();
-      navigate(`/app/hang-hoa/in-phieu-ket?type=intake&id=${result.intake.id}`);
-    } catch (error: unknown) {
-      toast.error(getErrorMessage(error) || 'Nhập két thất bại');
-    } finally {
-      setIntakeSubmitting(false);
-    }
-  };
 
   const recentEvents = useMemo(() => buildCrateHistoryEvents(history), [history]);
   const historyPageCount = Math.max(1, Math.ceil(recentEvents.length / HISTORY_PAGE_SIZE));
@@ -159,7 +122,7 @@ const CrateManagementPage: React.FC = () => {
                   <td className="px-4 py-3 text-right">
                     {activeTab === 'senders' ? (
                       <div className="flex flex-wrap items-center justify-end gap-2">
-                        <button onClick={() => openIntakeModal(row)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 flex items-center gap-1"><PackagePlus size={14} /> Nhập két</button>
+                        <button onClick={() => navigate(`/app/hang-hoa/nhap-ket?senderId=${row.customer_id}`)} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow-sm transition hover:bg-emerald-700 flex items-center gap-1"><PackagePlus size={14} /> Nhập két</button>
                         <button onClick={() => navigate(`/app/hang-hoa/chia-ket?senderId=${row.customer_id}`)} className="rounded-xl border border-border px-3 py-2 text-xs font-bold transition hover:bg-muted">Chia két</button>
                       </div>
                     ) : (
@@ -198,7 +161,7 @@ const CrateManagementPage: React.FC = () => {
               </div>
               {activeTab === 'senders' ? (
                 <div className="grid grid-cols-2 gap-2">
-                  <button onClick={() => openIntakeModal(row)} className="rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-black text-white flex items-center justify-center gap-1"><PackagePlus size={14} /> Nhập két</button>
+                  <button onClick={() => navigate(`/app/hang-hoa/nhap-ket?senderId=${row.customer_id}`)} className="rounded-xl bg-emerald-600 px-3 py-2.5 text-sm font-black text-white flex items-center justify-center gap-1"><PackagePlus size={14} /> Nhập két</button>
                   <button onClick={() => navigate(`/app/hang-hoa/chia-ket?senderId=${row.customer_id}`)} className="rounded-xl border border-border px-3 py-2.5 text-sm font-black text-foreground">Chia két</button>
                 </div>
               ) : (
@@ -236,46 +199,8 @@ const CrateManagementPage: React.FC = () => {
         )}
       </div>
 
-      {intakeModal && createPortal(
-        <div className="fixed inset-0 z-99999 flex items-end md:items-center justify-center p-0 md:p-4">
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm animate-in fade-in" onClick={closeIntakeModal} />
-          <div className="relative w-full max-w-lg rounded-t-3xl md:rounded-2xl border border-border bg-card shadow-2xl animate-in slide-in-from-bottom-6 md:zoom-in-95 fade-in duration-200">
-            <div className="flex items-start justify-between gap-4 border-b border-border p-5">
-              <div>
-                <h3 className="text-lg font-black text-foreground flex items-center gap-2"><PackagePlus className="text-emerald-600" size={20} /> Nhập két</h3>
-                <p className="mt-1 text-sm text-muted-foreground">Khách gửi: <b className="text-foreground">{intakeModal.customer?.name || '-'}</b></p>
-              </div>
-              <button onClick={closeIntakeModal} className="rounded-full p-2 text-muted-foreground hover:bg-muted hover:text-foreground"><X size={18} /></button>
-            </div>
-            <div className="space-y-4 p-5">
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-3">
-                <p className="text-xs font-bold uppercase text-muted-foreground">Đang gửi hiện tại</p>
-                <p className="text-2xl font-black text-emerald-600">{formatNumber(intakeModal.sender_balance)} két</p>
-              </div>
-              <div className="grid gap-3 md:grid-cols-[160px_1fr]">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase text-muted-foreground">Số két nhập</label>
-                  <input type="number" min={1} value={intakeForm.quantity} onChange={event => setIntakeForm(prev => ({ ...prev, quantity: event.target.value }))} placeholder="Số két" className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-bold outline-none focus:border-primary" />
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-xs font-bold uppercase text-muted-foreground">Ghi chú</label>
-                  <input value={intakeForm.notes} onChange={event => setIntakeForm(prev => ({ ...prev, notes: event.target.value }))} placeholder="Ghi chú nhập két" className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none focus:border-primary" />
-                </div>
-              </div>
-            </div>
-            <div className="flex flex-col-reverse gap-2 border-t border-border p-5 md:flex-row md:justify-end">
-              <button onClick={closeIntakeModal} disabled={intakeSubmitting} className="rounded-xl border border-border px-4 py-2.5 text-sm font-bold hover:bg-muted disabled:opacity-60">Hủy</button>
-              <button onClick={() => void handleIntake()} disabled={intakeSubmitting} className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-black text-white hover:bg-emerald-700 disabled:opacity-60">{intakeSubmitting ? 'Đang nhập...' : 'Xác nhận nhập két'}</button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
     </div>
   );
 };
 
 export default CrateManagementPage;
-
-
-

@@ -90,6 +90,7 @@ const LEGACY_ALLOWED_PATHS_BY_ROLE: Record<string, string[]> = {
     '/app/hang-hoa/giao-hang-rau',
     '/app/hang-hoa/kho-rau',
     '/app/hang-hoa/quan-ly-ket',
+    '/app/hang-hoa/nhap-ket',
     '/app/hang-hoa/chia-ket',
     '/app/hang-hoa/giao-ket',
     '/app/hang-hoa/lich-su-ket',
@@ -178,8 +179,3 @@ export const canAccessModuleRoute = (
 
   return canAccessAnyRoute(moduleChildPaths, role, allowedSet);
 };
-
-
-
-
-

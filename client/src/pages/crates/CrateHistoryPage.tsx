@@ -1,12 +1,36 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ChevronLeft, Eye, History, RefreshCw, Search } from 'lucide-react';
 import { cratesApi, type CrateHistory } from '../../api/cratesApi';
+import { DateRangePicker } from '../../components/shared/DateRangePicker';
 import { buildCrateHistoryEvents, type CrateHistoryEventKind } from './crateHistoryEvents';
 
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString('vi-VN') : '-';
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
+const formatDateInput = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const getDayBoundary = (value: string, boundary: 'start' | 'end') => {
+  const [year, month, day] = value.split('-').map(Number);
+  if (!year || !month || !day) return null;
+
+  return boundary === 'start'
+    ? new Date(year, month - 1, day, 0, 0, 0, 0)
+    : new Date(year, month - 1, day, 23, 59, 59, 999);
+};
+
+const getDefaultHistoryStartDate = () => {
+  const date = new Date();
+  date.setDate(date.getDate() - 6);
+  return formatDateInput(date);
+};
+
+const getTodayDate = () => formatDateInput(new Date());
 
 const typeOptions: Array<{ value: 'all' | CrateHistoryEventKind; label: string }> = [
   { value: 'all', label: 'Tất cả thao tác' },
@@ -17,33 +41,44 @@ const typeOptions: Array<{ value: 'all' | CrateHistoryEventKind; label: string }
 
 const CrateHistoryPage: React.FC = () => {
   const navigate = useNavigate();
+  const defaultStartDate = useMemo(() => getDefaultHistoryStartDate(), []);
+  const defaultEndDate = useMemo(() => getTodayDate(), []);
   const [history, setHistory] = useState<CrateHistory>({ intakes: [], allocations: [], deliveries: [] });
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState<'all' | CrateHistoryEventKind>('all');
+  const [startDate, setStartDate] = useState(defaultStartDate);
+  const [endDate, setEndDate] = useState(defaultEndDate);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      setHistory(await cratesApi.getHistory());
+      setHistory(await cratesApi.getHistory(undefined, { start_date: startDate, end_date: endDate }));
     } catch (error: unknown) {
       toast.error(getErrorMessage(error) || 'Không tải được lịch sử két');
     } finally {
       setLoading(false);
     }
-  };
+  }, [endDate, startDate]);
 
-  useEffect(() => { void loadData(); }, []);
+  useEffect(() => { void loadData(); }, [loadData]);
 
   const allEvents = useMemo(() => buildCrateHistoryEvents(history), [history]);
   const filteredEvents = useMemo(() => {
     const keyword = searchTerm.trim().toLowerCase();
+    const fromDate = startDate ? getDayBoundary(startDate, 'start') : null;
+    const toDate = endDate ? getDayBoundary(endDate, 'end') : null;
+
     return allEvents.filter(event => {
       const matchesType = typeFilter === 'all' || event.kind === typeFilter;
       const matchesSearch = !keyword || event.searchableText.includes(keyword);
-      return matchesType && matchesSearch;
+      const eventDate = new Date(event.at);
+      const matchesDateFrom = !fromDate || eventDate >= fromDate;
+      const matchesDateTo = !toDate || eventDate <= toDate;
+
+      return matchesType && matchesSearch && matchesDateFrom && matchesDateTo;
     });
-  }, [allEvents, searchTerm, typeFilter]);
+  }, [allEvents, endDate, searchTerm, startDate, typeFilter]);
 
   return (
     <div className="space-y-4 md:space-y-5 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -59,8 +94,8 @@ const CrateHistoryPage: React.FC = () => {
       </div>
 
       <div className="rounded-2xl border border-border bg-card p-3 md:p-4 shadow-sm">
-        <div className="grid gap-3 md:grid-cols-[1fr_220px]">
-          <label className="relative block">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <label className="relative block min-w-0 flex-1">
             <Search size={17} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
               value={searchTerm}
@@ -69,7 +104,26 @@ const CrateHistoryPage: React.FC = () => {
               className="h-11 w-full rounded-xl border border-border bg-background pl-10 pr-3 text-sm outline-none focus:border-primary"
             />
           </label>
-          <select value={typeFilter} onChange={event => setTypeFilter(event.target.value as 'all' | CrateHistoryEventKind)} className="h-11 rounded-xl border border-border bg-background px-3 text-sm font-bold outline-none focus:border-primary">
+          <div className="flex w-full items-center gap-2 lg:w-[300px]">
+            <DateRangePicker
+              initialDateFrom={startDate}
+              initialDateTo={endDate}
+              onUpdate={(values) => {
+                setStartDate(values.range.from ? formatDateInput(values.range.from) : '');
+                setEndDate(values.range.to ? formatDateInput(values.range.to) : '');
+              }}
+              className="h-11 w-full justify-center rounded-xl border-border bg-background px-3 text-sm font-bold shadow-none md:w-full"
+            />
+            {(startDate !== defaultStartDate || endDate !== defaultEndDate) ? (
+              <button
+                onClick={() => { setStartDate(defaultStartDate); setEndDate(defaultEndDate); }}
+                className="h-11 shrink-0 rounded-xl border border-border bg-background px-3 text-xs font-black text-muted-foreground transition hover:bg-muted"
+              >
+                7 ngày
+              </button>
+            ) : null}
+          </div>
+          <select value={typeFilter} onChange={event => setTypeFilter(event.target.value as 'all' | CrateHistoryEventKind)} className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-bold outline-none focus:border-primary lg:w-[220px]">
             {typeOptions.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
         </div>

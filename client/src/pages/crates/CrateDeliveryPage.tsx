@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { AlertCircle, Camera, CheckCircle, ImagePlus, Package, RefreshCw, Truck, X } from 'lucide-react';
+import { AlertCircle, Calendar, Camera, CheckCircle, ImagePlus, Package, RefreshCw, Truck, X } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateDelivery } from '../../api/cratesApi';
 import { uploadApi } from '../../api/uploadApi';
 import EmptyState from '../../components/shared/EmptyState';
@@ -14,15 +14,102 @@ import { useVehicles } from '../../hooks/queries/useVehicles';
 import type { Vehicle } from '../../types';
 
 const formatNumber = (value?: number | null) => new Intl.NumberFormat('vi-VN').format(value || 0);
+const formatDateTime = (value?: string | null) => value
+  ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Bangkok', hour12: false })
+  : '-';
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
 
 type DeliveryStatus = 'can_giao' | 'da_giao' | 'dang_no' | 'all';
 type DeliveryForm = { quantity: string; notes: string; files: File[] };
-type CrateDeliveryRow = CrateAccount & { delivered_total?: number; isDeliveredHistory?: boolean };
+type CrateDeliveryRow = CrateAccount & { delivered_total?: number; isDeliveredHistory?: boolean; deliveryDateKey?: string; rowKey?: string };
 
 type DeliveryModalState = {
   receiver: CrateAccount;
   vehicleId: string | null;
+};
+
+const CrateDeliveryTooltipContent: React.FC<{
+  delivery: CrateDelivery;
+  row: CrateDeliveryRow;
+  vehicle: Vehicle;
+  style: React.CSSProperties;
+}> = ({ delivery, row, vehicle, style }) => {
+  const deliveredAt = formatDateTime(delivery.delivered_at || delivery.created_at);
+  const driverName = delivery.driver?.full_name || 'Tài xế';
+  const customerName = delivery.receiver?.name || row.customer?.name || '-';
+
+  return (
+    <div className="fixed z-[9999] pointer-events-none" style={style}>
+      <div className="bg-popover border border-border rounded-xl shadow-xl p-3 min-w-[190px] text-left">
+        <div className="flex items-center gap-1.5 mb-2 pb-1.5 border-b border-border">
+          <Truck size={13} className="text-blue-500 shrink-0" />
+          <span className="text-[12px] font-black text-foreground">{vehicle.license_plate}</span>
+        </div>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10px] text-muted-foreground font-medium">Số lượng</span>
+            <span className="text-[12px] font-black text-blue-600 dark:text-blue-400 tabular-nums">{formatNumber(delivery.quantity)}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10px] text-muted-foreground font-medium">Ngày giờ giao</span>
+            <span className="text-[11px] font-bold text-foreground tabular-nums">{deliveredAt}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10px] text-muted-foreground font-medium">Tài xế</span>
+            <span className="text-[11px] font-bold text-foreground">{driverName}</span>
+          </div>
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[10px] text-muted-foreground font-medium">Khách</span>
+            <span className="text-[11px] font-bold text-foreground">{customerName}</span>
+          </div>
+        </div>
+      </div>
+      <div className="w-2.5 h-2.5 bg-popover border-b border-r border-border rotate-45 mx-auto -mt-1.5 relative z-10" />
+    </div>
+  );
+};
+
+const CrateDeliveryQuantityTooltip: React.FC<{ delivery: CrateDelivery; row: CrateDeliveryRow; vehicle: Vehicle; children: React.ReactNode }> = ({ delivery, row, vehicle, children }) => {
+  const [visible, setVisible] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0 });
+  const wrapperRef = useRef<HTMLSpanElement>(null);
+
+  const handleMouseEnter = useCallback(() => {
+    if (!wrapperRef.current) return;
+    const rect = wrapperRef.current.getBoundingClientRect();
+    const tooltipWidth = 190;
+    const padding = 8;
+    let left = rect.left + window.scrollX + rect.width / 2;
+    const viewportWidth = window.innerWidth;
+
+    if (left + tooltipWidth / 2 > viewportWidth - padding) left = viewportWidth - tooltipWidth / 2 - padding;
+    if (left - tooltipWidth / 2 < padding) left = tooltipWidth / 2 + padding;
+
+    setPos({ top: rect.top + window.scrollY - 8, left });
+    setVisible(true);
+  }, []);
+
+  const handleMouseLeave = useCallback(() => setVisible(false), []);
+
+  return (
+    <span
+      ref={wrapperRef}
+      className="inline-flex flex-col items-center justify-center"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+    >
+      {children}
+      {visible && createPortal(
+        <CrateDeliveryTooltipContent
+          delivery={delivery}
+          row={row}
+          vehicle={vehicle}
+          style={{ top: pos.top, left: pos.left, transform: 'translate(-50%, -100%)' }}
+        />,
+        document.body
+      )}
+    </span>
+  );
 };
 
 const STATUS_LABELS: Record<DeliveryStatus, string> = {
@@ -40,6 +127,24 @@ const STATUS_COLORS: Record<DeliveryStatus, { bg: string; text: string }> = {
 };
 
 const getDefaultForm = (): DeliveryForm => ({ quantity: '', notes: '', files: [] });
+
+const getDeliveryDateKey = (delivery: CrateDelivery) => {
+  const date = new Date(delivery.delivered_at || delivery.created_at);
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+
+const formatDeliveryDateKey = (dateKey?: string) => {
+  if (!dateKey) return '';
+  const [year, month, day] = dateKey.split('-');
+  return [day, month, year].filter(Boolean).join('/');
+};
 
 const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'vegetable') => {
   if (!vehicle.goods_categories || vehicle.goods_categories.length === 0) return true;
@@ -82,19 +187,42 @@ const CrateDeliveryPage: React.FC = () => {
     () => (vehicles || []).filter((vehicle) => vehicleSupportsGoodsCategory(vehicle, 'vegetable')),
     [vehicles]
   );
+  const normalizedRole = (user?.role || '').toLowerCase();
+  const isLoader = normalizedRole.includes('lo_xe') || normalizedRole.includes('lơ xe');
+  const isDriver =
+    normalizedRole === 'driver' || normalizedRole.includes('tai_xe') || normalizedRole.includes('tài xế') || normalizedRole.includes('driver');
+  const isDriverOrLoader = isDriver || isLoader;
+  const myVehicleIds = useMemo(
+    () => eligibleVehicles
+      .filter((vehicle) =>
+        vehicle.driver_id === user?.id ||
+        vehicle.in_charge_id === user?.id ||
+        (user?.full_name && vehicle.profiles?.full_name === user.full_name) ||
+        (user?.full_name && vehicle.responsible_profile?.full_name === user.full_name)
+      )
+      .map((vehicle) => vehicle.id),
+    [eligibleVehicles, user]
+  );
+  const myVehicleIdSet = useMemo(() => new Set(myVehicleIds), [myVehicleIds]);
+  const displayedVehicles = useMemo(
+    () => isDriverOrLoader ? eligibleVehicles.filter((vehicle) => myVehicleIdSet.has(vehicle.id)) : eligibleVehicles,
+    [eligibleVehicles, isDriverOrLoader, myVehicleIdSet]
+  );
 
-  const activeRows = useMemo(() => receivers.filter(row => row.receiver_pending > 0 || row.receiver_debt > 0), [receivers]);
+  const activeRows = useMemo<CrateDeliveryRow[]>(() => receivers.filter(row => row.receiver_pending > 0 || row.receiver_debt > 0), [receivers]);
 
   const deliveredRows = useMemo<CrateDeliveryRow[]>(() => {
-    const byReceiver = new Map<string, CrateDeliveryRow>();
+    const byReceiverDate = new Map<string, CrateDeliveryRow>();
     for (const delivery of deliveries) {
-      const existing = byReceiver.get(delivery.receiver_customer_id);
+      const deliveryDateKey = getDeliveryDateKey(delivery);
+      const rowKey = `${delivery.receiver_customer_id}:${deliveryDateKey}`;
+      const existing = byReceiverDate.get(rowKey);
       if (existing) {
         existing.delivered_total = (existing.delivered_total || 0) + delivery.quantity;
         continue;
       }
       const account = receivers.find(row => row.customer_id === delivery.receiver_customer_id);
-      byReceiver.set(delivery.receiver_customer_id, {
+      byReceiverDate.set(rowKey, {
         customer_id: delivery.receiver_customer_id,
         is_sender: account?.is_sender || false,
         is_receiver: true,
@@ -106,16 +234,20 @@ const CrateDeliveryPage: React.FC = () => {
         customer: (account?.customer || delivery.receiver) as CrateAccount['customer'],
         delivered_total: delivery.quantity,
         isDeliveredHistory: true,
+        deliveryDateKey,
+        rowKey,
       });
     }
-    return Array.from(byReceiver.values()).sort((a, b) => (b.delivered_total || 0) - (a.delivered_total || 0));
+    return Array.from(byReceiverDate.values()).sort((a, b) => {
+      const dateCompare = (b.deliveryDateKey || '').localeCompare(a.deliveryDateKey || '');
+      if (dateCompare !== 0) return dateCompare;
+      return (b.delivered_total || 0) - (a.delivered_total || 0);
+    });
   }, [deliveries, receivers]);
 
   const visibleRows = useMemo<CrateDeliveryRow[]>(() => {
-    const merged = new Map<string, CrateDeliveryRow>();
-    for (const row of activeRows) merged.set(row.customer_id, row);
-    for (const row of deliveredRows) merged.set(row.customer_id, { ...row, ...merged.get(row.customer_id), delivered_total: row.delivered_total, isDeliveredHistory: row.isDeliveredHistory });
-    return Array.from(merged.values());
+    const activeWithKeys = activeRows.map(row => ({ ...row, rowKey: `active:${row.customer_id}` }));
+    return [...activeWithKeys, ...deliveredRows];
   }, [activeRows, deliveredRows]);
 
   const statusCounts = useMemo(() => ({
@@ -127,7 +259,7 @@ const CrateDeliveryPage: React.FC = () => {
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase();
-    const sourceRows = statusFilter === 'da_giao' ? deliveredRows : visibleRows;
+    const sourceRows = statusFilter === 'da_giao' ? deliveredRows : statusFilter === 'all' ? visibleRows : activeRows;
     return sourceRows
       .filter(row => {
         if (statusFilter === 'can_giao') return row.receiver_pending > 0;
@@ -141,22 +273,77 @@ const CrateDeliveryPage: React.FC = () => {
         .toLowerCase()
         .includes(query))
       .sort((a, b) => {
-        if (statusFilter === 'da_giao') return (b.delivered_total || 0) - (a.delivered_total || 0);
+        if (statusFilter === 'da_giao' || statusFilter === 'all') {
+          const aIsActive = !a.deliveryDateKey;
+          const bIsActive = !b.deliveryDateKey;
+          if (statusFilter === 'all' && aIsActive !== bIsActive) return aIsActive ? -1 : 1;
+          const dateCompare = (b.deliveryDateKey || '').localeCompare(a.deliveryDateKey || '');
+          if (dateCompare !== 0) return dateCompare;
+          return (b.delivered_total || 0) - (a.delivered_total || 0);
+        }
         return (b.receiver_pending - a.receiver_pending) || (b.receiver_debt - a.receiver_debt);
       });
-  }, [deliveredRows, visibleRows, search, statusFilter]);
+  }, [activeRows, deliveredRows, visibleRows, search, statusFilter]);
 
-  const deliveredByReceiverVehicle = useMemo(() => {
-    return deliveries.reduce<Record<string, number>>((acc, delivery) => {
-      if (!delivery.vehicle_id) return acc;
-      const key = `${delivery.receiver_customer_id}:${delivery.vehicle_id}`;
-      acc[key] = (acc[key] || 0) + delivery.quantity;
+  const shouldGroupByDeliveryDate = statusFilter === 'da_giao' || statusFilter === 'all';
+
+  const groupedFilteredRows = useMemo(() => {
+    return filteredRows.reduce<Record<string, CrateDeliveryRow[]>>((acc, row) => {
+      const key = shouldGroupByDeliveryDate && row.deliveryDateKey ? row.deliveryDateKey : '__active__';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
       return acc;
     }, {});
+  }, [filteredRows, shouldGroupByDeliveryDate]);
+
+  const sortedFilteredRowGroupKeys = useMemo(() => {
+    return Object.keys(groupedFilteredRows).sort((a, b) => {
+      if (a === '__active__') return -1;
+      if (b === '__active__') return 1;
+      return b.localeCompare(a);
+    });
+  }, [groupedFilteredRows]);
+
+  const deliveriesByReceiverVehicle = useMemo(() => {
+    return [...deliveries]
+      .sort((a, b) => new Date(a.delivered_at || a.created_at).getTime() - new Date(b.delivered_at || b.created_at).getTime())
+      .reduce<Record<string, CrateDelivery[]>>((acc, delivery) => {
+        if (!delivery.vehicle_id) return acc;
+        const key = `${delivery.receiver_customer_id}:${delivery.vehicle_id}`;
+        acc[key] = [...(acc[key] || []), delivery];
+        return acc;
+      }, {});
   }, [deliveries]);
 
+  const deliveriesByReceiverVehicleDate = useMemo(() => {
+    return [...deliveries]
+      .sort((a, b) => new Date(a.delivered_at || a.created_at).getTime() - new Date(b.delivered_at || b.created_at).getTime())
+      .reduce<Record<string, CrateDelivery[]>>((acc, delivery) => {
+        if (!delivery.vehicle_id) return acc;
+        const key = `${delivery.receiver_customer_id}:${delivery.vehicle_id}:${getDeliveryDateKey(delivery)}`;
+        acc[key] = [...(acc[key] || []), delivery];
+        return acc;
+      }, {});
+  }, [deliveries]);
+
+  const getDeliveryEntriesForRowVehicle = (row: CrateDeliveryRow, vehicleId: string) => {
+    const baseKey = `${row.customer_id}:${vehicleId}`;
+    return row.deliveryDateKey
+      ? deliveriesByReceiverVehicleDate[`${baseKey}:${row.deliveryDateKey}`] || []
+      : deliveriesByReceiverVehicle[baseKey] || [];
+  };
+
   const openDeliveryModal = (receiver: CrateDeliveryRow, vehicleId?: string | null) => {
-    setDeliveryModal({ receiver, vehicleId: vehicleId || null });
+    const resolvedVehicleId = vehicleId || (displayedVehicles.length === 1 ? displayedVehicles[0].id : null);
+    if (!resolvedVehicleId) {
+      toast.error('Vui lòng chọn xe giao két');
+      return;
+    }
+    if (!displayedVehicles.some((vehicle) => vehicle.id === resolvedVehicleId)) {
+      toast.error('Bạn chỉ được giao bằng xe mình phụ trách');
+      return;
+    }
+    setDeliveryModal({ receiver, vehicleId: resolvedVehicleId });
     setDeliveryForm({ ...getDefaultForm(), quantity: receiver.receiver_pending > 0 ? String(receiver.receiver_pending) : '' });
   };
 
@@ -168,6 +355,10 @@ const CrateDeliveryPage: React.FC = () => {
 
   const handleDeliver = async () => {
     if (!deliveryModal) return;
+    if (!deliveryModal.vehicleId || !displayedVehicles.some((vehicle) => vehicle.id === deliveryModal.vehicleId)) {
+      toast.error('Vui lòng chọn xe giao két hợp lệ');
+      return;
+    }
     const quantity = Number(deliveryForm.quantity || 0);
     if (!Number.isInteger(quantity) || quantity <= 0) {
       toast.error('Số két giao phải là số nguyên dương');
@@ -301,16 +492,15 @@ const CrateDeliveryPage: React.FC = () => {
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-24 border-r border-border">Thao tác</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Loại</th>
                     <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left min-w-48 border-r border-border">Người nhận két</th>
-                    <th className="px-4 py-3 text-[11px] font-bold uppercase tracking-tight text-left min-w-60 border-r border-border">Địa chỉ</th>
                     <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Trạng thái</th>
                     <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Chờ giao</th>
                     <th className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-20 border-r border-border">Nợ két</th>
-                    {eligibleVehicles.map(vehicle => (
+                    {displayedVehicles.map(vehicle => (
                       <th key={vehicle.id} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-28 border-r border-border last:border-r-0">
                         {vehicle.license_plate}
                       </th>
                     ))}
-                    {eligibleVehicles.length === 0 && ['1', '2', '3', '4', '5', '6', '7', '8', 'ba', 'kho'].map(col => (
+                    {displayedVehicles.length === 0 && ['1', '2', '3', '4', '5', '6', '7', '8', 'ba', 'kho'].map(col => (
                       <th key={col} className="px-2 py-3 text-[11px] font-bold uppercase tracking-tight text-center w-12 border-r border-border last:border-r-0">
                         {col}
                       </th>
@@ -319,7 +509,7 @@ const CrateDeliveryPage: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-border">
                   <tr className="bg-muted/80 dark:bg-muted/40 border-y border-border shadow-sm">
-                    <td colSpan={8 + (eligibleVehicles.length || 10)} className="px-4 py-2.5">
+                    <td colSpan={7 + (displayedVehicles.length || 10)} className="px-4 py-2.5">
                       <div className="flex items-center gap-2">
                         <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary">
                           <Package size={14} />
@@ -329,8 +519,23 @@ const CrateDeliveryPage: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                  {filteredRows.map(row => (
-                    <tr key={row.customer_id} className="group hover:bg-muted/30 transition-colors">
+                  {sortedFilteredRowGroupKeys.map((groupKey) => (
+                    <React.Fragment key={groupKey}>
+                      {shouldGroupByDeliveryDate && groupKey !== '__active__' && (
+                        <tr className="bg-muted/80 dark:bg-muted/40 border-y border-border shadow-sm overflow-hidden">
+                          <td colSpan={7 + (displayedVehicles.length || 10)} className="px-4 py-2.5">
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary">
+                                <Calendar size={14} />
+                              </div>
+                              <span className="text-[13px] font-black text-foreground uppercase tracking-wider">Ngày giao: {formatDeliveryDateKey(groupKey)}</span>
+                              <span className="text-[11px] font-bold text-muted-foreground">{formatNumber(groupedFilteredRows[groupKey].length)} khách · {formatNumber(groupedFilteredRows[groupKey].reduce((sum, row) => sum + (row.delivered_total || 0), 0))} két</span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      {groupedFilteredRows[groupKey].map(row => (
+                    <tr key={row.rowKey || row.customer_id} className="group hover:bg-muted/30 transition-colors">
                       <td className="px-3 py-3 border-r border-border text-center">
                         <input type="checkbox" disabled className="w-4 h-4 rounded border-border opacity-40" />
                       </td>
@@ -352,12 +557,12 @@ const CrateDeliveryPage: React.FC = () => {
                         <div className="font-black text-[13px] text-foreground">{row.customer?.name || '-'}</div>
                         <div className="text-[12px] text-muted-foreground">{row.customer?.phone || '-'}</div>
                       </td>
-                      <td className="px-4 py-3 border-r border-border text-[13px] text-muted-foreground">{row.customer?.address || 'Chưa có địa chỉ'}</td>
                       <td className="px-2 py-3 border-r border-border text-center">{renderStatusBadge(row)}</td>
                       <td className="px-2 py-3 border-r border-border text-center font-black text-primary">{formatNumber(row.receiver_pending)}</td>
                       <td className="px-2 py-3 border-r border-border text-center font-black text-red-600">{formatNumber(row.receiver_debt)}</td>
-                      {eligibleVehicles.map(vehicle => {
-                        const deliveredQty = deliveredByReceiverVehicle[`${row.customer_id}:${vehicle.id}`] || 0;
+                      {displayedVehicles.map(vehicle => {
+                        const deliveryEntries = getDeliveryEntriesForRowVehicle(row, vehicle.id);
+                        const hasDeliveries = deliveryEntries.length > 0;
                         const canOpen = row.receiver_pending > 0 || row.receiver_debt > 0;
                         return (
                           <td
@@ -365,14 +570,25 @@ const CrateDeliveryPage: React.FC = () => {
                             onClick={() => canOpen && openDeliveryModal(row, vehicle.id)}
                             className={clsx(
                               'px-1 py-1 text-[13px] text-center tabular-nums border-r border-border last:border-r-0 transition-all relative group/cell',
-                              deliveredQty > 0 ? 'font-bold text-blue-600 dark:text-blue-500 bg-blue-500/10' : 'text-muted-foreground/30',
+                              hasDeliveries ? 'font-bold text-blue-600 dark:text-blue-500 bg-blue-500/10' : 'text-muted-foreground/30',
                               canOpen && 'cursor-pointer hover:bg-primary/5 active:scale-95'
                             )}
-                            title={`Giao két bằng xe ${vehicle.license_plate}`}
+                            title={hasDeliveries ? undefined : `Giao két bằng xe ${vehicle.license_plate}`}
                           >
-                            {deliveredQty > 0 ? (
+                            {hasDeliveries ? (
                               <div className="flex flex-col items-center justify-center gap-0.5">
-                                <span>{formatNumber(deliveredQty)}</span>
+                                <span className="inline-flex flex-wrap items-center justify-center gap-x-1">
+                                  {deliveryEntries.map((delivery, index) => (
+                                    <React.Fragment key={delivery.id}>
+                                      {index > 0 && <span className="text-blue-400">+</span>}
+                                      <CrateDeliveryQuantityTooltip delivery={delivery} row={row} vehicle={vehicle}>
+                                        <span className="rounded px-0.5 underline decoration-dotted underline-offset-2 transition-colors hover:bg-blue-500/10">
+                                          {formatNumber(delivery.quantity)}
+                                        </span>
+                                      </CrateDeliveryQuantityTooltip>
+                                    </React.Fragment>
+                                  ))}
+                                </span>
                                 <span className="inline-flex items-center gap-0.5 rounded-sm bg-green-500/10 px-1 text-[9px] font-black text-green-600">
                                   <CheckCircle size={8} strokeWidth={3} /> Giao
                                 </span>
@@ -383,49 +599,82 @@ const CrateDeliveryPage: React.FC = () => {
                           </td>
                         );
                       })}
-                      {eligibleVehicles.length === 0 && ['1', '2', '3', '4', '5', '6', '7', '8', 'ba', 'kho'].map(col => (
+                      {displayedVehicles.length === 0 && ['1', '2', '3', '4', '5', '6', '7', '8', 'ba', 'kho'].map(col => (
                         <td key={col} className="px-1 py-1 text-center text-muted-foreground/20 border-r border-border last:border-r-0">○</td>
                       ))}
                     </tr>
+                      ))}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
             </div>
 
             <div className="md:hidden p-2.5 space-y-3">
-              {filteredRows.map(row => (
-                <div key={row.customer_id} className="rounded-2xl border border-border bg-background p-4 space-y-3 shadow-sm">
-                  <div className="flex justify-between gap-3">
-                    <div>
-                      <h2 className="font-black text-lg">{row.customer?.name || '-'}</h2>
-                      <p className="text-sm text-muted-foreground">{row.customer?.phone || '-'} · {row.customer?.address || 'Chưa có địa chỉ'}</p>
+              {sortedFilteredRowGroupKeys.map((groupKey) => (
+                <div key={`mobile-${groupKey}`} className="flex flex-col gap-2.5">
+                  {shouldGroupByDeliveryDate && groupKey !== '__active__' && (
+                    <div className="flex items-center gap-2 sticky top-0 bg-muted/80 dark:bg-muted/40 backdrop-blur-md p-3 -mx-2.5 px-5 z-10 border-b border-border shadow-sm">
+                      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary shrink-0">
+                        <Calendar size={14} />
+                      </div>
+                      <span className="text-[13px] font-black text-foreground uppercase tracking-wider">
+                        Ngày giao: {formatDeliveryDateKey(groupKey)}
+                      </span>
                     </div>
-                    <div className="text-right shrink-0">
-                      <p className="text-xs text-muted-foreground font-bold uppercase">Chờ / Nợ</p>
-                      <p className="font-black"><span className="text-blue-600">{formatNumber(row.receiver_pending)}</span> / <span className="text-red-600">{formatNumber(row.receiver_debt)}</span></p>
+                  )}
+                  {groupedFilteredRows[groupKey].map(row => (
+                    <div key={row.rowKey || row.customer_id} className="rounded-2xl border border-border bg-background p-4 space-y-3 shadow-sm">
+                      <div className="flex justify-between gap-3">
+                        <div>
+                          <h2 className="font-black text-lg">{row.customer?.name || '-'}</h2>
+                          <p className="text-sm text-muted-foreground">{row.customer?.phone || '-'}</p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="text-xs text-muted-foreground font-bold uppercase">Chờ / Nợ</p>
+                          <p className="font-black"><span className="text-blue-600">{formatNumber(row.receiver_pending)}</span> / <span className="text-red-600">{formatNumber(row.receiver_debt)}</span></p>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        {displayedVehicles.slice(0, 6).map(vehicle => {
+                          const deliveryEntries = getDeliveryEntriesForRowVehicle(row, vehicle.id);
+                          const hasDeliveries = deliveryEntries.length > 0;
+                          return (
+                            <button
+                              key={vehicle.id}
+                              onClick={() => openDeliveryModal(row, vehicle.id)}
+                              className={clsx(
+                                'rounded-xl border border-border px-3 py-2 text-left text-xs font-bold transition-all',
+                                hasDeliveries ? 'bg-blue-500/10 text-blue-600' : 'bg-muted/20 text-muted-foreground'
+                              )}
+                            >
+                              <span className="block text-foreground">{vehicle.license_plate}</span>
+                              <span>
+                                {hasDeliveries ? (
+                                  <>
+                                    Đã giao{' '}
+                                    {deliveryEntries.map((delivery, index) => (
+                                      <React.Fragment key={delivery.id}>
+                                        {index > 0 && <span className="text-blue-400"> + </span>}
+                                        <CrateDeliveryQuantityTooltip delivery={delivery} row={row} vehicle={vehicle}>
+                                          <span className="rounded px-0.5 underline decoration-dotted underline-offset-2 transition-colors hover:bg-blue-500/10">
+                                            {formatNumber(delivery.quantity)}
+                                          </span>
+                                        </CrateDeliveryQuantityTooltip>
+                                      </React.Fragment>
+                                    ))}
+                                  </>
+                                ) : 'Chọn xe giao'}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <button onClick={() => openDeliveryModal(row)} className="w-full px-4 py-3.5 rounded-xl bg-primary text-white font-black hover:bg-primary/90">
+                        Xác nhận giao két
+                      </button>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    {eligibleVehicles.slice(0, 6).map(vehicle => {
-                      const deliveredQty = deliveredByReceiverVehicle[`${row.customer_id}:${vehicle.id}`] || 0;
-                      return (
-                        <button
-                          key={vehicle.id}
-                          onClick={() => openDeliveryModal(row, vehicle.id)}
-                          className={clsx(
-                            'rounded-xl border border-border px-3 py-2 text-left text-xs font-bold transition-all',
-                            deliveredQty > 0 ? 'bg-blue-500/10 text-blue-600' : 'bg-muted/20 text-muted-foreground'
-                          )}
-                        >
-                          <span className="block text-foreground">{vehicle.license_plate}</span>
-                          <span>{deliveredQty > 0 ? `Đã giao ${formatNumber(deliveredQty)}` : 'Chọn xe giao'}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <button onClick={() => openDeliveryModal(row)} className="w-full px-4 py-3.5 rounded-xl bg-primary text-white font-black hover:bg-primary/90">
-                    Xác nhận giao két
-                  </button>
+                  ))}
                 </div>
               ))}
             </div>

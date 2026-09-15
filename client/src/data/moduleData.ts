@@ -3,7 +3,7 @@ import {
   Warehouse, Download, Upload, Truck as DeliveryIcon,
   Banknote, Car, CalendarDays, ClipboardList, ClipboardCheck, DollarSign, FileText, Settings, Settings2, MapPin,
   Send, Store, Receipt, History, Heart,
-  CirclePlus, CheckCircle2, Boxes,
+  CirclePlus, CheckCircle2, Boxes, PackagePlus,
 } from 'lucide-react';
 import type { ModuleCardProps } from '../components/ui/ModuleCard';
 
@@ -42,6 +42,7 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
       section: 'Két',
       items: [
         { icon: Boxes, title: 'Quản lý két', description: 'Theo dõi khách gửi két, nhận két và lịch sử két.', colorScheme: 'emerald', path: '/app/hang-hoa/quan-ly-ket' },
+        { icon: PackagePlus, title: 'Nhập két', description: 'Nhập thêm két cho khách gửi và tạo phiếu nhập.', colorScheme: 'emerald', path: '/app/hang-hoa/nhap-ket' },
         { icon: Send, title: 'Chia két', description: 'Chia két từ khách gửi sang khách nhận.', colorScheme: 'blue', path: '/app/hang-hoa/chia-ket' },
         { icon: DeliveryIcon, title: 'Giao két', description: 'Tài xế xác nhận giao két cho khách nhận.', colorScheme: 'orange', path: '/app/hang-hoa/giao-ket' },
         { icon: History, title: 'Lịch sử két', description: 'Tra cứu toàn bộ nhập, chia và giao két.', colorScheme: 'slate', path: '/app/hang-hoa/lich-su-ket' },
@@ -194,4 +195,3 @@ export const moduleData: Record<string, { section: string; items: ModuleCardWith
     },
   ],
 };
-

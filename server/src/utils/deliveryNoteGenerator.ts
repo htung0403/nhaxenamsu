@@ -120,12 +120,15 @@ export class DeliveryNoteGenerator {
     const tableWidth = width - margin * 2;
     const rowHeight = 40;
     const rows = data.rows.length ? data.rows.slice(0, 4) : [{ time: '-', quantity: '-', content: '-', partner: '-', balance: '-', note: '-' }];
+    const isIntakeReceipt = data.title === 'Phiếu nhập két' || data.receiptType === 'Nhập két';
+    const isAllocationReceipt = data.receiptType === 'Chia két' || data.receiptType === 'Nhận két';
+    const isDeliveryReceipt = data.title === 'Phiếu giao két';
     const height = margin + rowHeight * (4 + rows.length) + margin;
     const font = "'DejaVu Sans', Arial, sans-serif";
     const titleFontSize = 21;
     const fontSize = 16;
     const smallFontSize = 15;
-    const colWidths = [95, 85, 170, 220, 220, 110];
+    const colWidths = isIntakeReceipt ? [240, 240, 170, 250] : isAllocationReceipt ? [175, 190, 120, 230, 185] : isDeliveryReceipt ? [240, 160, 260, 240] : [95, 85, 170, 220, 220, 110];
     const colXs = colWidths.reduce<number[]>((acc, current, index) => {
       acc.push(index === 0 ? margin : acc[index - 1] + colWidths[index - 1]);
       return acc;
@@ -143,19 +146,48 @@ export class DeliveryNoteGenerator {
 
     const rowSvg = rows.map((row, rowIndex) => {
       const y = margin + rowHeight * (4 + rowIndex);
-      const values = [
-        this.fitCellText(row.time, 10),
-        this.fitCellText(row.quantity, 8),
-        this.fitCellText(row.content, 18),
-        this.fitCellText(row.partner || '-', 24),
-        this.fitCellText(row.balance, 26),
-        this.fitCellText(row.note || '-', 14),
-      ];
-      return values.map((value, index) => cell(colXs[index], y, colWidths[index], rowHeight, value, { max: [10, 8, 18, 24, 26, 14][index] })).join('');
+      const values = isIntakeReceipt
+        ? [
+          this.fitCellText(data.date, 24),
+          this.fitCellText(row.content, 18),
+          this.fitCellText(row.quantity, 10),
+          this.fitCellText(row.balance, 26),
+        ]
+        : isAllocationReceipt
+          ? [
+            this.fitCellText(data.date, 24),
+            this.fitCellText(row.partner || '-', 20),
+            this.fitCellText(row.quantity, 10),
+            this.fitCellText(row.content, 20),
+            this.fitCellText(row.balance, 18),
+          ]
+          : isDeliveryReceipt
+            ? [
+              this.fitCellText(data.date, 24),
+              this.fitCellText(row.quantity, 10),
+              this.fitCellText(row.note || '-', 24),
+              this.fitCellText(row.balance, 18),
+            ]
+            : [
+            this.fitCellText(row.time, 10),
+            this.fitCellText(row.quantity, 8),
+            this.fitCellText(row.content, 18),
+            this.fitCellText(row.partner || '-', 24),
+            this.fitCellText(row.balance, 26),
+            this.fitCellText(row.note || '-', 14),
+          ];
+      const maxes = isIntakeReceipt ? [24, 18, 10, 26] : isAllocationReceipt ? [24, 20, 10, 24, 18] : isDeliveryReceipt ? [24, 10, 24, 18] : [10, 8, 18, 24, 26, 14];
+      return values.map((value, index) => cell(colXs[index], y, colWidths[index], rowHeight, value, { max: maxes[index] })).join('');
     }).join('');
 
     const headerY = margin + rowHeight * 3;
-    const headers = ['Giờ', 'Số két', 'Nội dung', 'Liên quan', 'Số dư sau', 'Ghi chú'];
+    const headers = isIntakeReceipt
+      ? ['Ngày giờ', 'Nội dung', 'Số lượng', 'Tổng số két hiện tại']
+      : isAllocationReceipt
+        ? ['Ngày giờ', data.receiptType === 'Nhận két' ? 'Người gửi' : 'Người nhận', 'Số lượng', 'Ghi chú', data.receiptType === 'Nhận két' ? 'Két chờ giao' : 'Két còn gửi']
+        : isDeliveryReceipt
+          ? ['Ngày giờ', 'Số lượng', 'Ghi chú', 'Két còn chờ giao']
+          : ['Giờ', 'Số két', 'Nội dung', 'Liên quan', 'Số dư sau', 'Ghi chú'];
     const headerSvg = headers.map((header, index) => cell(colXs[index], headerY, colWidths[index], rowHeight, header, { bold: true, max: 12 })).join('');
     const shopName = this.escapeXml(data.shopName || 'Nhà xe Năm Sự');
     const title = this.escapeXml(data.title || 'Phiếu két');
@@ -163,6 +195,16 @@ export class DeliveryNoteGenerator {
     const date = this.escapeXml(this.fitCellText(data.date, 24));
     const staffName = this.escapeXml(this.fitCellText(data.staffName || '-', 26));
     const receiptType = this.escapeXml(this.fitCellText(data.receiptType, 24));
+    const metaSvg = isIntakeReceipt || isAllocationReceipt
+      ? [
+        cell(margin, margin + rowHeight * 2, tableWidth / 2, rowHeight, `Ngày: ${date}`, { anchor: 'start', size: smallFontSize, max: 34 }),
+        cell(margin + tableWidth / 2, margin + rowHeight * 2, tableWidth / 2, rowHeight, `Tên NV: ${staffName}`, { anchor: 'start', size: smallFontSize, max: 32 }),
+      ].join('')
+      : [
+        cell(margin, margin + rowHeight * 2, 330, rowHeight, `Ngày: ${date}`, { anchor: 'start', size: smallFontSize, max: 34 }),
+        cell(margin + 330, margin + rowHeight * 2, 300, rowHeight, `Tên NV: ${staffName}`, { anchor: 'start', size: smallFontSize, max: 32 }),
+        cell(margin + 630, margin + rowHeight * 2, tableWidth - 630, rowHeight, receiptType, { anchor: 'middle', size: smallFontSize, bold: true, max: 24 }),
+      ].join('');
 
     const svg = `
       <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -173,9 +215,7 @@ export class DeliveryNoteGenerator {
         <rect x="${margin}" y="${margin + rowHeight}" width="${tableWidth}" height="${rowHeight}" fill="none" stroke="#111" stroke-width="1" />
         <text x="${width / 2}" y="${margin + rowHeight + rowHeight / 2 + 6}" font-family="${font}" font-size="${fontSize}" text-anchor="middle">Khách Hàng : ${customerName}</text>
 
-        ${cell(margin, margin + rowHeight * 2, 330, rowHeight, `Ngày: ${date}`, { anchor: 'start', size: smallFontSize, max: 34 })}
-        ${cell(margin + 330, margin + rowHeight * 2, 300, rowHeight, `Tên NV: ${staffName}`, { anchor: 'start', size: smallFontSize, max: 32 })}
-        ${cell(margin + 630, margin + rowHeight * 2, tableWidth - 630, rowHeight, receiptType, { anchor: 'middle', size: smallFontSize, bold: true, max: 24 })}
+        ${metaSvg}
 
         ${headerSvg}
         ${rowSvg}

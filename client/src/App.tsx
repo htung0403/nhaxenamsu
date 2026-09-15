@@ -71,6 +71,7 @@ import ZaloGrocerySummaryManagePage from './pages/notifications/ZaloGrocerySumma
 import ZaloSupplierSummaryManagePage from './pages/notifications/ZaloSupplierSummaryManagePage';
 import ZaloSenderSummaryManagePage from './pages/notifications/ZaloSenderSummaryManagePage';
 import CrateManagementPage from './pages/crates/CrateManagementPage';
+import CrateIntakePage from './pages/crates/CrateIntakePage';
 import CrateAllocationPage from './pages/crates/CrateAllocationPage';
 import CrateDeliveryPage from './pages/crates/CrateDeliveryPage';
 import CrateHistoryPage from './pages/crates/CrateHistoryPage';
@@ -163,6 +164,7 @@ function AppRoutes() {
         <Route path="/app/hang-hoa/in-phieu-rau" element={<PrintVegetableOrdersPage />} />
         <Route path="/app/hang-hoa/giao-hang-rau" element={<VegetableDeliveryPage />} />
         <Route path="/app/hang-hoa/quan-ly-ket" element={<CrateManagementPage />} />
+        <Route path="/app/hang-hoa/nhap-ket" element={<CrateIntakePage />} />
         <Route path="/app/hang-hoa/chia-ket" element={<CrateAllocationPage />} />
         <Route path="/app/hang-hoa/giao-ket" element={<CrateDeliveryPage />} />
         <Route path="/app/hang-hoa/lich-su-ket" element={<CrateHistoryPage />} />
@@ -316,8 +318,3 @@ function App() {
 }
 
 export default App;
-
-
-
-
-

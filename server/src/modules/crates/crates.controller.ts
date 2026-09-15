@@ -6,6 +6,13 @@ import { CratesService, CrateReceiptType } from './crates.service';
 const uuidSchema = z.string().uuid();
 const roleSchema = z.enum(['sender', 'receiver']);
 const receiptTypeSchema = z.enum(['intake', 'allocation', 'delivery']);
+const dateQuerySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải có định dạng YYYY-MM-DD');
+
+const historyQuerySchema = z.object({
+  customer_id: uuidSchema.optional(),
+  start_date: dateQuerySchema.optional(),
+  end_date: dateQuerySchema.optional(),
+});
 
 const setRolesSchema = z.object({
   customer_ids: z.array(uuidSchema).min(1),
@@ -78,7 +85,7 @@ export class CratesController {
   static async createDelivery(req: Request, res: Response) {
     try {
       const payload = deliverySchema.parse(req.body) as { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null };
-      const data = await CratesService.createDelivery(payload, req.user?.id);
+      const data = await CratesService.createDelivery(payload, req.user);
       return res.status(201).json(successResponse(data, 'Đã giao két'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -87,8 +94,11 @@ export class CratesController {
 
   static async getHistory(req: Request, res: Response) {
     try {
-      const customerId = req.query.customer_id ? uuidSchema.parse(req.query.customer_id) : undefined;
-      const data = await CratesService.getHistory(customerId);
+      const query = historyQuerySchema.parse(req.query);
+      const data = await CratesService.getHistory(query.customer_id, {
+        startDate: query.start_date,
+        endDate: query.end_date,
+      });
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));

@@ -112,8 +112,14 @@ export const cratesApi = {
     return data;
   },
 
-  getHistory: async (customerId?: string) => {
-    const { data } = await axiosClient.get<CrateHistory>('/crates/history', { params: { customer_id: customerId } });
+  getHistory: async (customerId?: string, filters?: { start_date?: string; end_date?: string }) => {
+    const { data } = await axiosClient.get<CrateHistory>('/crates/history', {
+      params: {
+        customer_id: customerId,
+        start_date: filters?.start_date || undefined,
+        end_date: filters?.end_date || undefined,
+      },
+    });
     return data;
   },
 

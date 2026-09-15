@@ -3,9 +3,15 @@ import { supabaseService } from '../../config/supabase';
 import { zaloService } from '../notifications/zalo.service';
 import { logger } from '../../utils/logger';
 import { DeliveryNoteGenerator, type CrateReceiptNoteData } from '../../utils/deliveryNoteGenerator';
+import type { UserPayload } from '../../types';
 
 export type CrateRole = 'sender' | 'receiver';
 export type CrateReceiptType = 'intake' | 'allocation' | 'delivery';
+
+type CrateHistoryFilters = {
+  startDate?: string;
+  endDate?: string;
+};
 
 type NotifyTarget = {
   customerId: string;
@@ -26,6 +32,15 @@ type NotificationAttachment = {
   data: Buffer;
   filename: `${string}.${string}`;
   metadata: { totalSize: number; width?: number; height?: number };
+};
+
+type CrateDeliveryVehicle = {
+  id: string;
+  license_plate: string;
+  driver_id?: string | null;
+  in_charge_id?: string | null;
+  profiles?: { full_name?: string | null } | null;
+  responsible_profile?: { full_name?: string | null } | null;
 };
 
 const receiptTokenDate = 'receipt';
@@ -64,18 +79,33 @@ export class CratesService {
     return data?.full_name || null;
   }
 
-  private static async getVehiclePlate(vehicleId?: string | null) {
-    if (!vehicleId) return null;
+  private static async getDeliveryVehicle(vehicleId: string): Promise<CrateDeliveryVehicle> {
     const { data, error } = await supabaseService
       .from('vehicles')
-      .select('license_plate')
+      .select('id, license_plate, driver_id, in_charge_id, profiles:profiles!vehicles_driver_id_fkey(full_name), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name)')
       .eq('id', vehicleId)
       .maybeSingle();
-    if (error) {
-      logger.warn('[CratesService] Failed to load vehicle plate:', error);
-      return null;
-    }
-    return data?.license_plate || null;
+    if (error) throw error;
+    if (!data) throw new Error('Không tìm thấy xe giao két');
+    return data as CrateDeliveryVehicle;
+  }
+
+  private static isDriverOrLoaderRole(role?: string | null) {
+    const normalizedRole = (role || '').toLowerCase();
+    return normalizedRole === 'driver' ||
+      normalizedRole.includes('driver') ||
+      normalizedRole.includes('tai_xe') ||
+      normalizedRole.includes('tài xế') ||
+      normalizedRole.includes('lo_xe') ||
+      normalizedRole.includes('lơ xe');
+  }
+
+  private static userCanDeliverWithVehicle(user: UserPayload | undefined, vehicle: CrateDeliveryVehicle) {
+    if (!user || !this.isDriverOrLoaderRole(user.role)) return true;
+    return vehicle.driver_id === user.id ||
+      vehicle.in_charge_id === user.id ||
+      vehicle.profiles?.full_name === user.full_name ||
+      vehicle.responsible_profile?.full_name === user.full_name;
   }
 
   private static formatNoteDateTime(value?: string | null) {
@@ -99,9 +129,9 @@ export class CratesService {
       rows: [{
         time: this.formatNoteTime(createdAt),
         quantity: record.quantity,
-        content: 'Nhập két',
+        content: record.notes || '-',
         partner: record.sender?.name || '-',
-        balance: `Đang gửi ${record.sender_balance_after} két`,
+        balance: `${record.sender_balance_after} két`,
         note: record.notes || '-',
       }],
     };
@@ -119,12 +149,12 @@ export class CratesService {
       rows: [{
         time: this.formatNoteTime(createdAt),
         quantity: record.quantity,
-        content: isReceiver ? 'Nhận két' : 'Chia két',
-        partner: isReceiver ? `Từ ${record.sender?.name || '-'}` : `Cho ${record.receiver?.name || '-'}`,
+        content: record.notes || '-',
+        partner: isReceiver ? record.sender?.name || '-' : record.receiver?.name || '-',
         balance: isReceiver
-          ? `Chờ ${record.receiver_pending_after}, nợ ${record.receiver_debt_after}`
-          : `Còn gửi ${record.sender_balance_after} két`,
-        note: record.notes || (isReceiver ? `Tăng chờ ${record.pending_added} két` : `Bù nợ ${record.debt_applied} két`),
+          ? `${record.receiver_pending_after} két`
+          : `${record.sender_balance_after} két`,
+        note: isReceiver ? `Tăng chờ ${record.pending_added} két` : `Bù nợ ${record.debt_applied} két`,
       }],
     };
   }
@@ -136,13 +166,13 @@ export class CratesService {
       customerName: record.receiver?.name || '-',
       date: this.formatNoteDateTime(deliveredAt),
       staffName: record.driver?.full_name || 'Tài xế',
-      receiptType: record.vehicle?.license_plate ? `Xe ${record.vehicle.license_plate}` : 'Giao két',
+      receiptType: `Xe: ${record.vehicle?.license_plate || '-'}`,
       rows: [{
         time: this.formatNoteTime(deliveredAt),
         quantity: record.quantity,
         content: 'Giao két',
         partner: record.receiver?.name || '-',
-        balance: `Chờ ${record.receiver_pending_after}, nợ ${record.receiver_debt_after}`,
+        balance: `${record.receiver_pending_after} két`,
         note: record.notes || (record.debt_created > 0 ? `Nợ phát sinh ${record.debt_created} két` : '-'),
       }],
     };
@@ -279,9 +309,9 @@ export class CratesService {
         rows: [{
           time: this.formatNoteTime(createdAt),
           quantity: payload.quantity,
-          content: 'Nhập két',
+          content: payload.notes || '-',
           partner: sender.name,
-          balance: `Đang gửi ${data.account.sender_balance} két`,
+          balance: `${data.account.sender_balance} két`,
           note: payload.notes || '-',
         }],
       },
@@ -321,10 +351,10 @@ export class CratesService {
         rows: [{
           time: this.formatNoteTime(createdAt),
           quantity: payload.quantity,
-          content: 'Chia két',
-          partner: `Cho ${receiver.name}`,
-          balance: `Còn gửi ${data.sender_account.sender_balance} két`,
-          note: payload.notes || `Bù nợ ${data.allocation.debt_applied} két`,
+          content: payload.notes || '-',
+          partner: receiver.name,
+          balance: `${data.sender_account.sender_balance} két`,
+          note: `Bù nợ ${data.allocation.debt_applied} két`,
         }],
       },
     });
@@ -343,10 +373,10 @@ export class CratesService {
         rows: [{
           time: this.formatNoteTime(createdAt),
           quantity: payload.quantity,
-          content: 'Nhận két',
-          partner: `Từ ${sender.name}`,
-          balance: `Chờ ${data.receiver_account.receiver_pending}, nợ ${data.receiver_account.receiver_debt}`,
-          note: payload.notes || `Tăng chờ ${data.allocation.pending_added} két`,
+          content: payload.notes || '-',
+          partner: sender.name,
+          balance: `${data.receiver_account.receiver_pending} két`,
+          note: `Tăng chờ ${data.allocation.pending_added} két`,
         }],
       },
     });
@@ -354,21 +384,27 @@ export class CratesService {
     return { ...data, notifications: [senderNotification, receiverNotification] };
   }
 
-  static async createDelivery(payload: { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null }, userId?: string) {
+  static async createDelivery(payload: { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null }, user?: UserPayload) {
+    if (!payload.vehicle_id) throw new Error('Vui lòng chọn xe giao két');
+    const vehicle = await this.getDeliveryVehicle(payload.vehicle_id);
+    if (!this.userCanDeliverWithVehicle(user, vehicle)) {
+      throw new Error('Bạn chỉ được giao két bằng xe mình phụ trách');
+    }
+    const deliveryDriverId = vehicle.driver_id || vehicle.in_charge_id || null;
+
     const { data, error } = await supabaseService.rpc('crate_record_delivery', {
       p_receiver_customer_id: payload.receiver_customer_id,
       p_quantity: payload.quantity,
       p_notes: payload.notes || null,
       p_image_urls: payload.image_urls || [],
-      p_driver_id: userId || null,
-      p_vehicle_id: payload.vehicle_id || null,
+      p_driver_id: deliveryDriverId,
+      p_vehicle_id: vehicle.id,
     });
     if (error) throw error;
 
-    const [receiver, driverName, vehiclePlate] = await Promise.all([
+    const [receiver, driverName] = await Promise.all([
       this.getCustomer(payload.receiver_customer_id),
-      this.getProfileName(userId),
-      this.getVehiclePlate(payload.vehicle_id),
+      this.getProfileName(deliveryDriverId),
     ]);
     const deliveredAt = data.delivery?.delivered_at || data.delivery?.created_at;
     const notification = await this.logAndSendNotification({
@@ -376,19 +412,19 @@ export class CratesService {
       transactionId: data.delivery.id,
       target: { customerId: receiver.id, name: receiver.name, phone: receiver.phone },
       caption: `Phiếu giao két: đã giao ${payload.quantity} két cho ${receiver.name}. Chờ giao còn: ${data.receiver_account.receiver_pending}, nợ két: ${data.receiver_account.receiver_debt}.`,
-      triggeredBy: userId,
+      triggeredBy: user?.id,
       receiptImage: {
         title: 'Phiếu giao két',
         customerName: receiver.name,
         date: this.formatNoteDateTime(deliveredAt),
-        staffName: driverName || 'Tài xế',
-        receiptType: vehiclePlate ? `Xe ${vehiclePlate}` : 'Giao két',
+        staffName: driverName || vehicle.profiles?.full_name || vehicle.responsible_profile?.full_name || 'Tài xế',
+        receiptType: `Xe: ${vehicle.license_plate || '-'}`,
         rows: [{
           time: this.formatNoteTime(deliveredAt),
           quantity: payload.quantity,
           content: 'Giao két',
           partner: receiver.name,
-          balance: `Chờ ${data.receiver_account.receiver_pending}, nợ ${data.receiver_account.receiver_debt}`,
+          balance: `${data.receiver_account.receiver_pending} két`,
           note: payload.notes || (data.delivery.debt_created > 0 ? `Nợ phát sinh ${data.delivery.debt_created} két` : '-'),
         }],
       },
@@ -397,20 +433,35 @@ export class CratesService {
     return { ...data, notification };
   }
 
-  static async getHistory(customerId?: string) {
+  static async getHistory(customerId?: string, filters: CrateHistoryFilters = {}) {
+    const defaultStartDate = new Date();
+    defaultStartDate.setDate(defaultStartDate.getDate() - 6);
+    defaultStartDate.setHours(0, 0, 0, 0);
+
+    const fromDate = filters.startDate ? this.getDateBoundary(filters.startDate, 'start') : defaultStartDate;
+    const toDate = filters.endDate ? this.getDateBoundary(filters.endDate, 'end') : new Date();
+
+    if (fromDate > toDate) throw new Error('Ngày bắt đầu không được lớn hơn ngày kết thúc');
+
     const intakesQuery = supabaseService
       .from('crate_intakes')
       .select('*, sender:customers!crate_intakes_sender_customer_id_fkey(id, name, phone), creator:profiles!crate_intakes_created_by_fkey(id, full_name)')
+      .gte('created_at', fromDate.toISOString())
+      .lte('created_at', toDate.toISOString())
       .order('created_at', { ascending: false })
       .limit(100);
     const allocationsQuery = supabaseService
       .from('crate_allocations')
       .select('*, sender:customers!crate_allocations_sender_customer_id_fkey(id, name, phone), receiver:customers!crate_allocations_receiver_customer_id_fkey(id, name, phone), creator:profiles!crate_allocations_created_by_fkey(id, full_name)')
+      .gte('created_at', fromDate.toISOString())
+      .lte('created_at', toDate.toISOString())
       .order('created_at', { ascending: false })
       .limit(100);
     const deliveriesQuery = supabaseService
       .from('crate_deliveries')
       .select('*, receiver:customers!crate_deliveries_receiver_customer_id_fkey(id, name, phone), driver:profiles!crate_deliveries_driver_id_fkey(id, full_name), vehicle:vehicles!crate_deliveries_vehicle_id_fkey(id, license_plate)')
+      .gte('created_at', fromDate.toISOString())
+      .lte('created_at', toDate.toISOString())
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -425,6 +476,13 @@ export class CratesService {
     if (deliveries.error) throw deliveries.error;
 
     return { intakes: intakes.data || [], allocations: allocations.data || [], deliveries: deliveries.data || [] };
+  }
+
+  private static getDateBoundary(value: string, boundary: 'start' | 'end') {
+    const [year, month, day] = value.split('-').map(Number);
+    return boundary === 'start'
+      ? new Date(year, month - 1, day, 0, 0, 0, 0)
+      : new Date(year, month - 1, day, 23, 59, 59, 999);
   }
 
   static async getReceipt(type: CrateReceiptType, transactionId: string) {
