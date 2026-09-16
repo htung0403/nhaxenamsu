@@ -41,6 +41,10 @@ const deliverySchema = z.object({
   vehicle_id: uuidSchema.optional().nullable(),
 });
 
+const revertDeliveriesSchema = z.object({
+  ids: z.array(uuidSchema).min(1),
+});
+
 export class CratesController {
   static async listAccounts(req: Request, res: Response) {
     try {
@@ -87,6 +91,16 @@ export class CratesController {
       const payload = deliverySchema.parse(req.body) as { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null };
       const data = await CratesService.createDelivery(payload, req.user);
       return res.status(201).json(successResponse(data, 'Đã giao két'));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
+  static async revertDeliveries(req: Request, res: Response) {
+    try {
+      const payload = revertDeliveriesSchema.parse(req.body);
+      const data = await CratesService.revertDeliveries(payload.ids, req.user);
+      return res.status(200).json(successResponse(data, 'Đã hoàn tác giao két'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
     }

@@ -3,9 +3,22 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { Boxes, ChevronLeft, PackagePlus, RefreshCw } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateNotificationLog } from '../../api/cratesApi';
+import { customersApi } from '../../api/customersApi';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
 
 const formatNumber = (value?: number | null) => new Intl.NumberFormat('vi-VN').format(value || 0);
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
+const VEHICLE_STOCK_CUSTOMER_NAME = 'Nhà xe';
+const VEHICLE_STOCK_PLACEHOLDER_ID = '__vehicle_stock__';
+const CRATE_SENDER_CUSTOMER_TYPE = 'vegetable_receiver';
+
+const normalizeName = (value?: string | null) => (value || '')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/đ/g, 'd')
+  .replace(/Đ/g, 'D')
+  .trim()
+  .toLowerCase();
 
 const showZaloReceiptToast = (notification?: CrateNotificationLog | null) => {
   if (!notification) return toast.error('Không xác nhận được trạng thái gửi Zalo');
@@ -20,6 +33,7 @@ const CrateIntakePage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [senders, setSenders] = useState<CrateAccount[]>([]);
   const [senderId, setSenderId] = useState(searchParams.get('senderId') || '');
+  const [isVehicleStockIntake, setIsVehicleStockIntake] = useState(false);
   const [quantity, setQuantity] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(true);
@@ -38,19 +52,82 @@ const CrateIntakePage: React.FC = () => {
 
   useEffect(() => { void loadData(); }, []);
 
+  const vehicleStockSender = useMemo(
+    () => senders.find(row =>
+      normalizeName(row.customer?.name) === normalizeName(VEHICLE_STOCK_CUSTOMER_NAME) &&
+      row.customer?.customer_type === CRATE_SENDER_CUSTOMER_TYPE,
+    ),
+    [senders],
+  );
+  const senderOptions = useMemo(() => {
+    const options = senders.map(row => {
+      const label = `${row.customer?.name || 'Chưa có tên'}${row.customer?.phone ? ` - ${row.customer.phone}` : ''} · ${formatNumber(row.sender_balance)} két`;
+      return {
+        value: row.customer_id,
+        label,
+        searchText: [row.customer?.name, row.customer?.phone, row.customer?.address, label].filter(Boolean).join(' '),
+      };
+    });
+
+    if (isVehicleStockIntake && !senderId) {
+      return [
+        {
+          value: VEHICLE_STOCK_PLACEHOLDER_ID,
+          label: `${VEHICLE_STOCK_CUSTOMER_NAME} · sẽ tạo khi nhập`,
+          searchText: VEHICLE_STOCK_CUSTOMER_NAME,
+        },
+        ...options,
+      ];
+    }
+
+    return options;
+  }, [isVehicleStockIntake, senderId, senders]);
+
   const selectedSender = useMemo(() => senders.find(row => row.customer_id === senderId), [senders, senderId]);
   const parsedQuantity = Number(quantity || 0);
-  const balanceAfter = selectedSender ? selectedSender.sender_balance + Math.max(parsedQuantity, 0) : Math.max(parsedQuantity, 0);
+  const currentBalance = isVehicleStockIntake ? (vehicleStockSender?.sender_balance || 0) : (selectedSender?.sender_balance || 0);
+  const balanceAfter = currentBalance + Math.max(parsedQuantity, 0);
+
+  const handleVehicleStockToggle = (checked: boolean) => {
+    setIsVehicleStockIntake(checked);
+    setSenderId(checked ? (vehicleStockSender?.customer_id || '') : '');
+  };
+
+  const resolveVehicleStockSenderId = async () => {
+    if (vehicleStockSender?.customer_id) return vehicleStockSender.customer_id;
+
+    const existingCustomers = await customersApi.getAll(undefined, 1000);
+    const vehicleStockCustomers = existingCustomers.filter(customer => normalizeName(customer.name) === normalizeName(VEHICLE_STOCK_CUSTOMER_NAME));
+    const correctVehicleStockCustomer = vehicleStockCustomers.find(customer => customer.customer_type === CRATE_SENDER_CUSTOMER_TYPE);
+    if (correctVehicleStockCustomer) return correctVehicleStockCustomer.id;
+
+    const wrongTypeVehicleStockCustomer = vehicleStockCustomers[0];
+    if (wrongTypeVehicleStockCustomer) {
+      await customersApi.update(wrongTypeVehicleStockCustomer.id, { customer_type: CRATE_SENDER_CUSTOMER_TYPE });
+      return wrongTypeVehicleStockCustomer.id;
+    }
+
+    const createdCustomer = await customersApi.create({
+      name: VEHICLE_STOCK_CUSTOMER_NAME,
+      customer_type: CRATE_SENDER_CUSTOMER_TYPE,
+    });
+    return createdCustomer.id;
+  };
 
   const handleSubmit = async () => {
-    if (!senderId) return toast.error('Vui lòng chọn khách gửi két');
     if (!Number.isInteger(parsedQuantity) || parsedQuantity <= 0) return toast.error('Số két nhập phải là số nguyên dương');
 
     setSubmitting(true);
     try {
-      const result = await cratesApi.createIntake({ sender_customer_id: senderId, quantity: parsedQuantity, notes: notes || null });
+      const targetSenderId = isVehicleStockIntake ? await resolveVehicleStockSenderId() : senderId;
+      if (!targetSenderId) {
+        toast.error('Vui lòng chọn khách gửi két');
+        return;
+      }
+
+      const result = await cratesApi.createIntake({ sender_customer_id: targetSenderId, quantity: parsedQuantity, notes: notes || null });
       toast.success('Đã nhập két và tạo phiếu');
-      showZaloReceiptToast(result?.notification);
+      if (!isVehicleStockIntake) showZaloReceiptToast(result?.notification);
       navigate(`/app/hang-hoa/in-phieu-ket?type=intake&id=${result.intake.id}`);
     } catch (error: unknown) {
       toast.error(getErrorMessage(error) || 'Nhập két thất bại');
@@ -74,13 +151,31 @@ const CrateIntakePage: React.FC = () => {
 
       <div className="grid grid-cols-1 gap-3 md:gap-4 lg:grid-cols-[1.1fr_0.9fr]">
         <div className="rounded-2xl border border-border bg-card p-3 md:p-4 space-y-3">
-          <p className="text-xs font-black uppercase text-muted-foreground">1. Khách gửi két</p>
-          <select value={senderId} disabled={Boolean(searchParams.get('senderId'))} onChange={e => setSenderId(e.target.value)} className="h-12 w-full rounded-xl border border-border bg-background px-3 text-sm font-bold outline-none focus:border-emerald-500">
-            <option value="">Chọn khách gửi két</option>
-            {senders.map(row => <option key={row.customer_id} value={row.customer_id}>{row.customer?.name || 'Chưa có tên'}{row.customer?.phone ? ` - ${row.customer.phone}` : ''} · {formatNumber(row.sender_balance)} két</option>)}
-          </select>
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs font-black uppercase text-muted-foreground">1. Khách gửi két</p>
+            <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-bold text-emerald-700">
+              <input
+                type="checkbox"
+                checked={isVehicleStockIntake}
+                disabled={Boolean(searchParams.get('senderId'))}
+                onChange={e => handleVehicleStockToggle(e.target.checked)}
+                className="h-4 w-4 accent-emerald-600"
+              />
+              Nhập két cho nhà xe
+            </label>
+          </div>
+          <SearchableSelect
+            options={senderOptions}
+            value={isVehicleStockIntake && !senderId ? VEHICLE_STOCK_PLACEHOLDER_ID : senderId}
+            onValueChange={value => setSenderId(value === VEHICLE_STOCK_PLACEHOLDER_ID ? '' : value)}
+            placeholder="Chọn khách gửi két"
+            searchPlaceholder="Tìm tên, SĐT, địa chỉ..."
+            emptyMessage="Không có khách gửi két phù hợp."
+            disabled={Boolean(searchParams.get('senderId')) || isVehicleStockIntake}
+            className="h-12 border-emerald-500 bg-background text-sm font-bold"
+          />
           {loading && <p className="text-sm text-muted-foreground">Đang tải danh sách khách gửi két...</p>}
-          {selectedSender && <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm"><b>{selectedSender.customer?.name}</b><br />Đang gửi hiện tại: <b>{formatNumber(selectedSender.sender_balance)}</b> két</div>}
+          {(selectedSender || isVehicleStockIntake) && <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm"><b>{isVehicleStockIntake ? VEHICLE_STOCK_CUSTOMER_NAME : selectedSender?.customer?.name}</b><br />Đang gửi hiện tại: <b>{formatNumber(currentBalance)}</b> két</div>}
         </div>
 
         <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm">
@@ -95,7 +190,7 @@ const CrateIntakePage: React.FC = () => {
           <input type="number" min={1} value={quantity} onChange={e => setQuantity(e.target.value)} placeholder="Số két" className="px-3 md:px-4 py-3 rounded-xl border border-border bg-background text-sm font-bold" />
           <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ghi chú nhập két" className="px-3 md:px-4 py-3 rounded-xl border border-border bg-background text-sm" />
         </div>
-        <div className="rounded-xl bg-muted/30 p-3 text-sm text-muted-foreground">Dự kiến: nhập thêm <b className="text-foreground">{formatNumber(Math.max(parsedQuantity, 0))}</b> két cho khách gửi đã chọn.</div>
+        <div className="rounded-xl bg-muted/30 p-3 text-sm text-muted-foreground">Dự kiến: nhập thêm <b className="text-foreground">{formatNumber(Math.max(parsedQuantity, 0))}</b> két cho {isVehicleStockIntake ? 'nhà xe' : 'khách gửi đã chọn'}.</div>
         <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 md:justify-end">
           <button onClick={() => navigate('/app/hang-hoa/quan-ly-ket')} className="px-4 md:px-5 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted">Quay lại</button>
           <button disabled={loading || submitting} onClick={() => void handleSubmit()} className="px-4 md:px-5 py-3 rounded-xl bg-emerald-600 text-white font-bold text-sm hover:bg-emerald-700 disabled:opacity-60">{submitting ? 'Đang nhập...' : 'Xác nhận nhập két'}</button>

@@ -108,6 +108,10 @@ export class CratesService {
       vehicle.responsible_profile?.full_name === user.full_name;
   }
 
+  private static isAdminRole(role?: string | null) {
+    return role === 'admin' || role === 'manager';
+  }
+
   private static formatNoteDateTime(value?: string | null) {
     const date = value ? new Date(value) : new Date();
     return date.toLocaleString('vi-VN', { timeZone: 'Asia/Bangkok', hour12: false });
@@ -116,6 +120,11 @@ export class CratesService {
   private static formatNoteTime(value?: string | null) {
     const date = value ? new Date(value) : new Date();
     return date.toLocaleTimeString('vi-VN', { timeZone: 'Asia/Bangkok', hour12: false });
+  }
+
+  private static formatSenderBalance(value?: number | null) {
+    const balance = Number(value || 0);
+    return balance < 0 ? 'Nợ ' + Math.abs(balance) + ' két' : balance + ' két';
   }
 
   private static buildIntakeReceiptImage(record: any): CrateReceiptNoteData {
@@ -257,7 +266,11 @@ export class CratesService {
 
     const { data, error } = await query;
     if (error) throw error;
-    return data || [];
+
+    const rows = data || [];
+    if (role === 'sender') return rows.filter((row: any) => row.customer?.customer_type === 'vegetable_receiver');
+    if (role === 'receiver') return rows.filter((row: any) => row.customer?.customer_type === 'vegetable_sender');
+    return rows;
   }
 
   static async setRoles(customerIds: string[], role: CrateRole, enabled: boolean) {
@@ -298,7 +311,7 @@ export class CratesService {
       type: 'intake',
       transactionId: data.intake.id,
       target: { customerId: sender.id, name: sender.name, phone: sender.phone },
-      caption: `Phiếu nhập két: ${sender.name} gửi ${payload.quantity} két. Số két đang gửi: ${data.account.sender_balance}.`,
+      caption: `Phiếu nhập két: ${sender.name} gửi ${payload.quantity} két. Số dư két: ${this.formatSenderBalance(data.account.sender_balance)}.`,
       triggeredBy: userId,
       receiptImage: {
         title: 'Phiếu nhập két',
@@ -311,7 +324,7 @@ export class CratesService {
           quantity: payload.quantity,
           content: payload.notes || '-',
           partner: sender.name,
-          balance: `${data.account.sender_balance} két`,
+          balance: this.formatSenderBalance(data.account.sender_balance),
           note: payload.notes || '-',
         }],
       },
@@ -340,7 +353,7 @@ export class CratesService {
       type: 'allocation',
       transactionId: data.allocation.id,
       target: { customerId: sender.id, name: sender.name, phone: sender.phone },
-      caption: `Phiếu chia két: đã chia ${payload.quantity} két từ ${sender.name} cho ${receiver.name}. Số két còn gửi: ${data.sender_account.sender_balance}.`,
+      caption: `Phiếu chia két: đã chia ${payload.quantity} két từ ${sender.name} cho ${receiver.name}. Số dư két: ${this.formatSenderBalance(data.sender_account.sender_balance)}.`,
       triggeredBy: userId,
       receiptImage: {
         title: 'Phiếu chia két',
@@ -353,7 +366,7 @@ export class CratesService {
           quantity: payload.quantity,
           content: payload.notes || '-',
           partner: receiver.name,
-          balance: `${data.sender_account.sender_balance} két`,
+          balance: this.formatSenderBalance(data.sender_account.sender_balance),
           note: `Bù nợ ${data.allocation.debt_applied} két`,
         }],
       },
@@ -431,6 +444,57 @@ export class CratesService {
     });
 
     return { ...data, notification };
+  }
+
+  static async revertDeliveries(deliveryIds: string[], user?: UserPayload) {
+    if (!this.isAdminRole(user?.role)) throw new Error('Chỉ quản trị viên được hoàn tác giao két');
+    const uniqueIds = Array.from(new Set(deliveryIds.filter(Boolean)));
+    if (uniqueIds.length === 0) throw new Error('Vui lòng chọn phiếu giao két cần hoàn tác');
+
+    const { data: deliveries, error: deliveryError } = await supabaseService
+      .from('crate_deliveries')
+      .select('id, receiver_customer_id, quantity, debt_created')
+      .in('id', uniqueIds);
+    if (deliveryError) throw deliveryError;
+    if (!deliveries || deliveries.length === 0) throw new Error('Không tìm thấy phiếu giao két cần hoàn tác');
+
+    const totalsByReceiver = deliveries.reduce<Record<string, { pending: number; debt: number }>>((acc, delivery: any) => {
+      const debtCreated = Number(delivery.debt_created || 0);
+      const quantity = Number(delivery.quantity || 0);
+      const key = delivery.receiver_customer_id;
+      if (!acc[key]) acc[key] = { pending: 0, debt: 0 };
+      acc[key].pending += Math.max(quantity - debtCreated, 0);
+      acc[key].debt += debtCreated;
+      return acc;
+    }, {});
+
+    for (const [customerId, totals] of Object.entries(totalsByReceiver)) {
+      const { data: account, error: accountError } = await supabaseService
+        .from('crate_accounts')
+        .select('receiver_pending, receiver_debt')
+        .eq('customer_id', customerId)
+        .maybeSingle();
+      if (accountError) throw accountError;
+      if (!account) throw new Error('Không tìm thấy tài khoản két của khách nhận');
+
+      const { error: updateError } = await supabaseService
+        .from('crate_accounts')
+        .update({
+          receiver_pending: Number(account.receiver_pending || 0) + totals.pending,
+          receiver_debt: Math.max(Number(account.receiver_debt || 0) - totals.debt, 0),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('customer_id', customerId);
+      if (updateError) throw updateError;
+    }
+
+    const { error: deleteError } = await supabaseService
+      .from('crate_deliveries')
+      .delete()
+      .in('id', deliveries.map((delivery: any) => delivery.id));
+    if (deleteError) throw deleteError;
+
+    return { reverted_count: deliveries.length };
   }
 
   static async getHistory(customerId?: string, filters: CrateHistoryFilters = {}) {

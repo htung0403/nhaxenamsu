@@ -49,7 +49,10 @@ const CrateCustomerPicker: React.FC<CrateCustomerPickerProps> = ({ type, value, 
             <span className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-muted-foreground">
               {selected ? (
                 isSender ? (
-                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">Còn {formatNumber(primaryValue)} két</span>
+                  <>
+                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700">Còn {formatNumber(Math.max(primaryValue, 0))} két</span>
+                    <span className="rounded-full bg-red-50 px-2 py-0.5 text-red-700">Nợ {formatNumber(Math.max(-primaryValue, 0))} két</span>
+                  </>
                 ) : (
                   <>
                     <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">Chờ {formatNumber(selected.receiver_pending)} két</span>
@@ -157,6 +160,8 @@ const CrateAllocationPage: React.FC = () => {
   const parsedQuantity = Number(quantity || 0);
   const debtApplied = selectedReceiver ? Math.min(selectedReceiver.receiver_debt, Math.max(parsedQuantity, 0)) : 0;
   const pendingAdded = Math.max(parsedQuantity - debtApplied, 0);
+  const senderBalanceAfter = selectedSender ? selectedSender.sender_balance - Math.max(parsedQuantity, 0) : 0;
+  const senderDebtAfter = Math.max(-senderBalanceAfter, 0);
 
   const handleSubmit = async () => {
     if (!senderId || !receiverId) {
@@ -165,10 +170,6 @@ const CrateAllocationPage: React.FC = () => {
     }
     if (!Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
       toast.error('Số két chia phải là số nguyên dương');
-      return;
-    }
-    if (selectedSender && parsedQuantity > selectedSender.sender_balance) {
-      toast.error('Số két của khách gửi không đủ để chia');
       return;
     }
 
@@ -208,7 +209,7 @@ const CrateAllocationPage: React.FC = () => {
         <div className="rounded-2xl border border-border bg-card p-3 md:p-4 space-y-3">
           <p className="text-xs font-black uppercase text-muted-foreground">1. Khách gửi két</p>
           <CrateCustomerPicker type="sender" value={senderId} rows={senders} disabled={Boolean(searchParams.get('senderId'))} onChange={setSenderId} />
-          {selectedSender && <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm"><b>{selectedSender.customer?.name}</b><br />Đang gửi: <b>{formatNumber(selectedSender.sender_balance)}</b> két</div>}
+          {selectedSender && <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm"><b>{selectedSender.customer?.name}</b><br />Đang gửi: <b>{formatNumber(Math.max(selectedSender.sender_balance, 0))}</b> két · Nợ két: <b className="text-red-600">{formatNumber(Math.max(-selectedSender.sender_balance, 0))}</b></div>}
         </div>
 
         <div className="hidden lg:flex h-full items-center pt-16"><ArrowRight className="text-muted-foreground" /></div>
@@ -227,7 +228,7 @@ const CrateAllocationPage: React.FC = () => {
           <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ghi chú chia két" className="px-3 md:px-4 py-3 rounded-xl border border-border bg-background text-sm" />
         </div>
         <div className="rounded-xl bg-muted/30 p-3 text-sm text-muted-foreground">
-          Dự kiến: bù nợ <b className="text-foreground">{formatNumber(debtApplied)}</b> két, tăng chờ giao <b className="text-foreground">{formatNumber(pendingAdded)}</b> két.
+          Dự kiến: bù nợ người nhận <b className="text-foreground">{formatNumber(debtApplied)}</b> két, tăng chờ giao <b className="text-foreground">{formatNumber(pendingAdded)}</b> két. Sau chia, người gửi nợ <b className="text-red-600">{formatNumber(senderDebtAfter)}</b> két.
         </div>
         <div className="grid grid-cols-2 md:flex md:flex-wrap gap-2 md:justify-end">
           <button onClick={() => navigate('/app/hang-hoa/quan-ly-ket')} className="px-4 md:px-5 py-3 rounded-xl border border-border font-bold text-sm hover:bg-muted">Quay lại</button>

@@ -2,13 +2,18 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { AlertCircle, Calendar, Camera, CheckCircle, ImagePlus, Package, RefreshCw, Truck, X } from 'lucide-react';
+import { AlertCircle, Calendar, Camera, Filter, ImagePlus, Package, RefreshCw, RotateCcw, Truck, X } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateDelivery } from '../../api/cratesApi';
 import { uploadApi } from '../../api/uploadApi';
+import ConfirmDialog from '../../components/shared/ConfirmDialog';
+import { DateRangePicker } from '../../components/shared/DateRangePicker';
 import EmptyState from '../../components/shared/EmptyState';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
+import MobileFilterSheet from '../../components/shared/MobileFilterSheet';
 import PageHeader from '../../components/shared/PageHeader';
+import { MultiSearchableSelect } from '../../components/ui/MultiSearchableSelect';
 import { SearchInput } from '../../components/ui/SearchInput';
+import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { useAuth } from '../../context/AuthContext';
 import { useVehicles } from '../../hooks/queries/useVehicles';
 import type { Vehicle } from '../../types';
@@ -21,7 +26,7 @@ const getErrorMessage = (error: unknown) => error instanceof Error ? error.messa
 
 type DeliveryStatus = 'can_giao' | 'da_giao' | 'dang_no' | 'all';
 type DeliveryForm = { quantity: string; notes: string; files: File[] };
-type CrateDeliveryRow = CrateAccount & { delivered_total?: number; isDeliveredHistory?: boolean; deliveryDateKey?: string; rowKey?: string };
+type CrateDeliveryRow = CrateAccount & { delivered_total?: number; isDeliveredHistory?: boolean; deliveryDateKey?: string; rowKey?: string; deliveryIds?: string[] };
 
 type DeliveryModalState = {
   receiver: CrateAccount;
@@ -140,10 +145,29 @@ const getDeliveryDateKey = (delivery: CrateDelivery) => {
   return `${values.year}-${values.month}-${values.day}`;
 };
 
+const getBangkokDateKey = (value?: string | null) => {
+  if (!value) return '__active__';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '__active__';
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Bangkok',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+
 const formatDeliveryDateKey = (dateKey?: string) => {
   if (!dateKey) return '';
   const [year, month, day] = dateKey.split('-');
   return [day, month, year].filter(Boolean).join('/');
+};
+
+const formatDateInputValue = (date: Date) => {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().split('T')[0];
 };
 
 const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'vegetable') => {
@@ -159,9 +183,17 @@ const CrateDeliveryPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DeliveryStatus>('can_giao');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const [filterCustomerIds, setFilterCustomerIds] = useState<string[]>([]);
+  const [filterVehicleIds, setFilterVehicleIds] = useState<string[]>([]);
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [isFilterClosing, setIsFilterClosing] = useState(false);
   const [deliveryModal, setDeliveryModal] = useState<DeliveryModalState | null>(null);
   const [deliveryForm, setDeliveryForm] = useState<DeliveryForm>(getDefaultForm());
   const [submitting, setSubmitting] = useState(false);
+  const [revertingRow, setRevertingRow] = useState<CrateDeliveryRow | null>(null);
+  const [isReverting, setIsReverting] = useState(false);
   const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -183,11 +215,21 @@ const CrateDeliveryPage: React.FC = () => {
 
   useEffect(() => { void loadData(); }, []);
 
+  const openFilter = () => setIsFilterOpen(true);
+  const closeFilter = () => {
+    setIsFilterClosing(true);
+    setTimeout(() => {
+      setIsFilterOpen(false);
+      setIsFilterClosing(false);
+    }, 300);
+  };
+
   const eligibleVehicles = useMemo(
     () => (vehicles || []).filter((vehicle) => vehicleSupportsGoodsCategory(vehicle, 'vegetable')),
     [vehicles]
   );
   const normalizedRole = (user?.role || '').toLowerCase();
+  const isAdmin = user?.role === 'admin' || user?.role === 'manager';
   const isLoader = normalizedRole.includes('lo_xe') || normalizedRole.includes('lơ xe');
   const isDriver =
     normalizedRole === 'driver' || normalizedRole.includes('tai_xe') || normalizedRole.includes('tài xế') || normalizedRole.includes('driver');
@@ -203,10 +245,27 @@ const CrateDeliveryPage: React.FC = () => {
       .map((vehicle) => vehicle.id),
     [eligibleVehicles, user]
   );
+  const myPrimaryVehicleId = myVehicleIds[0];
   const myVehicleIdSet = useMemo(() => new Set(myVehicleIds), [myVehicleIds]);
   const displayedVehicles = useMemo(
     () => isDriverOrLoader ? eligibleVehicles.filter((vehicle) => myVehicleIdSet.has(vehicle.id)) : eligibleVehicles,
     [eligibleVehicles, isDriverOrLoader, myVehicleIdSet]
+  );
+
+  const customerFilterOptions = useMemo(
+    () => receivers
+      .filter(row => row.customer_id && row.customer?.name)
+      .map(row => ({
+        value: row.customer_id,
+        label: row.customer?.phone ? `${row.customer.name} · ${row.customer.phone}` : row.customer?.name || row.customer_id,
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'vi')),
+    [receivers]
+  );
+
+  const vehicleFilterOptions = useMemo(
+    () => displayedVehicles.map(vehicle => ({ value: vehicle.id, label: vehicle.license_plate })),
+    [displayedVehicles]
   );
 
   const activeRows = useMemo<CrateDeliveryRow[]>(() => receivers.filter(row => row.receiver_pending > 0 || row.receiver_debt > 0), [receivers]);
@@ -219,6 +278,7 @@ const CrateDeliveryPage: React.FC = () => {
       const existing = byReceiverDate.get(rowKey);
       if (existing) {
         existing.delivered_total = (existing.delivered_total || 0) + delivery.quantity;
+        existing.deliveryIds = [...(existing.deliveryIds || []), delivery.id];
         continue;
       }
       const account = receivers.find(row => row.customer_id === delivery.receiver_customer_id);
@@ -236,6 +296,7 @@ const CrateDeliveryPage: React.FC = () => {
         isDeliveredHistory: true,
         deliveryDateKey,
         rowKey,
+        deliveryIds: [delivery.id],
       });
     }
     return Array.from(byReceiverDate.values()).sort((a, b) => {
@@ -249,60 +310,6 @@ const CrateDeliveryPage: React.FC = () => {
     const activeWithKeys = activeRows.map(row => ({ ...row, rowKey: `active:${row.customer_id}` }));
     return [...activeWithKeys, ...deliveredRows];
   }, [activeRows, deliveredRows]);
-
-  const statusCounts = useMemo(() => ({
-    can_giao: activeRows.filter(row => row.receiver_pending > 0).length,
-    da_giao: deliveredRows.length,
-    dang_no: activeRows.filter(row => row.receiver_debt > 0).length,
-    all: visibleRows.length,
-  }), [activeRows, deliveredRows, visibleRows]);
-
-  const filteredRows = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    const sourceRows = statusFilter === 'da_giao' ? deliveredRows : statusFilter === 'all' ? visibleRows : activeRows;
-    return sourceRows
-      .filter(row => {
-        if (statusFilter === 'can_giao') return row.receiver_pending > 0;
-        if (statusFilter === 'da_giao') return (row.delivered_total || 0) > 0;
-        if (statusFilter === 'dang_no') return row.receiver_debt > 0;
-        return true;
-      })
-      .filter(row => !query || [row.customer?.name, row.customer?.phone, row.customer?.address]
-        .filter(Boolean)
-        .join(' ')
-        .toLowerCase()
-        .includes(query))
-      .sort((a, b) => {
-        if (statusFilter === 'da_giao' || statusFilter === 'all') {
-          const aIsActive = !a.deliveryDateKey;
-          const bIsActive = !b.deliveryDateKey;
-          if (statusFilter === 'all' && aIsActive !== bIsActive) return aIsActive ? -1 : 1;
-          const dateCompare = (b.deliveryDateKey || '').localeCompare(a.deliveryDateKey || '');
-          if (dateCompare !== 0) return dateCompare;
-          return (b.delivered_total || 0) - (a.delivered_total || 0);
-        }
-        return (b.receiver_pending - a.receiver_pending) || (b.receiver_debt - a.receiver_debt);
-      });
-  }, [activeRows, deliveredRows, visibleRows, search, statusFilter]);
-
-  const shouldGroupByDeliveryDate = statusFilter === 'da_giao' || statusFilter === 'all';
-
-  const groupedFilteredRows = useMemo(() => {
-    return filteredRows.reduce<Record<string, CrateDeliveryRow[]>>((acc, row) => {
-      const key = shouldGroupByDeliveryDate && row.deliveryDateKey ? row.deliveryDateKey : '__active__';
-      if (!acc[key]) acc[key] = [];
-      acc[key].push(row);
-      return acc;
-    }, {});
-  }, [filteredRows, shouldGroupByDeliveryDate]);
-
-  const sortedFilteredRowGroupKeys = useMemo(() => {
-    return Object.keys(groupedFilteredRows).sort((a, b) => {
-      if (a === '__active__') return -1;
-      if (b === '__active__') return 1;
-      return b.localeCompare(a);
-    });
-  }, [groupedFilteredRows]);
 
   const deliveriesByReceiverVehicle = useMemo(() => {
     return [...deliveries]
@@ -326,20 +333,101 @@ const CrateDeliveryPage: React.FC = () => {
       }, {});
   }, [deliveries]);
 
-  const getDeliveryEntriesForRowVehicle = (row: CrateDeliveryRow, vehicleId: string) => {
+  const getDeliveryEntriesForRowVehicle = useCallback((row: CrateDeliveryRow, vehicleId: string) => {
     const baseKey = `${row.customer_id}:${vehicleId}`;
     return row.deliveryDateKey
       ? deliveriesByReceiverVehicleDate[`${baseKey}:${row.deliveryDateKey}`] || []
       : deliveriesByReceiverVehicle[baseKey] || [];
-  };
+  }, [deliveriesByReceiverVehicle, deliveriesByReceiverVehicleDate]);
+
+  const rowMatchesFilters = useCallback((row: CrateDeliveryRow) => {
+    const query = search.trim().toLowerCase();
+    const rowDateKey = row.deliveryDateKey || getBangkokDateKey(row.created_at);
+
+    if (query && ![row.customer?.name, row.customer?.phone, row.customer?.address]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+      .includes(query)) return false;
+
+    if (filterCustomerIds.length > 0 && !filterCustomerIds.includes(row.customer_id)) return false;
+    if (filterDateFrom && rowDateKey < filterDateFrom) return false;
+    if (filterDateTo && rowDateKey > filterDateTo) return false;
+    if (filterVehicleIds.length > 0 && !filterVehicleIds.some(vehicleId => getDeliveryEntriesForRowVehicle(row, vehicleId).length > 0)) return false;
+
+    return true;
+  }, [filterCustomerIds, filterDateFrom, filterDateTo, filterVehicleIds, getDeliveryEntriesForRowVehicle, search]);
+
+  const statusCounts = useMemo(() => ({
+    can_giao: activeRows.filter(row => row.receiver_pending > 0 && rowMatchesFilters(row)).length,
+    da_giao: deliveredRows.filter(rowMatchesFilters).length,
+    dang_no: activeRows.filter(row => row.receiver_debt > 0 && rowMatchesFilters(row)).length,
+    all: visibleRows.filter(rowMatchesFilters).length,
+  }), [activeRows, deliveredRows, visibleRows, rowMatchesFilters]);
+
+  const filteredRows = useMemo(() => {
+    const sourceRows = statusFilter === 'da_giao' ? deliveredRows : statusFilter === 'all' ? visibleRows : activeRows;
+    return sourceRows
+      .filter(row => {
+        if (statusFilter === 'can_giao') return row.receiver_pending > 0;
+        if (statusFilter === 'da_giao') return (row.delivered_total || 0) > 0;
+        if (statusFilter === 'dang_no') return row.receiver_debt > 0;
+        return true;
+      })
+      .filter(rowMatchesFilters)
+      .sort((a, b) => {
+        if (statusFilter === 'da_giao' || statusFilter === 'all') {
+          const aIsActive = !a.deliveryDateKey;
+          const bIsActive = !b.deliveryDateKey;
+          if (statusFilter === 'all' && aIsActive !== bIsActive) return aIsActive ? -1 : 1;
+          const dateCompare = (b.deliveryDateKey || '').localeCompare(a.deliveryDateKey || '');
+          if (dateCompare !== 0) return dateCompare;
+          return (b.delivered_total || 0) - (a.delivered_total || 0);
+        }
+        return (b.receiver_pending - a.receiver_pending) || (b.receiver_debt - a.receiver_debt);
+      });
+  }, [activeRows, deliveredRows, visibleRows, rowMatchesFilters, statusFilter]);
+
+  const shouldGroupByDeliveryDate = statusFilter === 'da_giao' || statusFilter === 'all';
+
+  const groupedFilteredRows = useMemo(() => {
+    return filteredRows.reduce<Record<string, CrateDeliveryRow[]>>((acc, row) => {
+      const key = shouldGroupByDeliveryDate && row.deliveryDateKey ? row.deliveryDateKey : '__active__';
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {});
+  }, [filteredRows, shouldGroupByDeliveryDate]);
+
+  const sortedFilteredRowGroupKeys = useMemo(() => {
+    return Object.keys(groupedFilteredRows).sort((a, b) => {
+      if (a === '__active__') return -1;
+      if (b === '__active__') return 1;
+      return b.localeCompare(a);
+    });
+  }, [groupedFilteredRows]);
+
+  const mobileGroupedRows = useMemo(() => {
+    return filteredRows.reduce<Record<string, CrateDeliveryRow[]>>((acc, row) => {
+      const createdDateKey = getBangkokDateKey(row.created_at);
+      const key = row.deliveryDateKey || createdDateKey;
+      if (!acc[key]) acc[key] = [];
+      acc[key].push(row);
+      return acc;
+    }, {});
+  }, [filteredRows]);
+
+  const sortedMobileGroupKeys = useMemo(() => {
+    return Object.keys(mobileGroupedRows).sort((a, b) => {
+      if (a === '__active__') return -1;
+      if (b === '__active__') return 1;
+      return b.localeCompare(a);
+    });
+  }, [mobileGroupedRows]);
 
   const openDeliveryModal = (receiver: CrateDeliveryRow, vehicleId?: string | null) => {
-    const resolvedVehicleId = vehicleId || (displayedVehicles.length === 1 ? displayedVehicles[0].id : null);
-    if (!resolvedVehicleId) {
-      toast.error('Vui lòng chọn xe giao két');
-      return;
-    }
-    if (!displayedVehicles.some((vehicle) => vehicle.id === resolvedVehicleId)) {
+    const resolvedVehicleId = vehicleId || (isDriverOrLoader && myPrimaryVehicleId) || (displayedVehicles.length === 1 ? displayedVehicles[0].id : null);
+    if (resolvedVehicleId && !displayedVehicles.some((vehicle) => vehicle.id === resolvedVehicleId)) {
       toast.error('Bạn chỉ được giao bằng xe mình phụ trách');
       return;
     }
@@ -394,6 +482,34 @@ const CrateDeliveryPage: React.FC = () => {
     }
   };
 
+  const openRevertDialog = (row: CrateDeliveryRow) => {
+    if (!isAdmin) return;
+    const ids = row.deliveryIds || [];
+    if (ids.length === 0) {
+      toast.error('Không tìm thấy phiếu giao két để hoàn tác');
+      return;
+    }
+    setRevertingRow(row);
+  };
+
+  const executeRevertDeliveries = async () => {
+    if (!revertingRow) return;
+    const ids = revertingRow.deliveryIds || [];
+    if (ids.length === 0) return;
+
+    setIsReverting(true);
+    try {
+      await cratesApi.revertDeliveries(ids);
+      toast.success('Đã hoàn tác giao két');
+      setRevertingRow(null);
+      await loadData();
+    } catch (error: unknown) {
+      toast.error(getErrorMessage(error) || 'Hoàn tác giao két thất bại');
+    } finally {
+      setIsReverting(false);
+    }
+  };
+
   const renderStatusBadge = (row: CrateDeliveryRow) => {
     if (row.receiver_pending > 0) {
       return <span className="inline-flex rounded-lg bg-orange-500/10 px-2 py-1 text-[11px] font-black text-orange-600">Cần giao</span>;
@@ -405,20 +521,27 @@ const CrateDeliveryPage: React.FC = () => {
   };
 
   const selectedVehicle = deliveryModal?.vehicleId
-    ? eligibleVehicles.find(vehicle => vehicle.id === deliveryModal.vehicleId)
+    ? displayedVehicles.find(vehicle => vehicle.id === deliveryModal.vehicleId)
     : null;
+  const deliveryVehicleOptions = displayedVehicles.map(vehicle => ({
+    value: vehicle.id,
+    label: `${vehicle.license_plate}${vehicle.profiles?.full_name ? ` · ${vehicle.profiles.full_name}` : vehicle.responsible_profile?.full_name ? ` · ${vehicle.responsible_profile.full_name}` : ''}`,
+    selectedLabel: vehicle.license_plate,
+    searchText: `${vehicle.license_plate} ${vehicle.profiles?.full_name || ''} ${vehicle.responsible_profile?.full_name || ''}`,
+  }));
+  const canChangeDeliveryVehicle = isAdmin;
   const modalDebtWillCreate = deliveryModal
     ? Math.max(Number(deliveryForm.quantity || 0) - deliveryModal.receiver.receiver_pending, 0)
     : 0;
 
   return (
-    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0 px-3 pb-24 md:px-0 md:pb-0">
+    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
         <PageHeader title="Giao két" description="Danh sách khách nhận két cần giao" backPath="/app/hang-hoa" />
       </div>
 
-      <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2 md:p-2.5 md:mb-6 mb-3 overflow-x-auto custom-scrollbar">
-        <div className="flex-1 min-w-50 md:max-w-full">
+      <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2.5 md:mb-6 mb-3 overflow-x-auto custom-scrollbar">
+        <div className="flex-1 min-w-56 md:min-w-0">
           <SearchInput
             placeholder="Tìm khách nhận két..."
             onSearch={(raw) => setSearch(raw)}
@@ -426,23 +549,84 @@ const CrateDeliveryPage: React.FC = () => {
           />
         </div>
 
-        <div className="hidden md:flex items-center gap-2 shrink-0 text-xs font-bold text-muted-foreground px-3">
-          <Truck size={15} className="text-primary" />
-          Tài xế: <span className="text-foreground">{user?.full_name || 'Tài khoản hiện tại'}</span>
+        <div className="hidden md:flex items-center gap-2 shrink-0">
+          <div className="w-56 shrink-0">
+            <DateRangePicker
+              initialDateFrom={filterDateFrom || undefined}
+              initialDateTo={filterDateTo || undefined}
+              onUpdate={({ range }) => {
+                setFilterDateFrom(range.from ? formatDateInputValue(range.from) : '');
+                setFilterDateTo(range.to ? formatDateInputValue(range.to) : '');
+              }}
+              className="h-9.5 w-full md:w-full bg-muted/20 border-border/80"
+              hidePresets
+            />
+          </div>
+          <div className="w-60 shrink-0">
+            <MultiSearchableSelect
+              options={customerFilterOptions}
+              value={filterCustomerIds}
+              onValueChange={setFilterCustomerIds}
+              placeholder="Khách nhận két"
+              className="h-9.5 bg-transparent"
+              icon={<Package size={15} />}
+            />
+          </div>
+          <div className="w-52 shrink-0">
+            <MultiSearchableSelect
+              options={vehicleFilterOptions}
+              value={filterVehicleIds}
+              onValueChange={setFilterVehicleIds}
+              placeholder="Xe đã giao"
+              className="h-9.5 bg-transparent"
+              icon={<Truck size={15} />}
+            />
+          </div>
+          {(filterDateFrom || filterDateTo || filterCustomerIds.length > 0 || filterVehicleIds.length > 0) && (
+            <button
+              onClick={() => {
+                setFilterDateFrom('');
+                setFilterDateTo('');
+                setFilterCustomerIds([]);
+                setFilterVehicleIds([]);
+              }}
+              className="h-9.5 px-3 shrink-0 border border-border/80 rounded-xl text-[12px] font-bold bg-muted/20 text-muted-foreground hover:bg-muted hover:text-foreground transition-all inline-flex items-center gap-1.5"
+              title="Xóa bộ lọc"
+            >
+              <X size={14} />
+              Xóa lọc
+            </button>
+          )}
         </div>
+
+        <button
+          onClick={openFilter}
+          className={clsx(
+            'md:hidden h-9.5 w-9.5 shrink-0 border rounded-xl transition-all inline-flex items-center justify-center relative',
+            filterDateFrom || filterDateTo || filterCustomerIds.length > 0 || filterVehicleIds.length > 0
+              ? 'border-primary/30 bg-primary/10 text-primary'
+              : 'border-border/80 bg-muted/20 text-muted-foreground hover:bg-muted'
+          )}
+          aria-label="Mở bộ lọc"
+        >
+          <Filter size={17} />
+          {(filterDateFrom || filterDateTo || filterCustomerIds.length > 0 || filterVehicleIds.length > 0) && (
+            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-primary ring-2 ring-card" />
+          )}
+        </button>
 
         <button
           onClick={() => void loadData()}
           className="h-9.5 px-3 shrink-0 border border-border/80 rounded-xl text-[12px] font-bold bg-muted/20 text-foreground hover:bg-muted transition-all inline-flex items-center gap-2"
         >
           <RefreshCw size={15} />
-          Tải lại
+          <span className="hidden md:inline">Tải lại</span>
         </button>
       </div>
 
       <div className="bg-card rounded-2xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
         <div className="flex flex-col shrink-0 border-b border-border bg-muted/50">
-          <div className="grid grid-cols-4 gap-1 p-2 md:px-3 md:py-2 md:flex md:items-center md:gap-1 md:overflow-x-auto custom-scrollbar">
+          <div className="grid grid-cols-4 gap-1 px-3 py-2 md:flex md:items-center md:gap-1 md:overflow-x-auto custom-scrollbar">
             {(['can_giao', 'da_giao', 'dang_no', 'all'] as const).map(status => {
               const colors = STATUS_COLORS[status];
               const isActive = statusFilter === status;
@@ -548,6 +732,15 @@ const CrateDeliveryPage: React.FC = () => {
                           >
                             <Truck size={16} />
                           </button>
+                          {statusFilter === 'da_giao' && isAdmin && row.deliveryIds && row.deliveryIds.length > 0 && (
+                            <button
+                              onClick={() => openRevertDialog(row)}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/10 text-amber-600 transition-all hover:bg-amber-500/20"
+                              title="Hoàn tác giao két"
+                            >
+                              <RotateCcw size={15} />
+                            </button>
+                          )}
                         </div>
                       </td>
                       <td className="px-3 py-3 border-r border-border text-center">
@@ -589,9 +782,6 @@ const CrateDeliveryPage: React.FC = () => {
                                     </React.Fragment>
                                   ))}
                                 </span>
-                                <span className="inline-flex items-center gap-0.5 rounded-sm bg-green-500/10 px-1 text-[9px] font-black text-green-600">
-                                  <CheckCircle size={8} strokeWidth={3} /> Giao
-                                </span>
                               </div>
                             ) : (
                               <Truck size={13} className="mx-auto opacity-20" />
@@ -610,77 +800,214 @@ const CrateDeliveryPage: React.FC = () => {
               </table>
             </div>
 
-            <div className="md:hidden p-2.5 space-y-3">
-              {sortedFilteredRowGroupKeys.map((groupKey) => (
+            <div className="md:hidden flex flex-col gap-3 px-3 pt-0 pb-20 relative">
+              {sortedMobileGroupKeys.map((groupKey) => (
                 <div key={`mobile-${groupKey}`} className="flex flex-col gap-2.5">
-                  {shouldGroupByDeliveryDate && groupKey !== '__active__' && (
-                    <div className="flex items-center gap-2 sticky top-0 bg-muted/80 dark:bg-muted/40 backdrop-blur-md p-3 -mx-2.5 px-5 z-10 border-b border-border shadow-sm">
-                      <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary shrink-0">
-                        <Calendar size={14} />
-                      </div>
-                      <span className="text-[13px] font-black text-foreground uppercase tracking-wider">
-                        Ngày giao: {formatDeliveryDateKey(groupKey)}
-                      </span>
+                  <div className="flex items-center gap-2 sticky top-0 bg-muted/80 dark:bg-muted/40 backdrop-blur-md p-3 -mx-3 px-5 z-10 border-b border-border shadow-sm">
+                    <div className="flex items-center justify-center w-7 h-7 rounded-lg bg-primary/10 text-primary shrink-0">
+                      <Calendar size={14} />
                     </div>
-                  )}
-                  {groupedFilteredRows[groupKey].map(row => (
-                    <div key={row.rowKey || row.customer_id} className="rounded-2xl border border-border bg-background p-4 space-y-3 shadow-sm">
-                      <div className="flex justify-between gap-3">
-                        <div>
-                          <h2 className="font-black text-lg">{row.customer?.name || '-'}</h2>
-                          <p className="text-sm text-muted-foreground">{row.customer?.phone || '-'}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="text-xs text-muted-foreground font-bold uppercase">Chờ / Nợ</p>
-                          <p className="font-black"><span className="text-blue-600">{formatNumber(row.receiver_pending)}</span> / <span className="text-red-600">{formatNumber(row.receiver_debt)}</span></p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        {displayedVehicles.slice(0, 6).map(vehicle => {
-                          const deliveryEntries = getDeliveryEntriesForRowVehicle(row, vehicle.id);
-                          const hasDeliveries = deliveryEntries.length > 0;
-                          return (
-                            <button
-                              key={vehicle.id}
-                              onClick={() => openDeliveryModal(row, vehicle.id)}
-                              className={clsx(
-                                'rounded-xl border border-border px-3 py-2 text-left text-xs font-bold transition-all',
-                                hasDeliveries ? 'bg-blue-500/10 text-blue-600' : 'bg-muted/20 text-muted-foreground'
+                    <span className="text-[13px] font-black text-foreground uppercase tracking-wider">
+                      {statusFilter === 'da_giao' ? 'Ngày giao' : 'Ngày tạo đơn'}: {groupKey === '__active__' ? '-' : formatDeliveryDateKey(groupKey)}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col gap-2.5 px-0.5">
+                    {mobileGroupedRows[groupKey].map(row => {
+                      const mobileDeliveries = displayedVehicles
+                        .map(vehicle => ({ vehicle, entries: getDeliveryEntriesForRowVehicle(row, vehicle.id) }))
+                        .filter(({ entries }) => entries.length > 0);
+                      const hasPending = row.receiver_pending > 0;
+                      const canOpen = row.receiver_pending > 0 || row.receiver_debt > 0;
+                      const canRevert = statusFilter === 'da_giao' && isAdmin && !!row.deliveryIds?.length;
+
+                      return (
+                        <div
+                          key={row.rowKey || row.customer_id}
+                          onClick={() => canOpen && openDeliveryModal(row)}
+                          className={clsx(
+                            'bg-card rounded-xl border shadow-sm transition-all relative overflow-hidden',
+                            canOpen && 'cursor-pointer active:scale-[0.98]',
+                            hasPending ? 'border-orange-500/30 dark:border-orange-500/20' : 'border-border'
+                          )}
+                        >
+                          <div className="p-3 flex flex-col gap-2.5">
+                            <div className="flex gap-3">
+                              <div className="w-16 h-16 shrink-0 bg-primary/10 rounded-lg overflow-hidden border border-border/50 self-center flex flex-col items-center justify-center text-primary">
+                                <Package size={22} className="mb-0.5" />
+                                <span className="text-[9px] font-bold">GIAO KÉT</span>
+                              </div>
+
+                              <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5 pr-6">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[13px] font-bold text-primary">{row.customer?.name || '-'}</span>
+                                  <div className="w-1 h-1 rounded-full bg-border" />
+                                  <span className="text-[13px] font-bold text-foreground">Két</span>
+                                </div>
+
+                                <div className="text-[11px] text-muted-foreground truncate">
+                                  <span className="font-semibold text-foreground/80">SĐT:</span>{' '}
+                                  {row.customer?.phone || '-'}
+                                </div>
+
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  {row.isDeliveredHistory ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-emerald-100 text-emerald-700 uppercase shrink-0">Đã giao</span>
+                                  ) : hasPending ? (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-orange-100 text-orange-700 uppercase shrink-0">Cần giao</span>
+                                  ) : (
+                                    <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-100 text-red-700 uppercase shrink-0">Đang nợ</span>
+                                  )}
+                                  <span className="text-[11px] text-muted-foreground tabular-nums whitespace-nowrap">
+                                    {row.isDeliveredHistory ? formatDeliveryDateKey(row.deliveryDateKey) : formatDateTime(row.created_at)}
+                                  </span>
+                                  <div className="flex items-center gap-1 ml-auto shrink-0">
+                                    <span className="text-[10px] uppercase font-black tracking-wider text-muted-foreground/60">SL:</span>
+                                    <span className="text-[14px] font-bold text-foreground tabular-nums">
+                                      {formatNumber(row.isDeliveredHistory ? row.delivered_total : row.receiver_pending)}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {mobileDeliveries.length > 0 && (
+                              <div className="pt-2 border-t border-border flex flex-wrap gap-1.5">
+                                {mobileDeliveries.map(({ vehicle, entries }) => (
+                                  <button
+                                    key={vehicle.id}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      openDeliveryModal(row, vehicle.id);
+                                    }}
+                                    className="flex items-center gap-1.5 px-2 py-1 rounded-md border bg-blue-50 border-blue-100 text-blue-700 dark:text-blue-500"
+                                  >
+                                    <Truck size={12} className="text-blue-500" />
+                                    <span className="text-[11px] font-bold">{vehicle.license_plate}</span>
+                                    <span className="text-[11px] font-black text-foreground ml-1">
+                                      {formatNumber(entries.reduce((sum, delivery) => sum + delivery.quantity, 0))}
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+
+                          {(canOpen || canRevert) && (
+                            <div className="flex border-t border-slate-100 divide-x divide-slate-100">
+                              {canOpen && (
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openDeliveryModal(row);
+                                  }}
+                                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-orange-600 dark:text-orange-500 hover:bg-orange-500/10 text-[12px] font-bold transition-colors"
+                                >
+                                  <Truck size={14} strokeWidth={2.5} />
+                                  <span className="hidden min-[400px]:inline">Giao két</span>
+                                </button>
                               )}
-                            >
-                              <span className="block text-foreground">{vehicle.license_plate}</span>
-                              <span>
-                                {hasDeliveries ? (
-                                  <>
-                                    Đã giao{' '}
-                                    {deliveryEntries.map((delivery, index) => (
-                                      <React.Fragment key={delivery.id}>
-                                        {index > 0 && <span className="text-blue-400"> + </span>}
-                                        <CrateDeliveryQuantityTooltip delivery={delivery} row={row} vehicle={vehicle}>
-                                          <span className="rounded px-0.5 underline decoration-dotted underline-offset-2 transition-colors hover:bg-blue-500/10">
-                                            {formatNumber(delivery.quantity)}
-                                          </span>
-                                        </CrateDeliveryQuantityTooltip>
-                                      </React.Fragment>
-                                    ))}
-                                  </>
-                                ) : 'Chọn xe giao'}
-                              </span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <button onClick={() => openDeliveryModal(row)} className="w-full px-4 py-3.5 rounded-xl bg-primary text-white font-black hover:bg-primary/90">
-                        Xác nhận giao két
-                      </button>
-                    </div>
-                  ))}
+                              {canRevert && (
+                                <button
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openRevertDialog(row);
+                                  }}
+                                  className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-amber-600 dark:text-amber-500 hover:bg-amber-500/10 text-[12px] font-bold transition-colors"
+                                >
+                                  <RotateCcw size={14} strokeWidth={2.5} />
+                                  <span className="hidden min-[400px]:inline">Hoàn tác</span>
+                                </button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
           </div>
         )}
       </div>
+
+      <MobileFilterSheet
+        isOpen={isFilterOpen}
+        isClosing={isFilterClosing}
+        onClose={closeFilter}
+        onApply={(filters) => {
+          setFilterDateFrom(filters.dateFrom || '');
+          setFilterDateTo(filters.dateTo || '');
+          if (filters.status) setStatusFilter(filters.status as DeliveryStatus);
+        }}
+        onClear={() => {
+          setFilterDateFrom('');
+          setFilterDateTo('');
+          setFilterCustomerIds([]);
+          setFilterVehicleIds([]);
+          setStatusFilter('can_giao');
+        }}
+        showClearButton={
+          !!filterDateFrom ||
+          !!filterDateTo ||
+          filterCustomerIds.length > 0 ||
+          filterVehicleIds.length > 0 ||
+          statusFilter !== 'can_giao'
+        }
+        initialDateFrom={filterDateFrom}
+        initialDateTo={filterDateTo}
+        initialStatus={statusFilter}
+        statusOptions={([
+          'can_giao',
+          'da_giao',
+          'dang_no',
+          'all',
+        ] as DeliveryStatus[]).map(status => ({ value: status, label: STATUS_LABELS[status] }))}
+        dateLabel="Khoảng thời gian"
+        statusLabel="Trạng thái"
+      >
+        <div className="space-y-1.5 z-30">
+          <label className="text-[13px] font-bold text-muted-foreground">Khách nhận két</label>
+          <MultiSearchableSelect
+            options={customerFilterOptions}
+            value={filterCustomerIds}
+            onValueChange={setFilterCustomerIds}
+            placeholder="Tất cả khách..."
+            className="w-full bg-muted/10 h-10.5 border-border/80 rounded-xl"
+            inline
+          />
+        </div>
+        <div className="space-y-1.5 z-20">
+          <label className="text-[13px] font-bold text-muted-foreground">Xe đã giao két</label>
+          <MultiSearchableSelect
+            options={vehicleFilterOptions}
+            value={filterVehicleIds}
+            onValueChange={setFilterVehicleIds}
+            placeholder="Tất cả xe..."
+            className="w-full bg-muted/10 h-10.5 border-border/80 rounded-xl"
+            inline
+            icon={<Truck size={15} />}
+          />
+        </div>
+      </MobileFilterSheet>
+
+      <ConfirmDialog
+        isOpen={!!revertingRow}
+        title="Hoàn tác giao két"
+        message={
+          <span>
+            Hoàn tác giao <span className="font-black text-foreground">{formatNumber(revertingRow?.delivered_total)}</span> két cho{' '}
+            <span className="font-black text-foreground">{revertingRow?.customer?.name || 'khách này'}</span>?
+          </span>
+        }
+        confirmLabel="Hoàn tác"
+        cancelLabel="Hủy"
+        variant="warning"
+        isLoading={isReverting}
+        onConfirm={() => void executeRevertDeliveries()}
+        onCancel={() => !isReverting && setRevertingRow(null)}
+      />
 
       {deliveryModal && createPortal(
         <div className="fixed inset-0 z-[99999] flex items-end justify-center sm:items-center sm:p-4">
@@ -724,8 +1051,31 @@ const CrateDeliveryPage: React.FC = () => {
               </div>
 
               <div>
+                <h4 className="mb-3 text-sm font-black uppercase text-foreground">Chọn xe giao két</h4>
+                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <SearchableSelect
+                    options={deliveryVehicleOptions}
+                    value={deliveryModal.vehicleId || ''}
+                    onValueChange={(vehicleId) => setDeliveryModal(prev => prev ? { ...prev, vehicleId: vehicleId || null } : prev)}
+                    placeholder="Chọn xe giao két..."
+                    searchPlaceholder="Tìm biển số / tài xế..."
+                    emptyMessage="Không có xe phù hợp."
+                    className="h-11 bg-background font-bold"
+                    disabled={!canChangeDeliveryVehicle}
+                    icon={<Truck size={15} />}
+                  />
+                </div>
+              </div>
+
+              <div>
                 <h4 className="mb-3 text-sm font-black uppercase text-foreground">Thông tin giao két</h4>
                 <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
+                  <div className="mb-4 space-y-2">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Người nhận</label>
+                    <div className="flex min-h-11 items-center rounded-xl border border-border bg-muted/20 px-3 text-sm font-black text-foreground">
+                      {deliveryModal.receiver.customer?.name || '-'}
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-[180px_1fr]">
                     <div className="space-y-2">
                       <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Số két giao</label>

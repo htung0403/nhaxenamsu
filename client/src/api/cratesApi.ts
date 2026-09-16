@@ -112,6 +112,11 @@ export const cratesApi = {
     return data;
   },
 
+  revertDeliveries: async (ids: string[]) => {
+    const { data } = await axiosClient.post('/crates/deliveries/revert', { ids });
+    return data;
+  },
+
   getHistory: async (customerId?: string, filters?: { start_date?: string; end_date?: string }) => {
     const { data } = await axiosClient.get<CrateHistory>('/crates/history', {
       params: {

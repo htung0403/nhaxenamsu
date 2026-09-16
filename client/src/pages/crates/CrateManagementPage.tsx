@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Boxes, ChevronLeft, History, PackagePlus, RefreshCw, Send } from 'lucide-react';
+import { Boxes, ChevronLeft, History, PackagePlus, Plus, RefreshCw, Send } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateHistory } from '../../api/cratesApi';
 import { buildCrateHistoryEvents } from './crateHistoryEvents';
 
@@ -9,6 +9,8 @@ const formatNumber = (value?: number | null) => new Intl.NumberFormat('vi-VN').f
 const formatDateTime = (value?: string | null) => value ? new Date(value).toLocaleString('vi-VN') : '-';
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
 const HISTORY_PAGE_SIZE = 10;
+const getSenderAvailableCrates = (row: CrateAccount) => Math.max(row.sender_balance, 0);
+const getSenderDebtCrates = (row: CrateAccount) => Math.max(-row.sender_balance, 0);
 
 const CrateManagementPage: React.FC = () => {
   const navigate = useNavigate();
@@ -40,6 +42,9 @@ const CrateManagementPage: React.FC = () => {
   useEffect(() => { void loadData(); }, []);
 
   const currentRows = activeTab === 'senders' ? senders : receivers;
+  const vehicleCratesInStock = senders.reduce((sum, row) => sum + row.sender_balance, 0);
+  const customerCratesAwaitingDelivery = receivers.reduce((sum, row) => sum + row.receiver_pending, 0);
+  const totalCratesInStock = vehicleCratesInStock + customerCratesAwaitingDelivery;
 
   const recentEvents = useMemo(() => buildCrateHistoryEvents(history), [history]);
   const historyPageCount = Math.max(1, Math.ceil(recentEvents.length / HISTORY_PAGE_SIZE));
@@ -69,10 +74,32 @@ const CrateManagementPage: React.FC = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-2 md:gap-3">
-        <div className="rounded-2xl border border-border bg-card p-3 md:p-4"><p className="text-xs font-bold text-muted-foreground uppercase">Khách gửi két</p><p className="text-2xl md:text-3xl font-black">{formatNumber(senders.length)}</p></div>
-        <div className="rounded-2xl border border-border bg-card p-3 md:p-4"><p className="text-xs font-bold text-muted-foreground uppercase">Tổng két đang gửi</p><p className="text-2xl md:text-3xl font-black text-emerald-600">{formatNumber(senders.reduce((sum, row) => sum + row.sender_balance, 0))}</p></div>
-        <div className="rounded-2xl border border-border bg-card p-3 md:p-4"><p className="text-xs font-bold text-muted-foreground uppercase">Chờ giao / Nợ</p><p className="text-2xl md:text-3xl font-black text-orange-600">{formatNumber(receivers.reduce((sum, row) => sum + row.receiver_pending, 0))} / {formatNumber(receivers.reduce((sum, row) => sum + row.receiver_debt, 0))}</p></div>
+      <div className="rounded-2xl border border-border bg-card p-3 shadow-sm md:p-4">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+            <div>
+            <p className="text-xs font-bold uppercase text-muted-foreground">Tổng két trong kho</p>
+            <p className="text-3xl font-black text-emerald-600 md:text-4xl">{formatNumber(totalCratesInStock)}</p>
+            </div>
+            <button
+              onClick={() => navigate('/app/hang-hoa/nhap-ket')}
+              className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 text-sm font-black text-white shadow-sm transition hover:bg-emerald-700 sm:h-12"
+              title="Nhập thêm két vào kho"
+            >
+              <Plus size={18} strokeWidth={3} /> Nhập thêm két
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-2 md:min-w-[420px]">
+            <div className="rounded-xl bg-emerald-500/10 p-3">
+              <p className="text-[11px] font-bold uppercase text-muted-foreground">Két nhà xe</p>
+              <p className="text-xl font-black text-emerald-600">{formatNumber(vehicleCratesInStock)}</p>
+            </div>
+            <div className="rounded-xl bg-blue-500/10 p-3">
+              <p className="text-[11px] font-bold uppercase text-muted-foreground">Khách chưa giao két</p>
+              <p className="text-xl font-black text-blue-600">{formatNumber(customerCratesAwaitingDelivery)}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div className="rounded-2xl border border-border bg-card overflow-hidden shadow-sm">
@@ -80,25 +107,28 @@ const CrateManagementPage: React.FC = () => {
           <button onClick={() => setActiveTab('senders')} className={`rounded-xl px-3 md:px-5 py-2.5 md:py-3 text-sm font-bold ${activeTab === 'senders' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}>Khách gửi két</button>
           <button onClick={() => setActiveTab('receivers')} className={`rounded-xl px-3 md:px-5 py-2.5 md:py-3 text-sm font-bold ${activeTab === 'receivers' ? 'bg-card text-primary shadow-sm' : 'text-muted-foreground'}`}>Khách nhận két</button>
         </div>
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden md:block max-h-[460px] overflow-auto xl:max-h-[520px]">
           <table className="w-full min-w-[760px] table-fixed text-left">
-            <thead className="bg-muted/30 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <thead className="sticky top-0 z-10 bg-muted/95 text-[11px] uppercase tracking-wide text-muted-foreground backdrop-blur">
               <tr>
                 <th className="w-[34%] px-4 py-3">Khách hàng</th>
                 <th className="w-[18%] px-4 py-3">Điện thoại</th>
                 {activeTab === 'senders' ? (
-                  <th className="w-[16%] px-4 py-3 text-center">Đang gửi</th>
+                  <>
+                    <th className="w-[14%] px-4 py-3 text-center">Đang gửi</th>
+                    <th className="w-[14%] px-4 py-3 text-center">Nợ két</th>
+                  </>
                 ) : (
                   <>
                     <th className="w-[14%] px-4 py-3 text-center">Chờ giao</th>
                     <th className="w-[14%] px-4 py-3 text-center">Nợ két</th>
                   </>
                 )}
-                <th className="w-[32%] px-4 py-3 text-right">Thao tác</th>
+                <th className="w-[28%] px-4 py-3 text-right">Thao tác</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/60">
-              {loading ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={activeTab === 'senders' ? 4 : 5}>Đang tải...</td></tr> : currentRows.map(row => (
+              {loading ? <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>Đang tải...</td></tr> : currentRows.map(row => (
                 <tr key={row.customer_id} className="group hover:bg-muted/20">
                   <td className="px-4 py-3">
                     <div className="font-black text-foreground">{row.customer?.name || '-'}</div>
@@ -106,9 +136,14 @@ const CrateManagementPage: React.FC = () => {
                   </td>
                   <td className="px-4 py-3 text-sm font-medium text-muted-foreground">{row.customer?.phone || '-'}</td>
                   {activeTab === 'senders' ? (
-                    <td className="px-4 py-3 text-center">
-                      <span className="inline-flex min-w-16 justify-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-black text-emerald-600">{formatNumber(row.sender_balance)}</span>
-                    </td>
+                    <>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex min-w-16 justify-center rounded-full bg-emerald-500/10 px-3 py-1 text-sm font-black text-emerald-600">{formatNumber(getSenderAvailableCrates(row))}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="inline-flex min-w-16 justify-center rounded-full bg-red-500/10 px-3 py-1 text-sm font-black text-red-600">{formatNumber(getSenderDebtCrates(row))}</span>
+                      </td>
+                    </>
                   ) : (
                     <>
                       <td className="px-4 py-3 text-center">
@@ -133,7 +168,7 @@ const CrateManagementPage: React.FC = () => {
                   </td>
                 </tr>
               ))}
-              {!loading && currentRows.length === 0 && <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={activeTab === 'senders' ? 4 : 5}>Chưa có khách trong danh sách này.</td></tr>}
+              {!loading && currentRows.length === 0 && <tr><td className="px-4 py-8 text-center text-muted-foreground" colSpan={5}>Chưa có khách trong danh sách này.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -155,9 +190,9 @@ const CrateManagementPage: React.FC = () => {
                 </button>
               </div>
               <div className="grid grid-cols-3 gap-2 text-center">
-                <div className="rounded-xl bg-emerald-500/10 p-2"><p className="text-[10px] font-bold uppercase text-muted-foreground">Đang gửi</p><p className="font-black text-emerald-600">{formatNumber(row.sender_balance)}</p></div>
+                <div className="rounded-xl bg-emerald-500/10 p-2"><p className="text-[10px] font-bold uppercase text-muted-foreground">Đang gửi</p><p className="font-black text-emerald-600">{formatNumber(activeTab === 'senders' ? getSenderAvailableCrates(row) : row.sender_balance)}</p></div>
                 <div className="rounded-xl bg-blue-500/10 p-2"><p className="text-[10px] font-bold uppercase text-muted-foreground">Chờ giao</p><p className="font-black text-blue-600">{formatNumber(row.receiver_pending)}</p></div>
-                <div className="rounded-xl bg-red-500/10 p-2"><p className="text-[10px] font-bold uppercase text-muted-foreground">Nợ két</p><p className="font-black text-red-600">{formatNumber(row.receiver_debt)}</p></div>
+                <div className="rounded-xl bg-red-500/10 p-2"><p className="text-[10px] font-bold uppercase text-muted-foreground">Nợ két</p><p className="font-black text-red-600">{formatNumber(activeTab === 'senders' ? getSenderDebtCrates(row) : row.receiver_debt)}</p></div>
               </div>
               {activeTab === 'senders' ? (
                 <div className="grid grid-cols-2 gap-2">
