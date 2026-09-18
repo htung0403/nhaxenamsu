@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { AlertCircle, Calendar, Camera, Filter, ImagePlus, Package, RefreshCw, RotateCcw, Truck, X } from 'lucide-react';
+import { AlertCircle, Calendar, Camera, Filter, ImagePlus, Package, PlusCircle, RefreshCw, RotateCcw, Truck, X } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateDelivery } from '../../api/cratesApi';
 import { uploadApi } from '../../api/uploadApi';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
@@ -29,8 +29,9 @@ type DeliveryForm = { quantity: string; notes: string; files: File[] };
 type CrateDeliveryRow = CrateAccount & { delivered_total?: number; isDeliveredHistory?: boolean; deliveryDateKey?: string; rowKey?: string; deliveryIds?: string[] };
 
 type DeliveryModalState = {
-  receiver: CrateAccount;
+  receiver: CrateAccount | null;
   vehicleId: string | null;
+  isManual?: boolean;
 };
 
 const CrateDeliveryTooltipContent: React.FC<{
@@ -435,6 +436,12 @@ const CrateDeliveryPage: React.FC = () => {
     setDeliveryForm({ ...getDefaultForm(), quantity: receiver.receiver_pending > 0 ? String(receiver.receiver_pending) : '' });
   };
 
+  const openManualDeliveryModal = () => {
+    const resolvedVehicleId = myPrimaryVehicleId || (displayedVehicles.length === 1 ? displayedVehicles[0].id : null);
+    setDeliveryModal({ receiver: null, vehicleId: resolvedVehicleId, isManual: true });
+    setDeliveryForm(getDefaultForm());
+  };
+
   const closeDeliveryModal = () => {
     if (submitting) return;
     setDeliveryModal(null);
@@ -443,6 +450,10 @@ const CrateDeliveryPage: React.FC = () => {
 
   const handleDeliver = async () => {
     if (!deliveryModal) return;
+    if (!deliveryModal.receiver) {
+      toast.error('Vui lòng chọn khách nhận két');
+      return;
+    }
     if (!deliveryModal.vehicleId || !displayedVehicles.some((vehicle) => vehicle.id === deliveryModal.vehicleId)) {
       toast.error('Vui lòng chọn xe giao két hợp lệ');
       return;
@@ -529,9 +540,29 @@ const CrateDeliveryPage: React.FC = () => {
     selectedLabel: vehicle.license_plate,
     searchText: `${vehicle.license_plate} ${vehicle.profiles?.full_name || ''} ${vehicle.responsible_profile?.full_name || ''}`,
   }));
+  const deliveryReceiverOptions = receivers
+    .filter(row => row.customer_id && row.customer?.name)
+    .map(row => ({
+      value: row.customer_id,
+      label: row.customer?.name || row.customer_id,
+      selectedLabel: row.customer?.name || row.customer_id,
+      searchText: `${row.customer?.name || ''} ${row.customer?.phone || ''} ${row.receiver_pending} ${row.receiver_debt}`,
+      content: (
+        <span className="flex min-w-0 flex-wrap items-center gap-2">
+          <span className="min-w-0 flex-1 truncate font-bold text-foreground">{row.customer?.name || row.customer_id}</span>
+          <span className="inline-flex shrink-0 items-center rounded-lg bg-blue-500/10 px-2 py-1 text-[11px] font-black text-blue-600">
+            Chờ giao {formatNumber(row.receiver_pending)} két
+          </span>
+          <span className="inline-flex shrink-0 items-center rounded-lg bg-red-500/10 px-2 py-1 text-[11px] font-black text-red-600">
+            Nợ {formatNumber(row.receiver_debt)} két
+          </span>
+        </span>
+      ),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
   const canChangeDeliveryVehicle = isAdmin;
   const modalDebtWillCreate = deliveryModal
-    ? Math.max(Number(deliveryForm.quantity || 0) - deliveryModal.receiver.receiver_pending, 0)
+    ? Math.max(Number(deliveryForm.quantity || 0) - (deliveryModal.receiver?.receiver_pending || 0), 0)
     : 0;
 
   return (
@@ -621,6 +652,15 @@ const CrateDeliveryPage: React.FC = () => {
         >
           <RefreshCw size={15} />
           <span className="hidden md:inline">Tải lại</span>
+        </button>
+
+        <button
+          onClick={openManualDeliveryModal}
+          className="h-9.5 px-3 shrink-0 rounded-xl text-[12px] font-black bg-primary text-white hover:bg-primary/90 shadow-sm shadow-primary/20 transition-all inline-flex items-center gap-2"
+        >
+          <PlusCircle size={15} />
+          <span className="hidden md:inline">Tạo đơn giao</span>
+          <span className="md:hidden">Tạo</span>
         </button>
       </div>
 
@@ -1019,9 +1059,9 @@ const CrateDeliveryPage: React.FC = () => {
                   <Truck size={20} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-foreground">Giao két</h3>
+                  <h3 className="text-lg font-black text-foreground">{deliveryModal.isManual ? 'Tạo đơn giao két' : 'Giao két'}</h3>
                   <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                    Người nhận: <span className="font-black text-foreground">{deliveryModal.receiver.customer?.name || '-'}</span>
+                    Nhân viên: <span className="font-black text-foreground">{user?.full_name || '-'}</span>
                   </p>
                 </div>
               </div>
@@ -1035,12 +1075,12 @@ const CrateDeliveryPage: React.FC = () => {
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto_1fr_auto_1fr] sm:items-center">
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Chờ giao</p>
-                    <p className="text-xl font-black tabular-nums text-primary">{formatNumber(deliveryModal.receiver.receiver_pending)}</p>
+                    <p className="text-xl font-black tabular-nums text-primary">{formatNumber(deliveryModal.receiver?.receiver_pending)}</p>
                   </div>
                   <div className="hidden h-8 w-px bg-border sm:block" />
                   <div>
                     <p className="text-[10px] font-bold uppercase tracking-widest text-red-400">Nợ két</p>
-                    <p className="text-xl font-black tabular-nums text-red-600">{formatNumber(deliveryModal.receiver.receiver_debt)}</p>
+                    <p className="text-xl font-black tabular-nums text-red-600">{formatNumber(deliveryModal.receiver?.receiver_debt)}</p>
                   </div>
                   <div className="hidden h-8 w-px bg-border sm:block" />
                   <div className="sm:text-right">
@@ -1051,19 +1091,28 @@ const CrateDeliveryPage: React.FC = () => {
               </div>
 
               <div>
-                <h4 className="mb-3 text-sm font-black uppercase text-foreground">Chọn xe giao két</h4>
-                <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
-                  <SearchableSelect
-                    options={deliveryVehicleOptions}
-                    value={deliveryModal.vehicleId || ''}
-                    onValueChange={(vehicleId) => setDeliveryModal(prev => prev ? { ...prev, vehicleId: vehicleId || null } : prev)}
-                    placeholder="Chọn xe giao két..."
-                    searchPlaceholder="Tìm biển số / tài xế..."
-                    emptyMessage="Không có xe phù hợp."
-                    className="h-11 bg-background font-bold"
-                    disabled={!canChangeDeliveryVehicle}
-                    icon={<Truck size={15} />}
-                  />
+                <h4 className="mb-3 text-sm font-black uppercase text-foreground">Thông tin tự động</h4>
+                <div className="grid grid-cols-1 gap-4 rounded-2xl border border-border bg-card p-4 shadow-sm md:grid-cols-2">
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Nhân viên</label>
+                    <div className="flex min-h-11 items-center rounded-xl border border-border bg-muted/20 px-3 text-sm font-black text-foreground">
+                      {user?.full_name || '-'}
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Xe</label>
+                    <SearchableSelect
+                      options={deliveryVehicleOptions}
+                      value={deliveryModal.vehicleId || ''}
+                      onValueChange={(vehicleId) => setDeliveryModal(prev => prev ? { ...prev, vehicleId: vehicleId || null } : prev)}
+                      placeholder="Chọn xe giao két..."
+                      searchPlaceholder="Tìm biển số / tài xế..."
+                      emptyMessage="Không có xe phù hợp."
+                      className="h-11 bg-background font-bold"
+                      disabled={!canChangeDeliveryVehicle}
+                      icon={<Truck size={15} />}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -1071,10 +1120,26 @@ const CrateDeliveryPage: React.FC = () => {
                 <h4 className="mb-3 text-sm font-black uppercase text-foreground">Thông tin giao két</h4>
                 <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                   <div className="mb-4 space-y-2">
-                    <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Người nhận</label>
-                    <div className="flex min-h-11 items-center rounded-xl border border-border bg-muted/20 px-3 text-sm font-black text-foreground">
-                      {deliveryModal.receiver.customer?.name || '-'}
-                    </div>
+                    <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Khách nhận két</label>
+                    {deliveryModal.isManual ? (
+                      <SearchableSelect
+                        options={deliveryReceiverOptions}
+                        value={deliveryModal.receiver?.customer_id || ''}
+                        onValueChange={(customerId) => {
+                          const receiver = receivers.find(row => row.customer_id === customerId) || null;
+                          setDeliveryModal(prev => prev ? { ...prev, receiver } : prev);
+                        }}
+                        placeholder="Chọn khách nhận két..."
+                        searchPlaceholder="Tìm tên / số điện thoại..."
+                        emptyMessage="Không có khách nhận két."
+                        className="h-11 bg-background font-bold"
+                        icon={<Package size={15} />}
+                      />
+                    ) : (
+                      <div className="flex min-h-11 items-center rounded-xl border border-border bg-muted/20 px-3 text-sm font-black text-foreground">
+                        {deliveryModal.receiver?.customer?.name || '-'}
+                      </div>
+                    )}
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-[180px_1fr]">
                     <div className="space-y-2">

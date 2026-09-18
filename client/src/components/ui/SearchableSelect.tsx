@@ -23,6 +23,7 @@ interface Option {
   selectedLabel?: string
   /** Extra text included in search matching but not displayed (e.g. aliases). */
   searchText?: string
+  content?: React.ReactNode
 }
 
 interface SearchableSelectProps {
@@ -131,9 +132,9 @@ export function SearchableSelect({
                     value === option.value && "bg-primary/10 text-primary hover:bg-primary/15"
                   )}
                 >
-                  {option.label}
+                  <span className="min-w-0 flex-1">{option.content || option.label}</span>
                   {value === option.value && (
-                    <Check className="h-4 w-4 text-primary" />
+                    <Check className="h-4 w-4 shrink-0 text-primary" />
                   )}
                 </CommandItem>
               ))}
