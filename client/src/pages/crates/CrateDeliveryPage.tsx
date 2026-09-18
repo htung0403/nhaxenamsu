@@ -455,12 +455,12 @@ const CrateDeliveryPage: React.FC = () => {
       return;
     }
     if (!deliveryModal.vehicleId || !displayedVehicles.some((vehicle) => vehicle.id === deliveryModal.vehicleId)) {
-      toast.error('Vui lòng chọn xe giao két hợp lệ');
+      toast.error('Vui lòng chọn xe tạo đơn giao hợp lệ');
       return;
     }
     const quantity = Number(deliveryForm.quantity || 0);
     if (!Number.isInteger(quantity) || quantity <= 0) {
-      toast.error('Số két giao phải là số nguyên dương');
+      toast.error('Số lượng phải là số nguyên dương');
       return;
     }
     if (quantity > deliveryModal.receiver.receiver_pending && !deliveryForm.notes.trim()) {
@@ -482,12 +482,12 @@ const CrateDeliveryPage: React.FC = () => {
         image_urls: imageUrls,
         vehicle_id: deliveryModal.vehicleId,
       });
-      toast.success(result?.delivery?.debt_created > 0 ? 'Đã giao két và ghi nợ phát sinh' : 'Đã giao két');
+      toast.success(result?.delivery?.debt_created > 0 ? 'Đã tạo đơn giao và ghi nợ phát sinh' : 'Đã tạo đơn giao');
       setDeliveryModal(null);
       setDeliveryForm(getDefaultForm());
       await loadData();
     } catch (error: unknown) {
-      toast.error(getErrorMessage(error) || 'Giao két thất bại');
+      toast.error(getErrorMessage(error) || 'Tạo đơn giao thất bại');
     } finally {
       setSubmitting(false);
     }
@@ -561,14 +561,18 @@ const CrateDeliveryPage: React.FC = () => {
     }))
     .sort((a, b) => a.label.localeCompare(b.label, 'vi'));
   const canChangeDeliveryVehicle = isAdmin;
+  const modalQuantity = Number(deliveryForm.quantity || 0);
+  const modalPendingAfter = deliveryModal?.receiver
+    ? Math.max(deliveryModal.receiver.receiver_pending - (Number.isFinite(modalQuantity) ? modalQuantity : 0), 0)
+    : 0;
   const modalDebtWillCreate = deliveryModal
-    ? Math.max(Number(deliveryForm.quantity || 0) - (deliveryModal.receiver?.receiver_pending || 0), 0)
+    ? Math.max((Number.isFinite(modalQuantity) ? modalQuantity : 0) - (deliveryModal.receiver?.receiver_pending || 0), 0)
     : 0;
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
-        <PageHeader title="Giao két" description="Danh sách khách nhận két cần giao" backPath="/app/hang-hoa" />
+        <PageHeader title="Giao két" description="Tạo và theo dõi đơn giao két" backPath="/app/hang-hoa" />
       </div>
 
       <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2.5 md:mb-6 mb-3 overflow-x-auto custom-scrollbar">
@@ -738,7 +742,7 @@ const CrateDeliveryPage: React.FC = () => {
                         <div className="flex items-center justify-center w-6 h-6 rounded-lg bg-primary/10 text-primary">
                           <Package size={14} />
                         </div>
-                        <span className="text-[13px] font-black text-foreground uppercase tracking-wider">Danh sách két cần giao</span>
+                        <span className="text-[13px] font-black text-foreground uppercase tracking-wider">Khách đang cần giao két</span>
                         <span className="text-[11px] font-bold text-muted-foreground">{formatNumber(filteredRows.length)} khách · {formatNumber(filteredRows.reduce((sum, row) => sum + row.receiver_pending, 0))} két chờ · {formatNumber(filteredRows.reduce((sum, row) => sum + row.receiver_debt, 0))} két nợ</span>
                       </div>
                     </td>
@@ -768,7 +772,7 @@ const CrateDeliveryPage: React.FC = () => {
                           <button
                             onClick={() => openDeliveryModal(row)}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-orange-500/10 text-orange-600 transition-all hover:bg-orange-500/20"
-                            title="Giao két"
+                            title="Tạo đơn giao"
                           >
                             <Truck size={16} />
                           </button>
@@ -806,7 +810,7 @@ const CrateDeliveryPage: React.FC = () => {
                               hasDeliveries ? 'font-bold text-blue-600 dark:text-blue-500 bg-blue-500/10' : 'text-muted-foreground/30',
                               canOpen && 'cursor-pointer hover:bg-primary/5 active:scale-95'
                             )}
-                            title={hasDeliveries ? undefined : `Giao két bằng xe ${vehicle.license_plate}`}
+                            title={hasDeliveries ? undefined : `Tạo đơn giao bằng xe ${vehicle.license_plate}`}
                           >
                             {hasDeliveries ? (
                               <div className="flex flex-col items-center justify-center gap-0.5">
@@ -944,7 +948,7 @@ const CrateDeliveryPage: React.FC = () => {
                                   className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 text-orange-600 dark:text-orange-500 hover:bg-orange-500/10 text-[12px] font-bold transition-colors"
                                 >
                                   <Truck size={14} strokeWidth={2.5} />
-                                  <span className="hidden min-[400px]:inline">Giao két</span>
+                                  <span className="hidden min-[400px]:inline">Tạo đơn</span>
                                 </button>
                               )}
                               {canRevert && (
@@ -1059,7 +1063,7 @@ const CrateDeliveryPage: React.FC = () => {
                   <Truck size={20} />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-foreground">{deliveryModal.isManual ? 'Tạo đơn giao két' : 'Giao két'}</h3>
+                  <h3 className="text-lg font-black text-foreground">Tạo đơn giao két</h3>
                   <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
                     Nhân viên: <span className="font-black text-foreground">{user?.full_name || '-'}</span>
                   </p>
@@ -1105,7 +1109,7 @@ const CrateDeliveryPage: React.FC = () => {
                       options={deliveryVehicleOptions}
                       value={deliveryModal.vehicleId || ''}
                       onValueChange={(vehicleId) => setDeliveryModal(prev => prev ? { ...prev, vehicleId: vehicleId || null } : prev)}
-                      placeholder="Chọn xe giao két..."
+                      placeholder="Chọn xe tạo đơn giao..."
                       searchPlaceholder="Tìm biển số / tài xế..."
                       emptyMessage="Không có xe phù hợp."
                       className="h-11 bg-background font-bold"
@@ -1117,7 +1121,7 @@ const CrateDeliveryPage: React.FC = () => {
               </div>
 
               <div>
-                <h4 className="mb-3 text-sm font-black uppercase text-foreground">Thông tin giao két</h4>
+                <h4 className="mb-3 text-sm font-black uppercase text-foreground">Thông tin đơn giao</h4>
                 <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
                   <div className="mb-4 space-y-2">
                     <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Khách nhận két</label>
@@ -1143,13 +1147,24 @@ const CrateDeliveryPage: React.FC = () => {
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-[180px_1fr]">
                     <div className="space-y-2">
-                      <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Số két giao</label>
+                      <div className="flex items-center justify-between gap-2">
+                        <label className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground">Số lượng</label>
+                        {!!deliveryModal.receiver?.receiver_pending && (
+                          <button
+                            type="button"
+                            onClick={() => setDeliveryForm(prev => ({ ...prev, quantity: String(deliveryModal.receiver?.receiver_pending || '') }))}
+                            className="text-[11px] font-black text-primary hover:underline"
+                          >
+                            Điền hết chờ giao
+                          </button>
+                        )}
+                      </div>
                       <input
                         type="number"
                         min={1}
                         value={deliveryForm.quantity}
                         onChange={event => setDeliveryForm(prev => ({ ...prev, quantity: event.target.value }))}
-                        placeholder="Số két"
+                        placeholder="Số lượng két"
                         className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm font-black outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/10"
                       />
                     </div>
@@ -1158,15 +1173,28 @@ const CrateDeliveryPage: React.FC = () => {
                       <input
                         value={deliveryForm.notes}
                         onChange={event => setDeliveryForm(prev => ({ ...prev, notes: event.target.value }))}
-                        placeholder="Ghi chú giao két"
+                        placeholder="Ghi chú đơn giao"
                         className="h-11 w-full rounded-xl border border-border bg-background px-3 text-sm outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/10"
                       />
                     </div>
                   </div>
 
+                  {deliveryModal.receiver && deliveryForm.quantity && (
+                    <div className="mt-4 grid grid-cols-1 gap-3 rounded-2xl border border-border bg-muted/30 p-3 sm:grid-cols-2">
+                      <div className="rounded-xl bg-blue-500/10 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-blue-600">Sau đơn này còn chờ</p>
+                        <p className="mt-1 text-lg font-black tabular-nums text-blue-700">{formatNumber(modalPendingAfter)} két</p>
+                      </div>
+                      <div className="rounded-xl bg-red-500/10 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-red-600">Nợ phát sinh</p>
+                        <p className="mt-1 text-lg font-black tabular-nums text-red-700">{formatNumber(modalDebtWillCreate)} két</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="mt-5 border-t border-dashed border-border pt-4">
                     <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-muted-foreground">
-                      Ảnh xác nhận {selectedVehicle ? `/ ${selectedVehicle.license_plate}` : ''}
+                      Hình ảnh {selectedVehicle ? `/ ${selectedVehicle.license_plate}` : ''}
                     </p>
                     <div className="flex flex-wrap gap-3">
                       <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex h-20 w-20 flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-border text-[12px] font-bold text-orange-600 transition-colors hover:bg-orange-50">
@@ -1179,7 +1207,7 @@ const CrateDeliveryPage: React.FC = () => {
                       </button>
                       {deliveryForm.files.length > 0 && (
                         <div className="flex min-h-20 flex-1 items-center rounded-2xl border border-blue-100 bg-blue-50 px-4 text-sm font-bold text-blue-700">
-                          Đã chọn {deliveryForm.files.length} ảnh xác nhận
+                          Đã chọn {deliveryForm.files.length} hình ảnh
                         </div>
                       )}
                     </div>
@@ -1190,7 +1218,7 @@ const CrateDeliveryPage: React.FC = () => {
               {modalDebtWillCreate > 0 && (
                 <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3 text-sm font-bold text-red-700">
                   <AlertCircle size={16} className="mt-0.5 shrink-0" />
-                  <span>Giao vượt chờ giao {formatNumber(modalDebtWillCreate)} két; hệ thống sẽ ghi nợ két cho khách.</span>
+                  <span>Tạo đơn vượt chờ giao {formatNumber(modalDebtWillCreate)} két; hệ thống sẽ ghi nợ két cho khách.</span>
                 </div>
               )}
 
@@ -1218,7 +1246,7 @@ const CrateDeliveryPage: React.FC = () => {
                   Hủy bỏ
                 </button>
                 <button onClick={() => void handleDeliver()} disabled={submitting} className="flex-[2] rounded-xl bg-primary py-3 text-sm font-black text-white shadow-lg shadow-primary/20 transition-all hover:-translate-y-0.5 hover:bg-primary/90 hover:shadow-primary/30 disabled:pointer-events-none disabled:opacity-60">
-                  {submitting ? 'Đang giao...' : 'Xác nhận giao két'}
+                  {submitting ? 'Đang tạo đơn...' : 'Tạo đơn giao'}
                 </button>
               </div>
             </div>
