@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { Calendar, Camera, ChevronRight, Clock, FileText, Filter, Hash, ImagePlus, Package, PlusCircle, RefreshCw, Truck, Upload, User, X } from 'lucide-react';
+import { Calendar, Camera, ChevronRight, Clock, FileText, Filter, Hash, History, ImagePlus, Package, PlusCircle, RefreshCw, Truck, Upload, User, X } from 'lucide-react';
 import { cratesApi, type CrateAccount, type CrateDelivery } from '../../api/cratesApi';
 import { uploadApi } from '../../api/uploadApi';
 import { DateRangePicker } from '../../components/shared/DateRangePicker';
@@ -24,7 +25,7 @@ const formatDateTime = (value?: string | null) => value
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
 
 type DeliveryForm = { deliveredDate: string; deliveredTime: string; quantity: string; notes: string; files: File[] };
-type CrateDeliveryRow = CrateAccount & { delivered_total?: number; isDeliveredHistory?: boolean; deliveryDateKey?: string; rowKey?: string; deliveryIds?: string[] };
+type CrateDeliveryRow = CrateAccount & { delivered_total?: number; isDeliveredHistory?: boolean; deliveryDateKey?: string; rowKey?: string; deliveryIds?: string[]; pendingDelivery?: CrateDelivery };
 
 type DeliveryModalState = {
   receiver: CrateAccount | null;
@@ -82,6 +83,7 @@ const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'v
 };
 
 const CrateDeliveryPage: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const { data: vehicles } = useVehicles();
   const [receivers, setReceivers] = useState<CrateAccount[]>([]);
@@ -161,14 +163,14 @@ const CrateDeliveryPage: React.FC = () => {
   );
 
   const customerFilterOptions = useMemo(
-    () => receivers
-      .filter(row => row.customer_id && row.customer?.name)
-      .map(row => ({
-        value: row.customer_id,
-        label: row.customer?.phone ? `${row.customer.name} · ${row.customer.phone}` : row.customer?.name || row.customer_id,
+    () => deliveries
+      .filter(delivery => delivery.receiver_customer_id && delivery.receiver?.name)
+      .map(delivery => ({
+        value: delivery.receiver_customer_id,
+        label: delivery.receiver?.phone ? `${delivery.receiver.name} · ${delivery.receiver.phone}` : delivery.receiver?.name || delivery.receiver_customer_id,
       }))
       .sort((a, b) => a.label.localeCompare(b.label, 'vi')),
-    [receivers]
+    [deliveries]
   );
 
   const vehicleFilterOptions = useMemo(
@@ -176,7 +178,23 @@ const CrateDeliveryPage: React.FC = () => {
     [displayedVehicles]
   );
 
-  const activeRows = useMemo<CrateDeliveryRow[]>(() => receivers.filter(row => row.receiver_pending > 0 || row.receiver_debt > 0), [receivers]);
+  const activeRows = useMemo<CrateDeliveryRow[]>(() => deliveries.map(delivery => ({
+    customer_id: delivery.receiver_customer_id,
+    is_sender: false,
+    is_receiver: true,
+    sender_balance: 0,
+    receiver_pending: delivery.receiver_pending_after ?? 0,
+    receiver_debt: delivery.receiver_debt_after ?? 0,
+    created_at: delivery.created_at,
+    updated_at: delivery.created_at,
+    customer: delivery.receiver as CrateAccount['customer'],
+    delivered_total: delivery.quantity,
+    isDeliveredHistory: true,
+    deliveryDateKey: getDeliveryDateKey(delivery),
+    rowKey: delivery.id,
+    deliveryIds: [delivery.id],
+    pendingDelivery: delivery,
+  })), [deliveries]);
 
 
 
@@ -239,16 +257,6 @@ const CrateDeliveryPage: React.FC = () => {
         return (a.customer?.name || '').localeCompare(b.customer?.name || '', 'vi');
       });
   }, [activeRows, rowMatchesFilters]);
-
-  const openDeliveryModal = (receiver: CrateDeliveryRow, vehicleId?: string | null) => {
-    const resolvedVehicleId = vehicleId || (isDriverOrLoader && myPrimaryVehicleId) || (displayedVehicles.length === 1 ? displayedVehicles[0].id : null);
-    if (resolvedVehicleId && !displayedVehicles.some((vehicle) => vehicle.id === resolvedVehicleId)) {
-      toast.error('Bạn chỉ được giao bằng xe mình phụ trách');
-      return;
-    }
-    setDeliveryModal({ receiver, vehicleId: resolvedVehicleId });
-    setDeliveryForm({ ...getDefaultForm(), quantity: receiver.receiver_pending > 0 ? String(receiver.receiver_pending) : '' });
-  };
 
   const openManualDeliveryModal = () => {
     const resolvedVehicleId = myPrimaryVehicleId || (displayedVehicles.length === 1 ? displayedVehicles[0].id : null);
@@ -328,14 +336,8 @@ const CrateDeliveryPage: React.FC = () => {
     }
   };
 
-  const renderStatusBadge = (row: CrateDeliveryRow) => {
-    if (row.receiver_pending > 0) {
-      return <span className="inline-flex rounded-lg bg-orange-500/10 px-2 py-1 text-[11px] font-black text-orange-600">Cần giao</span>;
-    }
-    if ((row.delivered_total || 0) > 0) {
-      return <span className="inline-flex rounded-lg bg-green-500/10 px-2 py-1 text-[11px] font-black text-green-600">Đã giao</span>;
-    }
-    return <span className="inline-flex rounded-lg bg-red-500/10 px-2 py-1 text-[11px] font-black text-red-600">Đang nợ</span>;
+  const renderStatusBadge = () => {
+    return <span className="inline-flex rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] font-black text-amber-700">Chờ admin xác nhận</span>;
   };
 
   const deliveryVehicleOptions = displayedVehicles.map(vehicle => ({
@@ -463,6 +465,14 @@ const CrateDeliveryPage: React.FC = () => {
         </button>
 
         <button
+          onClick={() => navigate('/app/hang-hoa/giao-ket/lich-su')}
+          className="h-9.5 px-3 shrink-0 border border-border/80 rounded-xl text-[12px] font-bold bg-muted/20 text-foreground hover:bg-muted transition-all inline-flex items-center gap-2"
+        >
+          <History size={15} />
+          <span>Lịch sử</span>
+        </button>
+
+        <button
           onClick={openManualDeliveryModal}
           className="h-9.5 px-3 shrink-0 rounded-xl text-[12px] font-black bg-primary text-white hover:bg-primary/90 shadow-sm shadow-primary/20 transition-all inline-flex items-center gap-2"
         >
@@ -472,59 +482,13 @@ const CrateDeliveryPage: React.FC = () => {
         </button>
       </div>
 
-      {deliveries.length > 0 && (
-        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50/60 p-3 shadow-sm">
-          <div className="mb-3 flex items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-black text-amber-800">Phiếu giao chờ admin xác nhận</h3>
-              <p className="text-xs font-medium text-amber-700/80">Các phiếu này chưa trừ két và chưa vào lịch sử giao két.</p>
-            </div>
-            <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-black text-amber-700">{deliveries.length} phiếu</span>
-          </div>
-          <div className="grid gap-2 md:grid-cols-2">
-            {deliveries.map(delivery => (
-              <div key={delivery.id} className="rounded-xl border border-amber-200 bg-card p-3 shadow-sm">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-black text-foreground">{delivery.receiver?.name || '-'}</div>
-                    <div className="text-xs text-muted-foreground">{delivery.receiver?.phone || '-'} · {formatDateTime(delivery.created_at)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-lg font-black text-emerald-600 tabular-nums">{formatNumber(delivery.quantity)}</div>
-                    <div className="text-[11px] font-bold text-muted-foreground">két</div>
-                  </div>
-                </div>
-                <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-bold text-muted-foreground">
-                  <span className="inline-flex items-center gap-1 rounded-lg border border-blue-200 bg-card px-2 py-1 text-blue-700"><Truck size={12} /> {delivery.vehicle?.license_plate || 'Chưa có xe'}</span>
-                  <span>{delivery.driver?.full_name || 'Tài xế'}</span>
-                </div>
-                {delivery.notes ? <p className="mt-2 text-xs text-muted-foreground line-clamp-2">{delivery.notes}</p> : null}
-                <div className="mt-3 flex items-center justify-end">
-                  {isAdmin ? (
-                    <button
-                      onClick={() => void handleConfirmDelivery(delivery.id)}
-                      disabled={confirmingDeliveryId === delivery.id}
-                      className="rounded-xl bg-emerald-500 px-3 py-2 text-xs font-black text-white shadow-sm shadow-emerald-500/20 transition hover:bg-emerald-600 disabled:opacity-60"
-                    >
-                      {confirmingDeliveryId === delivery.id ? 'Đang xác nhận...' : 'Xác nhận phiếu'}
-                    </button>
-                  ) : (
-                    <span className="rounded-xl bg-amber-100 px-3 py-2 text-xs font-black text-amber-700">Chờ admin xác nhận</span>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
       <div className="bg-card rounded-2xl border border-border shadow-sm flex flex-col flex-1 min-h-0 overflow-hidden">
         {loading ? (
           <div className="p-4"><LoadingSkeleton rows={10} columns={8} /></div>
         ) : !filteredRows.length ? (
           <EmptyState
-            title="Không có két cần giao"
-            description="Không có khách nhận két nào phù hợp với bộ lọc hiện tại."
+            title="Không có phiếu chờ xác nhận"
+            description="Chỉ hiển thị các đơn giao két đã tạo và đang chờ admin xác nhận."
           />
         ) : (
           <div className="flex-1 overflow-auto custom-scrollbar bg-muted/30 p-3 md:p-4">
@@ -545,8 +509,8 @@ const CrateDeliveryPage: React.FC = () => {
                     const vehicleSummaries = displayedVehicles
                       .map(vehicle => ({ vehicle, entries: getDeliveryEntriesForRowVehicle(row, vehicle.id) }))
                       .filter(item => item.entries.length > 0);
-                    const canCreate = row.receiver_pending > 0 || row.receiver_debt > 0;
-                    const primaryQuantity = row.receiver_pending;
+                    const pendingDelivery = row.pendingDelivery;
+                    const primaryQuantity = row.delivered_total || pendingDelivery?.quantity || 0;
                     return (
                       <tr key={row.rowKey || row.customer_id} className="group transition-colors hover:bg-muted/30">
                         <td className="px-4 py-4">
@@ -558,7 +522,7 @@ const CrateDeliveryPage: React.FC = () => {
                               <Truck size={19} />
                             </div>
                             <div>
-                              <div className="text-[13px] font-black text-foreground">Phiếu cần giao</div>
+                              <div className="text-[13px] font-black text-foreground">Phiếu chờ xác nhận</div>
                               <div className="text-[12px] font-bold text-muted-foreground tabular-nums">
                                 {formatDateTime(row.created_at)}
                               </div>
@@ -569,7 +533,7 @@ const CrateDeliveryPage: React.FC = () => {
                           <div className="text-[13px] font-black text-foreground">{row.customer?.name || '-'}</div>
                           <div className="text-[12px] text-muted-foreground">{row.customer?.phone || '-'}</div>
                         </td>
-                        <td className="px-4 py-4 text-center">{renderStatusBadge(row)}</td>
+                        <td className="px-4 py-4 text-center">{renderStatusBadge()}</td>
                         <td className="px-4 py-4 text-right">
                           <div className="text-lg font-black tabular-nums text-emerald-600">{formatNumber(primaryQuantity)}</div>
                           <div className="text-[11px] font-bold text-muted-foreground">két</div>
@@ -594,13 +558,16 @@ const CrateDeliveryPage: React.FC = () => {
                         </td>
                         <td className="px-4 py-4">
                           <div className="flex items-center justify-center gap-2">
-                            {canCreate && (
+                            {isAdmin && pendingDelivery ? (
                               <button
-                                onClick={() => openDeliveryModal(row)}
-                                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-[12px] font-black text-white shadow-sm shadow-emerald-500/20 transition-all hover:bg-emerald-600"
+                                onClick={() => void handleConfirmDelivery(pendingDelivery.id)}
+                                disabled={confirmingDeliveryId === pendingDelivery.id}
+                                className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-3 py-2 text-[12px] font-black text-white shadow-sm shadow-emerald-500/20 transition-all hover:bg-emerald-600 disabled:opacity-60"
                               >
-                                <PlusCircle size={14} /> Tạo phiếu
+                                <PlusCircle size={14} /> {confirmingDeliveryId === pendingDelivery.id ? 'Đang xác nhận...' : 'Xác nhận'}
                               </button>
+                            ) : (
+                              <span className="rounded-xl bg-amber-100 px-3 py-2 text-xs font-black text-amber-700">Chờ admin</span>
                             )}
                           </div>
                         </td>
@@ -616,13 +583,12 @@ const CrateDeliveryPage: React.FC = () => {
                 const vehicleSummaries = displayedVehicles
                   .map(vehicle => ({ vehicle, entries: getDeliveryEntriesForRowVehicle(row, vehicle.id) }))
                   .filter(item => item.entries.length > 0);
-                    const canCreate = row.receiver_pending > 0 || row.receiver_debt > 0;
-                    const primaryQuantity = row.receiver_pending;
+                    const pendingDelivery = row.pendingDelivery;
+                    const primaryQuantity = row.delivered_total || pendingDelivery?.quantity || 0;
                 return (
                   <div key={row.rowKey || row.customer_id} className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
                     <button
                       type="button"
-                      onClick={() => canCreate && openDeliveryModal(row)}
                       className="w-full p-4 text-left"
                     >
                       <div className="mb-3 flex items-start justify-between gap-3">
@@ -630,7 +596,7 @@ const CrateDeliveryPage: React.FC = () => {
                           <div className="text-[15px] font-black text-foreground">{row.customer?.name || '-'}</div>
                           <div className="text-[12px] text-muted-foreground">{row.customer?.phone || '-'}</div>
                         </div>
-                        {renderStatusBadge(row)}
+                        {renderStatusBadge()}
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <div className="rounded-xl bg-emerald-500/10 px-3 py-2">
@@ -660,13 +626,20 @@ const CrateDeliveryPage: React.FC = () => {
                         </div>
                       )}
                     </button>
-                    {canCreate && (
+                    {pendingDelivery && (
                       <div className="flex border-t border-border divide-x divide-border">
-                        {canCreate && (
-                          <button onClick={() => openDeliveryModal(row)} className="flex-1 py-3 text-[12px] font-black text-emerald-600 transition-colors hover:bg-emerald-500/10">
-                            Tạo phiếu giao
+                        {isAdmin ? (
+                          <button
+                            onClick={() => void handleConfirmDelivery(pendingDelivery.id)}
+                            disabled={confirmingDeliveryId === pendingDelivery.id}
+                            className="flex-1 py-3 text-[12px] font-black text-emerald-600 transition-colors hover:bg-emerald-500/10 disabled:opacity-60"
+                          >
+                            {confirmingDeliveryId === pendingDelivery.id ? 'Đang xác nhận...' : 'Xác nhận phiếu'}
                           </button>
-                        )}
+                        ) : (
+                          <span className="flex-1 py-3 text-center text-[12px] font-black text-amber-700">Chờ admin xác nhận</span>
+                        )}
+
                       </div>
                     )}
                   </div>

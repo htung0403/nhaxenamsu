@@ -599,7 +599,7 @@ export class CratesService {
       .select('*, receiver:customers!crate_deliveries_receiver_customer_id_fkey(id, name, phone), vehicle:vehicles!crate_deliveries_vehicle_id_fkey(id, license_plate)')
       .gte('created_at', fromDate.toISOString())
       .lte('created_at', toDate.toISOString())
-      .or('status.eq.confirmed,status.is.null')
+      .eq('status', 'confirmed')
       .order('created_at', { ascending: false })
       .limit(100);
 
