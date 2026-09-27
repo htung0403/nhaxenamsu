@@ -7,12 +7,14 @@
     "dev": "cross-env NODE_OPTIONS=--dns-result-order=ipv4first ts-node-dev --respawn --transpile-only src/app.ts",
     "seed": "ts-node-dev --transpile-only scripts/seedMockData.ts",
     "report:missing-supplier-phones": "ts-node-dev --transpile-only scripts/reportMissingSupplierPhones.ts",
+    "db:sync-compare": "node scripts/syncAndCompareDatabase.js",
     "test:send-supplier-summary": "ts-node-dev --transpile-only scripts/testSendSupplierSummary.ts",
     "set-profile-password": "ts-node-dev --transpile-only scripts/setProfilePassword.ts",
     "create-admin": "ts-node-dev --transpile-only scripts/createAdmin.ts",
     "zca:login": "ts-node-dev --transpile-only scripts/zcaLoginQR.ts",
     "build": "tsc",
-    "start": "node dist/app.js"
+    "start": "node dist/app.js",
+    "db:copy-production-data": "node scripts/copyProductionData.js"
   },
   "keywords": [],
   "author": "",

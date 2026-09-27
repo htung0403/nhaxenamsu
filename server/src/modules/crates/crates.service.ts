@@ -79,6 +79,32 @@ export class CratesService {
     return data?.full_name || null;
   }
 
+  private static async hydrateDeliveryProfiles<T extends Record<string, any>>(deliveries: T[]) {
+    const profileIds = Array.from(new Set(deliveries
+      .flatMap((delivery) => [delivery.driver_id, delivery.confirmed_by])
+      .filter(Boolean)));
+    if (profileIds.length === 0) return deliveries;
+
+    const { data, error } = await supabaseService
+      .from('profiles')
+      .select('id, full_name')
+      .in('id', profileIds);
+    if (error) throw error;
+
+    const profilesById = new Map((data || []).map((profile: any) => [profile.id, profile]));
+    return deliveries.map((delivery) => ({
+      ...delivery,
+      driver: delivery.driver_id ? profilesById.get(delivery.driver_id) || null : null,
+      confirmer: delivery.confirmed_by ? profilesById.get(delivery.confirmed_by) || null : null,
+    }));
+  }
+
+  private static async hydrateDeliveryProfile<T extends Record<string, any>>(delivery: T | null) {
+    if (!delivery) return delivery;
+    const [hydrated] = await this.hydrateDeliveryProfiles([delivery]);
+    return hydrated;
+  }
+
   private static async getDeliveryVehicle(vehicleId: string): Promise<CrateDeliveryVehicle> {
     const { data, error } = await supabaseService
       .from('vehicles')
@@ -268,8 +294,6 @@ export class CratesService {
     if (error) throw error;
 
     const rows = data || [];
-    if (role === 'sender') return rows.filter((row: any) => row.customer?.customer_type === 'vegetable_receiver');
-    if (role === 'receiver') return rows.filter((row: any) => row.customer?.customer_type === 'vegetable_sender');
     return rows;
   }
 
@@ -397,7 +421,21 @@ export class CratesService {
     return { ...data, notifications: [senderNotification, receiverNotification] };
   }
 
-  static async createDelivery(payload: { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null }, user?: UserPayload) {
+  static async listDeliveries(filters: { status?: 'pending' | 'confirmed' } = {}) {
+    let query = supabaseService
+      .from('crate_deliveries')
+      .select('*, receiver:customers!crate_deliveries_receiver_customer_id_fkey(id, name, phone, address), vehicle:vehicles!crate_deliveries_vehicle_id_fkey(id, license_plate)')
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (filters.status) query = query.eq('status', filters.status);
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return this.hydrateDeliveryProfiles(data || []);
+  }
+
+  static async createDelivery(payload: { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null; delivered_at?: string }, user?: UserPayload) {
     if (!payload.vehicle_id) throw new Error('Vui lòng chọn xe giao két');
     const vehicle = await this.getDeliveryVehicle(payload.vehicle_id);
     if (!this.userCanDeliverWithVehicle(user, vehicle)) {
@@ -405,26 +443,60 @@ export class CratesService {
     }
     const deliveryDriverId = vehicle.driver_id || vehicle.in_charge_id || null;
 
-    const { data, error } = await supabaseService.rpc('crate_record_delivery', {
-      p_receiver_customer_id: payload.receiver_customer_id,
-      p_quantity: payload.quantity,
-      p_notes: payload.notes || null,
-      p_image_urls: payload.image_urls || [],
-      p_driver_id: deliveryDriverId,
-      p_vehicle_id: vehicle.id,
+    const { data: account, error: accountError } = await supabaseService
+      .from('crate_accounts')
+      .select('receiver_pending, receiver_debt')
+      .eq('customer_id', payload.receiver_customer_id)
+      .maybeSingle();
+    if (accountError) throw accountError;
+
+    const pendingBefore = Number(account?.receiver_pending || 0);
+    const receiverDebt = Number(account?.receiver_debt || 0);
+
+    const { data: delivery, error } = await supabaseService
+      .from('crate_deliveries')
+      .insert({
+        receiver_customer_id: payload.receiver_customer_id,
+        quantity: payload.quantity,
+        pending_before: pendingBefore,
+        debt_created: 0,
+        receiver_pending_after: pendingBefore,
+        receiver_debt_after: receiverDebt,
+        notes: payload.notes || null,
+        image_urls: payload.image_urls || [],
+        driver_id: deliveryDriverId,
+        vehicle_id: vehicle.id,
+        delivered_at: payload.delivered_at || new Date().toISOString(),
+        status: 'pending',
+      })
+      .select('*, receiver:customers!crate_deliveries_receiver_customer_id_fkey(id, name, phone, address), vehicle:vehicles!crate_deliveries_vehicle_id_fkey(id, license_plate)')
+      .single();
+    if (error) throw error;
+
+    return { delivery: await this.hydrateDeliveryProfile(delivery), pending_admin_confirmation: true };
+  }
+
+  static async confirmDelivery(deliveryId: string, user?: UserPayload) {
+    if (!this.isAdminRole(user?.role)) throw new Error('Chỉ quản trị viên được xác nhận phiếu giao két');
+
+    const { data, error } = await supabaseService.rpc('crate_confirm_delivery', {
+      p_delivery_id: deliveryId,
+      p_admin_id: user?.id || null,
     });
     if (error) throw error;
 
-    const [receiver, driverName] = await Promise.all([
-      this.getCustomer(payload.receiver_customer_id),
-      this.getProfileName(deliveryDriverId),
+    const delivery = data.delivery;
+    const [receiver, vehicle, driverName] = await Promise.all([
+      this.getCustomer(delivery.receiver_customer_id),
+      this.getDeliveryVehicle(delivery.vehicle_id),
+      this.getProfileName(delivery.driver_id),
     ]);
-    const deliveredAt = data.delivery?.delivered_at || data.delivery?.created_at;
+    const deliveredAt = delivery.delivered_at || delivery.created_at;
     const notification = await this.logAndSendNotification({
       type: 'delivery',
-      transactionId: data.delivery.id,
+      transactionId: delivery.id,
       target: { customerId: receiver.id, name: receiver.name, phone: receiver.phone },
-      caption: `Phiếu giao két: đã giao ${payload.quantity} két cho ${receiver.name}. Chờ giao còn: ${data.receiver_account.receiver_pending}, nợ két: ${data.receiver_account.receiver_debt}.`,
+      caption: `Phiếu giao két: đã giao ${delivery.quantity} két cho ${receiver.name}. Chờ giao còn: ${data.receiver_account.receiver_pending}, nợ két: ${data.receiver_account.receiver_debt}.`,
       triggeredBy: user?.id,
       receiptImage: {
         title: 'Phiếu giao két',
@@ -434,11 +506,11 @@ export class CratesService {
         receiptType: `Xe: ${vehicle.license_plate || '-'}`,
         rows: [{
           time: this.formatNoteTime(deliveredAt),
-          quantity: payload.quantity,
+          quantity: delivery.quantity,
           content: 'Giao két',
           partner: receiver.name,
           balance: `${data.receiver_account.receiver_pending} két`,
-          note: payload.notes || (data.delivery.debt_created > 0 ? `Nợ phát sinh ${data.delivery.debt_created} két` : '-'),
+          note: delivery.notes || (delivery.debt_created > 0 ? `Nợ phát sinh ${delivery.debt_created} két` : '-'),
         }],
       },
     });
@@ -453,10 +525,11 @@ export class CratesService {
 
     const { data: deliveries, error: deliveryError } = await supabaseService
       .from('crate_deliveries')
-      .select('id, receiver_customer_id, quantity, debt_created')
+      .select('id, receiver_customer_id, quantity, debt_created, status')
       .in('id', uniqueIds);
     if (deliveryError) throw deliveryError;
     if (!deliveries || deliveries.length === 0) throw new Error('Không tìm thấy phiếu giao két cần hoàn tác');
+    if (deliveries.some((delivery: any) => delivery.status && delivery.status !== 'confirmed')) throw new Error('Chỉ được hoàn tác phiếu giao két đã xác nhận');
 
     const totalsByReceiver = deliveries.reduce<Record<string, { pending: number; debt: number }>>((acc, delivery: any) => {
       const debtCreated = Number(delivery.debt_created || 0);
@@ -523,9 +596,10 @@ export class CratesService {
       .limit(100);
     const deliveriesQuery = supabaseService
       .from('crate_deliveries')
-      .select('*, receiver:customers!crate_deliveries_receiver_customer_id_fkey(id, name, phone), driver:profiles!crate_deliveries_driver_id_fkey(id, full_name), vehicle:vehicles!crate_deliveries_vehicle_id_fkey(id, license_plate)')
+      .select('*, receiver:customers!crate_deliveries_receiver_customer_id_fkey(id, name, phone), vehicle:vehicles!crate_deliveries_vehicle_id_fkey(id, license_plate)')
       .gte('created_at', fromDate.toISOString())
       .lte('created_at', toDate.toISOString())
+      .or('status.eq.confirmed,status.is.null')
       .order('created_at', { ascending: false })
       .limit(100);
 
@@ -539,7 +613,7 @@ export class CratesService {
     if (allocations.error) throw allocations.error;
     if (deliveries.error) throw deliveries.error;
 
-    return { intakes: intakes.data || [], allocations: allocations.data || [], deliveries: deliveries.data || [] };
+    return { intakes: intakes.data || [], allocations: allocations.data || [], deliveries: await this.hydrateDeliveryProfiles(deliveries.data || []) };
   }
 
   private static getDateBoundary(value: string, boundary: 'start' | 'end') {
@@ -572,11 +646,11 @@ export class CratesService {
 
     const { data, error } = await supabaseService
       .from('crate_deliveries')
-      .select('*, receiver:customers!crate_deliveries_receiver_customer_id_fkey(id, name, phone, address), driver:profiles!crate_deliveries_driver_id_fkey(id, full_name), vehicle:vehicles!crate_deliveries_vehicle_id_fkey(id, license_plate)')
+      .select('*, receiver:customers!crate_deliveries_receiver_customer_id_fkey(id, name, phone, address), vehicle:vehicles!crate_deliveries_vehicle_id_fkey(id, license_plate)')
       .eq('id', transactionId)
       .single();
     if (error) throw error;
-    return { type, record: data };
+    return { type, record: await this.hydrateDeliveryProfile(data) };
   }
 
   static async resendNotification(type: CrateReceiptType, transactionId: string, targetCustomerId?: string, userId?: string) {
@@ -629,5 +703,7 @@ export class CratesService {
     return this.logAndSendNotification({ type, transactionId, target, caption, triggeredBy: userId, receiptImage });
   }
 }
+
+
 
 

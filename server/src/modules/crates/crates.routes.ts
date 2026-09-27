@@ -12,10 +12,13 @@ router.get('/accounts', CratesController.listAccounts);
 router.put('/accounts/roles', CratesController.setRoles);
 router.post('/intakes', CratesController.createIntake);
 router.post('/allocations', CratesController.createAllocation);
+router.get('/deliveries', CratesController.listDeliveries);
 router.post('/deliveries', CratesController.createDelivery);
+router.put('/deliveries/:id/confirm', CratesController.confirmDelivery);
 router.post('/deliveries/revert', CratesController.revertDeliveries);
 router.get('/history', CratesController.getHistory);
 router.get('/receipts/:type/:id', CratesController.getReceipt);
 router.post('/receipts/:type/:id/resend-zalo', CratesController.resendNotification);
 
 export default router;
+

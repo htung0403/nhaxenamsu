@@ -57,12 +57,25 @@ export interface CrateDelivery {
   notes?: string | null;
   image_urls: string[];
   driver_id?: string | null;
-    vehicle_id?: string | null;
+  vehicle_id?: string | null;
   delivered_at: string;
   created_at: string;
+  status?: 'pending' | 'confirmed';
+  confirmed_at?: string | null;
+  confirmed_by?: string | null;
   receiver?: Pick<Customer, 'id' | 'name' | 'phone' | 'address'>;
   driver?: { id: string; full_name: string } | null;
   vehicle?: Pick<Vehicle, 'id' | 'license_plate'> | null;
+  confirmer?: { id: string; full_name: string } | null;
+}
+
+export interface CreateCrateDeliveryPayload {
+  receiver_customer_id: string;
+  quantity: number;
+  notes?: string | null;
+  image_urls?: string[];
+  vehicle_id?: string | null;
+  delivered_at?: string;
 }
 
 export interface CrateHistory {
@@ -107,8 +120,18 @@ export const cratesApi = {
     return data;
   },
 
-  createDelivery: async (payload: { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null }) => {
+  createDelivery: async (payload: CreateCrateDeliveryPayload) => {
     const { data } = await axiosClient.post('/crates/deliveries', payload);
+    return data;
+  },
+
+  getDeliveries: async (params?: { status?: 'pending' | 'confirmed' }) => {
+    const { data } = await axiosClient.get<CrateDelivery[]>('/crates/deliveries', { params });
+    return data;
+  },
+
+  confirmDelivery: async (id: string) => {
+    const { data } = await axiosClient.put(`/crates/deliveries/${id}/confirm`);
     return data;
   },
 
@@ -138,5 +161,6 @@ export const cratesApi = {
     return data;
   },
 };
+
 
 

@@ -6,6 +6,7 @@ import { CratesService, CrateReceiptType } from './crates.service';
 const uuidSchema = z.string().uuid();
 const roleSchema = z.enum(['sender', 'receiver']);
 const receiptTypeSchema = z.enum(['intake', 'allocation', 'delivery']);
+const deliveryStatusSchema = z.enum(['pending', 'confirmed']);
 const dateQuerySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Ngày phải có định dạng YYYY-MM-DD');
 
 const historyQuerySchema = z.object({
@@ -39,6 +40,7 @@ const deliverySchema = z.object({
   notes: z.string().optional().nullable(),
   image_urls: z.array(z.string().url()).optional().default([]),
   vehicle_id: uuidSchema.optional().nullable(),
+  delivered_at: z.string().datetime().optional(),
 });
 
 const revertDeliveriesSchema = z.object({
@@ -86,11 +88,31 @@ export class CratesController {
     }
   }
 
+  static async listDeliveries(req: Request, res: Response) {
+    try {
+      const status = req.query.status ? deliveryStatusSchema.parse(req.query.status) : undefined;
+      const data = await CratesService.listDeliveries({ status });
+      return res.status(200).json(successResponse(data));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
   static async createDelivery(req: Request, res: Response) {
     try {
-      const payload = deliverySchema.parse(req.body) as { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null };
+      const payload = deliverySchema.parse(req.body) as { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null; delivered_at?: string };
       const data = await CratesService.createDelivery(payload, req.user);
-      return res.status(201).json(successResponse(data, 'Đã giao két'));
+      return res.status(201).json(successResponse(data, 'Đã tạo phiếu giao két, chờ admin xác nhận'));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
+  static async confirmDelivery(req: Request, res: Response) {
+    try {
+      const id = uuidSchema.parse(req.params.id);
+      const data = await CratesService.confirmDelivery(id, req.user);
+      return res.status(200).json(successResponse(data, 'Đã xác nhận phiếu giao két'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
     }
