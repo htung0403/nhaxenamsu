@@ -88,6 +88,21 @@ const getReceiverDisplayName = (order: ImportOrder, receiverByPhone: Map<string,
   return enteredName || order.receiver_phone || '-';
 };
 
+const getSenderDisplayName = (order: ImportOrder, isReturnToSgPage: boolean) => {
+  if (isReturnToSgPage) {
+    const senderName = order.selected_alias || order.customers?.name;
+    if (!senderName) return '-';
+    return `${senderName}${order.customers?.phone ? ` (${order.customers.phone})` : ''}`;
+  }
+  return order.selected_alias || order.customers?.name || order.sender_name || '-';
+};
+
+const getPageReceiverDisplayName = (order: ImportOrder, receiverByPhone: Map<string, Customer>, isReturnToSgPage: boolean) => {
+  if (!isReturnToSgPage) return getReceiverDisplayName(order, receiverByPhone);
+  if (order.receiver_name) return `${order.receiver_name}${order.receiver_phone ? ` (${order.receiver_phone})` : ''}`;
+  return order.receiver_phone || '-';
+};
+
 const defaultColumns: ColumnOption[] = [
   { id: 'image', label: 'Ảnh', isVisible: true },
   { id: 'order_code', label: 'Mã đơn', isVisible: true },
@@ -130,7 +145,9 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isFilterClosing, setIsFilterClosing] = useState(false);
 
-  const [columns, setColumns] = useState<ColumnOption[]>(defaultColumns);
+  const [columns, setColumns] = useState<ColumnOption[]>(() => defaultColumns.map((column) =>
+    column.id === 'sender' && isReturnToSgPage ? { ...column, label: 'Người gửi' } : column
+  ));
 
   const [page, setPage] = useState(1);
   const pageSize = 50;
@@ -160,9 +177,14 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
   if (filterDateTo) filters.dateTo = filterDateTo;
   if (filterStatus.length > 0) filters.status = filterStatus.join(',');
   if (searchText.trim()) filters.search = searchText.trim();
-  if (filterCustomer.length > 0) filters.sender = filterCustomer.join(',');
+  if (filterCustomer.length > 0) {
+    if (isReturnToSgPage) filters.customer_id = filterCustomer.join(',');
+    else filters.sender = filterCustomer.join(',');
+  }
   if (filterVehicle.length > 0) filters.license_plate = filterVehicle.join(',');
-  if (filterReceiver.length > 0) filters.receiver = filterReceiver.join(',');
+  if (filterReceiver.length > 0) {
+    filters.receiver = filterReceiver.join(',');
+  }
   filters.order_category = 'standard';
   filters.admin_confirmation_status = isConfirmationPage ? 'pending_customer' : isReturnToSgPage ? 'return_to_sg' : 'official';
   filters.page = page;
@@ -194,29 +216,29 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
 
   const { vuaOptions, taiOptions, nguoiNhapOptions } = useMemo(() => {
     if (!orders) return { vuaOptions: [], taiOptions: [], nguoiNhapOptions: [] };
-    const vuaSet = new Set<string>();
+    const vuaMap = new Map<string, string>();
     const taiSet = new Set<string>();
-    const receiverSet = new Set<string>();
+    const receiverMap = new Map<string, string>();
 
     orders.forEach(order => {
-      const senderName = order.sender_name;
-      if (senderName) vuaSet.add(senderName);
+      const senderName = getSenderDisplayName(order, isReturnToSgPage);
+      if (senderName) vuaMap.set(isReturnToSgPage ? order.customer_id || senderName : senderName, senderName);
 
       const tai = getOrderVehicles(order);
       if (tai) {
         tai.split(', ').forEach((t: string) => taiSet.add(t));
       }
 
-      const receiver = getReceiverDisplayName(order, receiverByPhone);
-      if (receiver) receiverSet.add(receiver);
+      const receiver = getPageReceiverDisplayName(order, receiverByPhone, isReturnToSgPage);
+      if (receiver) receiverMap.set(isReturnToSgPage ? order.receiver_name || receiver : receiver, receiver);
     });
 
     return {
-      vuaOptions: Array.from(vuaSet).map(v => ({ label: v, value: v })),
+      vuaOptions: Array.from(vuaMap).map(([value, label]) => ({ label, value })),
       taiOptions: Array.from(taiSet).map(v => ({ label: v, value: v })),
-      nguoiNhapOptions: Array.from(receiverSet).map(v => ({ label: v, value: v }))
+      nguoiNhapOptions: Array.from(receiverMap).map(([value, label]) => ({ label, value }))
     };
-  }, [orders, receiverByPhone]);
+  }, [orders, receiverByPhone, isReturnToSgPage]);
 
   const totalItems = apiResponse?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
@@ -349,7 +371,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
                 options={vuaOptions}
                 value={filterCustomer}
                 onValueChange={(v) => { setFilterCustomer(v); setPage(1); }}
-                placeholder="Chủ hàng"
+                placeholder={isReturnToSgPage ? 'Người gửi' : 'Chủ hàng'}
                 className="bg-transparent"
                 icon={<Store size={15} />}
               />
@@ -449,7 +471,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
                         case 'order_code': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left w-34">Mã đơn</th>;
                         case 'order_date': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left w-28">Ngày</th>;
                         case 'order_time': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left w-20">Giờ</th>;
-                        case 'sender': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left min-w-[100px]">Chủ hàng</th>;
+                        case 'sender': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left min-w-[100px]">{isReturnToSgPage ? 'Người gửi' : 'Chủ hàng'}</th>;
                         case 'item_name': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left w-36">Tên hàng</th>;
                         case 'quantity': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-center w-24">Số lượng</th>;
                         case 'payment_status': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-right w-24">Tình trạng</th>;
@@ -528,7 +550,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
                           );
                           case 'sender': return (
                             <td key={col.id} className="px-4 py-3">
-                              <span className="text-[13px] font-bold text-foreground">{order.selected_alias || order.customers?.name || order.sender_name || '-'}</span>
+                              <span className="text-[13px] font-bold text-foreground">{getSenderDisplayName(order, isReturnToSgPage)}</span>
                             </td>
                           );
                           case 'item_name': {
@@ -566,7 +588,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
                           );
                           case 'receiver': return (
                             <td key={col.id} className="px-4 py-3">
-                              <span className="text-[13px] font-medium text-foreground">{getReceiverDisplayName(order, receiverByPhone)}</span>
+                              <span className="text-[13px] font-medium text-foreground">{getPageReceiverDisplayName(order, receiverByPhone, isReturnToSgPage)}</span>
                             </td>
                           );
                           case 'status': return (
@@ -657,13 +679,18 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
 
                       <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[13px] font-bold text-foreground truncate">{order.selected_alias || order.customers?.name || order.sender_name || '-'}</span>
+                          <span className="text-[13px] font-bold text-foreground truncate">{getSenderDisplayName(order, isReturnToSgPage)}</span>
                           <StatusBadge status={order.status} label={statusLabels[order.status]} />
                         </div>
                         <div className="flex flex-wrap gap-x-2 gap-y-0.5">
                           <span className="text-[11px] font-semibold text-primary">{order.order_code}</span>
                           <span className="text-[10px] text-muted-foreground tabular-nums">{order.order_date}</span>
                         </div>
+                        {isReturnToSgPage && (
+                          <div className="text-[11px] text-muted-foreground truncate">
+                            Người nhận: <span className="font-semibold text-foreground">{getPageReceiverDisplayName(order, receiverByPhone, true)}</span>
+                          </div>
+                        )}
                         <div className="text-[12px] text-muted-foreground line-clamp-1" title={getImportOrderItemNames(order)}>
                           <span className="font-bold text-foreground">
                             {getImportOrderItemNames(order) || 'Chưa có hàng'}
@@ -769,6 +796,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
         isClosing={isDialogClosing}
         editingOrder={editingOrder}
         onClose={closeDialog}
+        reverseParties={isReturnToSgPage}
       />
 
       <ConfirmDialog
@@ -835,7 +863,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
         showClearButton={filterCustomer.length > 0 || filterVehicle.length > 0 || filterReceiver.length > 0}
       >
         <div className="space-y-1.5 z-30">
-          <label className="text-[13px] font-bold text-muted-foreground">Chủ hàng</label>
+          <label className="text-[13px] font-bold text-muted-foreground">{isReturnToSgPage ? 'Người gửi' : 'Chủ hàng'}</label>
           <MultiSearchableSelect
             options={vuaOptions}
             value={filterCustomer}

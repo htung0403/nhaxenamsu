@@ -39,6 +39,7 @@ const importOrderSchema = z.object({
   sender_name: z.string().optional(),
   sender_id: z.string().optional(),
   receiver_name: z.string().optional(),
+  receiver_phone: z.string().optional(),
   selected_alias: z.string().optional(),
   notes: z.string().optional(),
   payment_status: z.enum(['paid', 'unpaid']).default('unpaid'),
@@ -54,6 +55,7 @@ interface Props {
   editingOrder: ImportOrder | null;
   onClose: () => void;
   defaultCategory?: 'standard' | 'vegetable';
+  reverseParties?: boolean;
 }
 
 type CustomerLike = Pick<Customer, 'id' | 'name' | 'phone' | 'aliases' | 'customer_type'>;
@@ -122,7 +124,7 @@ const unwrapMutationData = <T extends { id: string }>(response: MutationResponse
   return response.data;
 };
 
-const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, editingOrder, onClose, defaultCategory = 'standard' }) => {
+const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, editingOrder, onClose, defaultCategory = 'standard', reverseParties = false }) => {
   const { user } = useAuth();
   const isEditMode = !!editingOrder;
   const createMutation = useCreateImportOrder();
@@ -157,7 +159,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       const row = unwrapMutationData(resp);
       if (row?.id) {
         setValue('customer_id', row.id, { shouldValidate: true });
-        setValue('receiver_name', row.name, { shouldValidate: true });
+        if (!reverseParties) setValue('receiver_name', row.name, { shouldValidate: true });
       }
       setNewCustomerName('');
       setNewCustomerPhone('');
@@ -246,7 +248,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         value: c.id,
         label: c.name,
         selectedLabel,
-        searchText: [c.name, c.phone, ...(c.aliases || [])].filter(Boolean).join(' ')
+        searchText: [c.name, c.phone, normalizePhone(c.phone), ...(c.aliases || [])].filter(Boolean).join(' ')
       });
       // Alias options
       if (c.aliases && c.aliases.length > 0) {
@@ -255,7 +257,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
             value: `${c.id}:${alias}`,
             label: alias,
             selectedLabel: alias,
-            searchText: [alias, c.name, c.phone].filter(Boolean).join(' ')
+            searchText: [alias, c.name, c.phone, normalizePhone(c.phone)].filter(Boolean).join(' ')
           });
         });
       }
@@ -289,7 +291,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       value: customer.id,
       label: `${customer.name}${customer.phone ? ` (${customer.phone})` : ''}`,
       matchKey: customer.name,
-      searchText: [customer.name, customer.phone, ...(customer.aliases || [])].filter(Boolean).join(' '),
+      searchText: [customer.name, customer.phone, normalizePhone(customer.phone), ...(customer.aliases || [])].filter(Boolean).join(' '),
     })),
     [filteredSenders],
   );
@@ -322,6 +324,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       sender_name: '',
       sender_id: '',
       receiver_name: '',
+      receiver_phone: '',
       selected_alias: '',
       received_by: '',
       notes: '',
@@ -418,7 +421,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         receiptUrls = editingOrder.receipt_image_url.includes(',') ? editingOrder.receipt_image_url.split(',').map((u: string) => u.trim()) : [editingOrder.receipt_image_url];
       }
 
-      const matchedReceiverId = editingOrder.customer_id || receiverCustomerMatchedByPhone?.id || '';
+      const matchedReceiverId = editingOrder.customer_id || (!reverseParties ? receiverCustomerMatchedByPhone?.id : '') || '';
 
       reset({
         order_date: editingOrder.order_date,
@@ -428,6 +431,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         sender_name: editingOrder.sender_name || '',
         sender_id: editingOrder.sender_id || '',
         receiver_name: editingOrder.receiver_name || '',
+        receiver_phone: editingOrder.receiver_phone || '',
         selected_alias: editingOrder.selected_alias || '',
         notes: editingOrder.notes || '',
         items: editingOrder.import_order_items?.map((item: ImportOrderItem) => {
@@ -460,6 +464,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         sender_name: '',
         sender_id: '',
         receiver_name: '',
+        receiver_phone: '',
         selected_alias: '',
         received_by: user?.id || employees?.[0]?.id || '',
         notes: '',
@@ -469,7 +474,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editingOrder, reset, isOpen, user?.id, receiverCustomerMatchedByPhone]);
+  }, [editingOrder, reset, isOpen, user?.id, receiverCustomerMatchedByPhone, reverseParties]);
 
   const watchTotalAmountInput = watch('total_amount');
   const [uploadingItemIndex, setUploadingItemIndex] = React.useState<number | null>(null);
@@ -528,6 +533,10 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
 
   const onSubmit = async (data: ImportOrderFormValues) => {
     if (submitLockRef.current) return;
+    if (reverseParties && !data.receiver_name?.trim()) {
+      toast.error('Vui lòng nhập tên người nhận');
+      return;
+    }
 
     submitLockRef.current = true;
 
@@ -535,6 +544,11 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       console.log('--- FORM SUBMIT DATA BEGIN ---', data);
       const { items, ...formPayload } = data;
       const payload: ImportOrderSubmitPayload = { ...formPayload };
+      if (reverseParties) {
+        payload.sender_id = null;
+        payload.sender_name = null;
+        payload.is_return_to_sg = true;
+      }
       const receiverOnlyName = fromReceiverOnlyValue(payload.customer_id);
       if (receiverOnlyName) {
         payload.customer_id = null;
@@ -664,9 +678,32 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                         </div>
                       </div>
 
-                      <div className="space-y-1.5">
+                      <div className="flex flex-col gap-3 md:gap-4">
+                      <div className={clsx('space-y-1.5', reverseParties ? 'order-2' : 'order-1')}>
+                        {reverseParties ? (
+                          <>
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                              Người nhận <span className="text-red-500">*</span>
+                            </label>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
+                              <input
+                                type="text"
+                                {...register('receiver_name')}
+                                className="w-full px-3 py-2.5 bg-card border border-border rounded-xl text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                                placeholder="Nhập tên người nhận"
+                              />
+                              <input
+                                type="tel"
+                                {...register('receiver_phone')}
+                                className="w-full px-3 py-2.5 bg-card border border-border rounded-xl text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                                placeholder="Số điện thoại (tùy chọn)"
+                              />
+                            </div>
+                          </>
+                        ) : (
+                          <>
                         <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Người gửi</label>
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{reverseParties ? 'Người nhận' : 'Người gửi'}</label>
                           <button
                             type="button"
                             onClick={() => setShowNewSenderForm(!showNewSenderForm)}
@@ -700,7 +737,8 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                               }
                             } catch { /* handled */ }
                           }}
-                          placeholder="Chọn hoặc tạo người gửi"
+                          placeholder={reverseParties ? 'Chọn hoặc tạo người nhận' : 'Chọn hoặc tạo người gửi'}
+                          searchPlaceholder="Tìm theo tên hoặc số điện thoại..."
                           createMessage="Tạo mới"
                           disabled={showNewSenderForm}
                         />
@@ -710,7 +748,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                           <div className="mt-2 p-3 bg-primary/5 border border-primary/15 rounded-xl space-y-2.5 animate-in fade-in slide-in-from-top-2 duration-200">
                             <p className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
                               <UserCircle size={14} />
-                              Thêm người gửi mới
+                              {reverseParties ? 'Thêm người nhận mới' : 'Thêm người gửi mới'}
                             </p>
                             <input
                               type="text"
@@ -752,11 +790,13 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                             </div>
                           </div>
                         )}
+                          </>
+                        )}
                       </div>
 
-                      <div className="space-y-1.5">
+                      <div className={clsx('space-y-1.5', reverseParties ? 'order-1' : 'order-2')}>
                         <div className="flex items-center justify-between">
-                          <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Người nhận <span className="text-red-500">*</span></label>
+                          <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">{reverseParties ? 'Người gửi' : 'Người nhận'} <span className="text-red-500">*</span></label>
                           <button
                             type="button"
                             onClick={() => setShowNewCustomerForm(!showNewCustomerForm)}
@@ -786,11 +826,14 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                               setValue('selected_alias', alias, { shouldValidate: true });
                             } else {
                               setValue('customer_id', val, { shouldValidate: true });
-                              setValue('receiver_name', customerOptions.find((option) => option.value === val)?.label || '', { shouldValidate: true });
+                              if (!reverseParties) {
+                                setValue('receiver_name', customerOptions.find((option) => option.value === val)?.label || '', { shouldValidate: true });
+                              }
                               setValue('selected_alias', '', { shouldValidate: true });
                             }
                           }}
-                          placeholder="Nhập tên người nhận hàng"
+                          placeholder={reverseParties ? 'Chọn người gửi từ danh sách người nhận tạp hóa' : 'Nhập tên người nhận hàng'}
+                          searchPlaceholder="Tìm theo tên hoặc số điện thoại..."
                           disabled={showNewCustomerForm}
                         />
                         {errors.customer_id && <p className="text-red-500 text-[11px] font-medium">{errors.customer_id.message as string}</p>}
@@ -842,6 +885,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                             </div>
                           </div>
                         )}
+                      </div>
                       </div>
 
                       <div className="space-y-1.5">
@@ -963,6 +1007,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                             } catch { /* handled */ }
                           }}
                           placeholder="Chọn hoặc tạo chủ hàng"
+                          searchPlaceholder="Tìm theo tên hoặc số điện thoại..."
                           createMessage="Tạo mới"
                           disabled={showNewSenderForm}
                         />
@@ -1053,6 +1098,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                             }
                           }}
                           placeholder="Tìm vựa rau hoặc KH Rau..."
+                          searchPlaceholder="Tìm theo tên hoặc số điện thoại..."
                           disabled={showNewCustomerForm}
                         />
                         {errors.customer_id && <p className="text-red-500 text-[11px] font-medium">{errors.customer_id.message as string}</p>}

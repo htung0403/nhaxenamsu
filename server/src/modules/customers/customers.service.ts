@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import { format, subMonths } from 'date-fns';
 import { supabaseService } from '../../config/supabase';
 import { hashPassword } from '../../utils/password';
 import { normalizeEntityNameKey } from '../../utils/normalizeEntityName';
@@ -12,6 +13,85 @@ import {
 } from './customer-order-policy';
 
 export class CustomerService {
+  private static normalizePhoneKey(value?: string | null) {
+    return (value || '').replace(/\D/g, '');
+  }
+
+  private static addCustomerIdentity(
+    identityMap: Map<string, Set<string>>,
+    identity: string,
+    customerId: string,
+  ) {
+    if (!identity) return;
+    const customerIds = identityMap.get(identity) || new Set<string>();
+    customerIds.add(customerId);
+    identityMap.set(identity, customerIds);
+  }
+
+  private static async filterCustomersWithoutOrdersLastMonth(customers: any[]) {
+    if (customers.length === 0) return customers;
+
+    const cutoffDate = format(subMonths(new Date(), 1), 'yyyy-MM-dd');
+    const recentOrders: any[] = [];
+    const pageSize = 1000;
+
+    for (let from = 0; ; from += pageSize) {
+      const to = from + pageSize - 1;
+      const { data, error } = await supabaseService
+        .from('import_orders')
+        .select('id, customer_id, receiver_name, receiver_phone, selected_alias, order_date')
+        .gte('order_date', cutoffDate)
+        .is('deleted_at', null)
+        .order('order_date', { ascending: false })
+        .order('id', { ascending: true })
+        .range(from, to);
+
+      if (error) throw error;
+      recentOrders.push(...(data || []));
+      if (!data || data.length < pageSize) break;
+    }
+
+    const customerIds = new Set(customers.map((customer) => customer.id));
+    const customerIdsByPhone = new Map<string, Set<string>>();
+    const customerIdsByName = new Map<string, Set<string>>();
+
+    for (const customer of customers) {
+      this.addCustomerIdentity(customerIdsByPhone, this.normalizePhoneKey(customer.phone), customer.id);
+      this.addCustomerIdentity(customerIdsByName, normalizeEntityNameKey(customer.name), customer.id);
+      for (const alias of customer.aliases || []) {
+        this.addCustomerIdentity(customerIdsByName, normalizeEntityNameKey(alias), customer.id);
+      }
+    }
+
+    const activeCustomerIds = new Set<string>();
+    const markIdentityMatches = (matches?: Set<string>) => {
+      matches?.forEach((customerId) => activeCustomerIds.add(customerId));
+    };
+
+    for (const order of recentOrders) {
+      if (order.customer_id && customerIds.has(order.customer_id)) {
+        activeCustomerIds.add(order.customer_id);
+        continue;
+      }
+
+      const phoneKey = this.normalizePhoneKey(order.receiver_phone);
+      if (phoneKey) {
+        const phoneMatches = customerIdsByPhone.get(phoneKey);
+        if (phoneMatches?.size) {
+          markIdentityMatches(phoneMatches);
+          continue;
+        }
+      }
+
+      const receiverNameKey = normalizeEntityNameKey(order.receiver_name || '');
+      const selectedAliasKey = normalizeEntityNameKey(order.selected_alias || '');
+      markIdentityMatches(customerIdsByName.get(receiverNameKey));
+      markIdentityMatches(customerIdsByName.get(selectedAliasKey));
+    }
+
+    return customers.filter((customer) => !activeCustomerIds.has(customer.id));
+  }
+
   private static sanitizeCustomerOrderPayload(payload: Record<string, unknown>) {
     const items = Array.isArray(payload.items)
       ? payload.items.map((rawItem) => {
@@ -115,11 +195,13 @@ export class CustomerService {
     return query;
   }
 
-  static async getAll(type?: string, isLoyal?: boolean, limit?: number) {
+  static async getAll(type?: string, isLoyal?: boolean, limit?: number, noOrdersLastMonth = false) {
     if (!limit) {
       const { data, error } = await this.buildCustomerListQuery(type, isLoyal);
       if (error) throw error;
-      return data;
+      return noOrdersLastMonth
+        ? this.filterCustomersWithoutOrdersLastMonth(data || [])
+        : data;
     }
 
     const customers: any[] = [];
@@ -133,7 +215,9 @@ export class CustomerService {
       if (!data || data.length < to - from + 1) break;
     }
 
-    return customers;
+    return noOrdersLastMonth
+      ? this.filterCustomersWithoutOrdersLastMonth(customers)
+      : customers;
   }
 
   static async getVegetableReceiverCustomersBySender(senderId: string) {
@@ -398,7 +482,11 @@ export class CustomerService {
       throw new Error('Bạn không thể tạo loại đơn hàng này');
     }
 
-    const normalizedPayload = applyCustomerBinding(sanitizedPayload, customer, policy);
+    const normalizedPayload = applyCustomerBinding(
+      { ...sanitizedPayload, is_return_to_sg: policy.customerType === 'grocery_receiver' },
+      customer,
+      policy,
+    );
     const createdOrder = await ImportOrderService.create(normalizedPayload, userId);
     return { ...createdOrder, order_category: policy.orderCategory };
   }
@@ -424,7 +512,11 @@ export class CustomerService {
     }
 
     const normalizedPayload = applyCustomerBinding(
-      { ...sanitizedPayload, order_category: ownedOrder.order_category },
+      {
+        ...sanitizedPayload,
+        order_category: ownedOrder.order_category,
+        is_return_to_sg: policy.customerType === 'grocery_receiver',
+      },
       customer,
       policy,
     );
@@ -506,6 +598,25 @@ export class CustomerService {
       .is('deleted_at', null);
 
     if (error) throw error;
+  }
+
+  static async softDeleteMany(ids: string[]) {
+    const uniqueIds = Array.from(new Set(ids));
+    const deletedAt = new Date().toISOString();
+    const chunkSize = 100;
+
+    for (let index = 0; index < uniqueIds.length; index += chunkSize) {
+      const chunk = uniqueIds.slice(index, index + chunkSize);
+      const { error } = await supabaseService
+        .from('customers')
+        .update({ deleted_at: deletedAt })
+        .in('id', chunk)
+        .is('deleted_at', null);
+
+      if (error) throw error;
+    }
+
+    return { deleted: uniqueIds.length };
   }
 
   static async updateDebtPayment(id: string, payload: { amount: number, payment_date?: string, payment_time?: string, collector_id?: string, notes?: string }, userId?: string) {

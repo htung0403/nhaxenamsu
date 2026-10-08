@@ -679,8 +679,13 @@ const DeliveryPage: React.FC = () => {
     return next.filter(o => {
       const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
       const rName = o.import_orders?.customers?.name || o.import_orders?.receiver_name?.trim() || o.import_orders?.profiles?.full_name;
+      const customerPhone = getCustomerPhone(o);
+      const searchPhoneDigits = extractPhoneDigits(searchQuery);
+      const matchesCustomerSearch = matchesSearch(rName || '', searchQuery)
+        || matchesSearch(customerPhone, searchQuery)
+        || (searchPhoneDigits.length > 0 && extractPhoneDigits(customerPhone).includes(searchPhoneDigits));
 
-      if (searchQuery && !matchesSearch(rName || '', searchQuery)) return false;
+      if (searchQuery && !matchesCustomerSearch) return false;
       if (filterCustomer.length > 0 && cName && !filterCustomer.includes(cName)) return false;
       if (filterReceiver.length > 0 && rName && !filterReceiver.includes(rName)) return false;
       if (filterDeliveryDate) {
@@ -837,7 +842,7 @@ const DeliveryPage: React.FC = () => {
         {/* SEARCH BAR */}
         <div className="flex-1 min-w-50 md:max-w-full">
           <SearchInput
-            placeholder="Tìm mã, vựa, hàng..."
+            placeholder="Tìm mã, vựa, hàng, SĐT..."
             onSearch={(raw) => setSearchQuery(raw)}
             className="h-9.5"
           />

@@ -31,6 +31,10 @@ const bulkLoyalSchema = z.object({
   is_loyal: z.boolean(),
 });
 
+const bulkDeleteSchema = z.object({
+  customer_ids: z.array(z.string().uuid()).min(1).max(2000),
+});
+
 const updatePricesSchema = z.object({
   updates: z.array(z.object({
     deliveryOrderId: z.string().uuid(),
@@ -123,7 +127,8 @@ export class CustomerController {
       const limit = req.query.limit !== undefined
         ? z.coerce.number().int().positive().max(2000).parse(req.query.limit)
         : DEFAULT_CUSTOMER_LIST_LIMIT;
-      const data = await CustomerService.getAll(type, isLoyal, limit);
+      const noOrdersLastMonth = type === 'grocery_receiver' && req.query.no_orders_last_month === 'true';
+      const data = await CustomerService.getAll(type, isLoyal, limit, noOrdersLastMonth);
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -358,6 +363,16 @@ export class CustomerController {
     try {
       await CustomerService.softDelete(req.params.id as string);
       return res.status(200).json(successResponse(null, 'Customer deleted'));
+    } catch (err: any) {
+      return res.status(400).json(errorResponse(err.message));
+    }
+  }
+
+  static async bulkDelete(req: Request, res: Response) {
+    try {
+      const validated = bulkDeleteSchema.parse(req.body);
+      const data = await CustomerService.softDeleteMany(validated.customer_ids);
+      return res.status(200).json(successResponse(data, 'Customers deleted'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
     }

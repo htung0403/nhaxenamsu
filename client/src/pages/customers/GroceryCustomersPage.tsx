@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../../components/shared/PageHeader';
-import { useCustomers, useDeleteCustomer, useBulkSetLoyal } from '../../hooks/queries/useCustomers';
+import { useCustomers, useDeleteCustomer, useBulkDeleteCustomers, useBulkSetLoyal } from '../../hooks/queries/useCustomers';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
 import EmptyState from '../../components/shared/EmptyState';
 import ErrorState from '../../components/shared/ErrorState';
@@ -38,7 +38,14 @@ interface Props {
 }
 
 const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
-  const { data: customers, isLoading, isError, refetch } = useCustomers(type);
+  const [noOrdersLastMonth, setNoOrdersLastMonth] = useState(false);
+  const showNoOrdersLastMonthFilter = type === 'grocery_receiver';
+  const { data: customers, isLoading, isFetching, isError, refetch } = useCustomers(
+    type,
+    true,
+    undefined,
+    showNoOrdersLastMonthFilter && noOrdersLastMonth,
+  );
   const deleteCustomer = useDeleteCustomer();
   const navigate = useNavigate();
 
@@ -46,12 +53,14 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
   const [isAddClosing, setIsAddClosing] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [isBulkDeleteConfirmOpen, setIsBulkDeleteConfirmOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
   const [customerForAccount, setCustomerForAccount] = useState<Customer | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const bulkSetLoyal = useBulkSetLoyal();
+  const bulkDeleteCustomers = useBulkDeleteCustomers();
   const showLoyalCheckbox = true;
 
   // Merge dialog state
@@ -137,6 +146,17 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
     }
   };
 
+  const confirmBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    try {
+      await bulkDeleteCustomers.mutateAsync(Array.from(selectedIds));
+      setSelectedIds(new Set());
+      setIsBulkDeleteConfirmOpen(false);
+    } catch {
+      // Error handled by mutation
+    }
+  };
+
   const openMergeDialog = () => {
     const selectedArray = Array.from(selectedIds);
     if (selectedArray.length !== 2) return;
@@ -161,6 +181,11 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
     closeMergeDialog();
   };
 
+  const toggleNoOrdersLastMonth = () => {
+    setNoOrdersLastMonth((current) => !current);
+    setSelectedIds(new Set());
+  };
+
   const pageTitle = type === 'grocery_sender' ? "DS người gửi hàng tạp hóa" : 
                     type === 'grocery_receiver' ? "DS người nhận hàng tạp hóa" : 
                     "Danh sách KH Tạp hóa";
@@ -174,6 +199,17 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
           backPath="/app/khach-hang"
           actions={
             <div className="flex items-center gap-3">
+              {showNoOrdersLastMonthFilter && (
+                <label className="flex items-center gap-2 px-3 py-2 rounded-xl border border-border bg-white text-[12px] font-semibold text-muted-foreground cursor-pointer hover:border-primary/30 hover:bg-primary/5 transition-colors whitespace-nowrap">
+                  <input
+                    type="checkbox"
+                    checked={noOrdersLastMonth}
+                    onChange={toggleNoOrdersLastMonth}
+                    className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20 cursor-pointer"
+                  />
+                  Không có đơn trong 1 tháng gần nhất
+                </label>
+              )}
               <SearchInput
                 placeholder="Tìm kiếm khách hàng..."
                 onSearch={(raw) => {
@@ -203,6 +239,17 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
             setSelectedIds(new Set());
           }}
         />
+        {showNoOrdersLastMonthFilter && (
+          <label className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-xl border border-border bg-white text-[13px] font-semibold text-muted-foreground cursor-pointer">
+            <input
+              type="checkbox"
+              checked={noOrdersLastMonth}
+              onChange={toggleNoOrdersLastMonth}
+              className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20 cursor-pointer"
+            />
+            Không có đơn trong 1 tháng gần nhất
+          </label>
+        )}
       </div>
 
       {showLoyalCheckbox && selectedIds.size > 0 && (
@@ -227,16 +274,31 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
             <Heart size={14} />
             Chuyển thành KH thân thiết
           </button>
+          <button
+            onClick={() => setIsBulkDeleteConfirmOpen(true)}
+            disabled={bulkDeleteCustomers.isPending}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-600 text-[13px] font-bold hover:bg-red-500/15 transition-all disabled:opacity-50"
+          >
+            <Trash2 size={14} />
+            Xóa đã chọn
+          </button>
         </div>
       )}
 
       <div className="md:bg-white md:rounded-2xl md:border md:border-border md:shadow-sm flex flex-col flex-1 min-h-0 md:overflow-hidden -mx-4 sm:mx-0">
-        {isLoading ? (
+        {isLoading || (isFetching && !customers) ? (
           <div className="p-4"><LoadingSkeleton rows={6} columns={5} /></div>
         ) : isError ? (
           <ErrorState onRetry={() => refetch()} />
         ) : !filteredAndSortedCustomers.length ? (
-          <EmptyState title={searchTerm ? "Không tìm thấy khách hàng" : "Chưa có khách hàng"} />
+          <EmptyState
+            title={searchTerm
+              ? "Không tìm thấy khách hàng"
+              : noOrdersLastMonth
+                ? "Không có khách hàng phù hợp"
+                : "Chưa có khách hàng"}
+            description={noOrdersLastMonth ? "Tất cả khách hàng đều đã phát sinh đơn trong 1 tháng gần nhất." : undefined}
+          />
         ) : (
           <div className="flex-1 overflow-auto custom-scrollbar">
             {/* Desktop View */}
@@ -250,6 +312,7 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
                           type="checkbox"
                           checked={selectedIds.size > 0 && selectedIds.size === filteredAndSortedCustomers.length}
                           onChange={toggleSelectAll}
+                          aria-label="Chọn tất cả khách hàng"
                           className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20 cursor-pointer"
                         />
                       </th>
@@ -280,6 +343,7 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
                               type="checkbox"
                               checked={selectedIds.has(c.id)}
                               onChange={() => toggleSelect(c.id)}
+                              aria-label={`Chọn khách hàng ${c.name}`}
                               className="w-4 h-4 rounded border-border text-primary focus:ring-primary/20 cursor-pointer"
                             />
                           </td>
@@ -480,6 +544,17 @@ const GroceryCustomersPage: React.FC<Props> = ({ type = 'grocery_sender' }) => {
         isLoading={deleteCustomer.isPending}
         onConfirm={confirmSoftDelete}
         onCancel={closeDeleteConfirm}
+      />
+
+      <ConfirmDialog
+        isOpen={isBulkDeleteConfirmOpen}
+        title="Xóa khách hàng đã chọn"
+        message={`Bạn có chắc chắn muốn xóa ${selectedIds.size} khách hàng đã chọn? Các khách hàng sẽ được ẩn khỏi danh sách.`}
+        confirmLabel="Xóa đã chọn"
+        variant="danger"
+        isLoading={bulkDeleteCustomers.isPending}
+        onConfirm={confirmBulkDelete}
+        onCancel={() => setIsBulkDeleteConfirmOpen(false)}
       />
 
       {sourceCustomerForMerge && (

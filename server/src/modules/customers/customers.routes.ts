@@ -108,6 +108,12 @@ router.put(
 	CustomerController.bulkSetLoyal
 );
 
+router.post(
+	'/bulk-delete',
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	CustomerController.bulkDelete
+);
+
 router.put(
 	'/:id',
 	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),

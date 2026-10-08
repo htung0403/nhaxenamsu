@@ -109,7 +109,11 @@ export class ImportOrderService {
           q = q.or(orClause);
         }
       }
-      if (filters.customer_id) q = q.eq('customer_id', filters.customer_id);
+      if (filters.customer_id) {
+        const customerIds = String(filters.customer_id).split(',').map((id: string) => id.trim()).filter(Boolean);
+        if (customerIds.length === 1) q = q.eq('customer_id', customerIds[0]);
+        else if (customerIds.length > 1) q = q.in('customer_id', customerIds);
+      }
       if (filters.admin_confirmation_status === 'pending_customer') {
         q = q.is('admin_confirmed_at', null);
       }
@@ -185,20 +189,30 @@ export class ImportOrderService {
       return profile?.role === 'customer';
     };
 
+    const isReturnToSgOrder = (order: any) => {
+      if (typeof order.is_return_to_sg === 'boolean') return order.is_return_to_sg;
+      const notes = String(order.notes || '').toLocaleLowerCase('vi-VN');
+      return order.order_category === 'standard'
+        && Boolean(order.customer_id)
+        && (isCustomerSubmittedOrder(order) || notes.includes('trả hàng lỗi về lại sg'));
+    };
+
     if (filters.admin_confirmation_status === 'pending_customer') {
       mapped = mapped.filter((order: any) =>
-        order.order_category === 'standard' && isCustomerSubmittedOrder(order) && Boolean(order.sender_id) && !order.admin_confirmed_at,
+        order.order_category === 'standard' && !isReturnToSgOrder(order) && isCustomerSubmittedOrder(order) && Boolean(order.sender_id) && !order.admin_confirmed_at,
       );
     }
 
     if (filters.admin_confirmation_status === 'return_to_sg') {
       mapped = mapped.filter((order: any) =>
-        order.order_category === 'standard' && isCustomerSubmittedOrder(order) && Boolean(order.customer_id),
+        order.order_category === 'standard' && isReturnToSgOrder(order),
       );
     }
 
     if (filters.admin_confirmation_status === 'official') {
-      mapped = mapped.filter((order: any) => !isCustomerSubmittedOrder(order) || Boolean(order.admin_confirmed_at));
+      mapped = mapped.filter((order: any) =>
+        !isReturnToSgOrder(order) && (!isCustomerSubmittedOrder(order) || Boolean(order.admin_confirmed_at)),
+      );
     }
 
     assignVegetableTaiRanksByDate(mapped);
@@ -322,6 +336,7 @@ export class ImportOrderService {
         sheet_number: mainData.sheet_number,
         customer_id: mainData.customer_id,
         is_custom_amount: mainData.is_custom_amount || false,
+        ...(!isVeg ? { is_return_to_sg: mainData.is_return_to_sg || false } : {}),
         total_amount: mainData.total_amount,
         paid_amount: paidAmount,
         debt_amount: debtAmount,
@@ -405,6 +420,7 @@ export class ImportOrderService {
       sheet_number: mainData.sheet_number,
       customer_id: mainData.customer_id,
       is_custom_amount: mainData.is_custom_amount !== undefined ? (mainData.is_custom_amount || false) : undefined,
+      ...(!isVeg ? { is_return_to_sg: mainData.is_return_to_sg } : {}),
       total_amount: mainData.total_amount,
       paid_amount: paidAmount,
       debt_amount: debtAmount,

@@ -20,7 +20,10 @@ interface Props {
 
 const TooltipContent: React.FC<{ dv: DeliveryVehicle; vehicle: Vehicle; qty: number; isPaid: boolean; exportPaid?: boolean; style: React.CSSProperties }> = ({
   dv, vehicle, qty, isPaid, exportPaid, style,
-}) => (
+}) => {
+  const driverName = dv.profiles?.full_name || vehicle.profiles?.full_name || vehicle.responsible_profile?.full_name;
+
+  return (
   <div
     className="fixed z-[9999] pointer-events-none"
     style={style}
@@ -43,10 +46,10 @@ const TooltipContent: React.FC<{ dv: DeliveryVehicle; vehicle: Vehicle; qty: num
             </span>
           </div>
         )}
-        {dv.profiles?.full_name && (
+        {driverName && (
           <div className="flex items-center justify-between gap-3">
             <span className="text-[10px] text-muted-foreground font-medium">Tài xế</span>
-            <span className="text-[11px] font-bold text-foreground">{dv.profiles.full_name}</span>
+            <span className="text-[11px] font-bold text-foreground">{driverName}</span>
           </div>
         )}
         {dv.loader_name && (
@@ -88,7 +91,8 @@ const TooltipContent: React.FC<{ dv: DeliveryVehicle; vehicle: Vehicle; qty: num
     </div>
       <div className="w-2.5 h-2.5 bg-popover border-b border-r border-border rotate-45 mx-auto -mt-1.5 relative z-10" />
   </div>
-);
+  );
+};
 
 export const VehicleCellTooltip: React.FC<Props> = ({ dv, vehicle, qty, isPaid, exportPaid, children }) => {
   const [visible, setVisible] = useState(false);

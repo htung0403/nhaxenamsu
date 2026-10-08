@@ -5,7 +5,7 @@ import toast from 'react-hot-toast';
 
 export const customerKeys = {
   all: ['customers'] as const,
-  list: (type?: string, limit?: number) => [...customerKeys.all, 'list', type, limit] as const,
+  list: (type?: string, limit?: number, noOrdersLastMonth = false) => [...customerKeys.all, 'list', type, limit, noOrdersLastMonth] as const,
   vegetableSenderReceivers: (senderId: string) => [...customerKeys.all, 'vegetable-sender-receivers', senderId] as const,
   vegetableSenderReceiverOrders: (senderId: string, receiverKey: string) => [...customerKeys.all, 'vegetable-sender-receiver-orders', senderId, receiverKey] as const,
   loyalList: () => [...customerKeys.all, 'loyalList'] as const,
@@ -22,10 +22,10 @@ export const customerKeys = {
 
 export const DEFAULT_CUSTOMER_LIST_LIMIT = 2000;
 
-export function useCustomers(type?: string, enabled = true, limit = DEFAULT_CUSTOMER_LIST_LIMIT) {
+export function useCustomers(type?: string, enabled = true, limit = DEFAULT_CUSTOMER_LIST_LIMIT, noOrdersLastMonth = false) {
   return useQuery({
-    queryKey: customerKeys.list(type, limit),
-    queryFn: () => customersApi.getAll(type, limit),
+    queryKey: customerKeys.list(type, limit, noOrdersLastMonth),
+    queryFn: () => customersApi.getAll(type, limit, noOrdersLastMonth),
     enabled,
   });
 }
@@ -181,6 +181,18 @@ export function useDeleteCustomer() {
       toast.success('Đã xóa khách hàng');
     },
     onError: () => toast.error('Lỗi khi xóa khách hàng'),
+  });
+}
+
+export function useBulkDeleteCustomers() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (customerIds: string[]) => customersApi.bulkRemove(customerIds),
+    onSuccess: (_data, customerIds) => {
+      queryClient.invalidateQueries({ queryKey: customerKeys.all });
+      toast.success(`Đã xóa ${customerIds.length} khách hàng`);
+    },
+    onError: (err: any) => toast.error(err.response?.data?.error || 'Không thể xóa các khách hàng đã chọn'),
   });
 }
 

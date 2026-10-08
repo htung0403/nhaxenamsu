@@ -18,7 +18,7 @@ const importOrderItemSchema = z.object({
 const importOrderSchema = z.object({
     order_date: z.string().optional(),
     order_time: z.string().optional(),
-    sender_name: z.string().optional(),
+    sender_name: z.string().optional().nullable(),
     sender_id: z.string().uuid().optional().nullable(),
     receiver_name: z.string().optional(),
     receiver_phone: z.string().optional(),
@@ -28,6 +28,7 @@ const importOrderSchema = z.object({
     order_category: z.enum(['standard', 'vegetable']).optional().default('standard'),
     total_amount: z.number().optional().nullable(),
     is_custom_amount: z.boolean().optional(),
+    is_return_to_sg: z.boolean().optional(),
     license_plate: z.string().optional().nullable(),
     driver_name: z.string().optional().nullable(),
     supplier_name: z.string().optional().nullable(),

@@ -205,6 +205,7 @@ export interface ImportOrder {
   total_order_amount?: number; 
   total_amount?: number;
   is_custom_amount?: boolean;
+  is_return_to_sg?: boolean;
   payment_status?: 'paid' | 'unpaid' | 'partial';
   received_by?: string;
   warehouse_id?: string;
@@ -262,6 +263,7 @@ export interface ImportOrderCreatePayload {
   receiver_address?: string;
   warehouse_id?: string;
   order_category?: 'standard' | 'vegetable';
+  is_return_to_sg?: boolean;
   status?: OrderStatus;
   customer_id?: string;
   notes?: string;

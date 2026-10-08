@@ -56,8 +56,10 @@ export interface DeliveryOrderPriceUpdate {
 }
 
 export const customersApi = {
-  getAll: async (type?: string, limit?: number) => {
-    const { data } = await axiosClient.get<Customer[]>('/customers', { params: { type, limit } });
+  getAll: async (type?: string, limit?: number, noOrdersLastMonth = false) => {
+    const { data } = await axiosClient.get<Customer[]>('/customers', {
+      params: { type, limit, no_orders_last_month: noOrdersLastMonth || undefined },
+    });
     return data;
   },
 
@@ -96,6 +98,11 @@ export const customersApi = {
 
   remove: async (id: string) => {
     const { data } = await axiosClient.delete(`/customers/${id}`);
+    return data;
+  },
+
+  bulkRemove: async (customerIds: string[]) => {
+    const { data } = await axiosClient.post('/customers/bulk-delete', { customer_ids: customerIds });
     return data;
   },
 
