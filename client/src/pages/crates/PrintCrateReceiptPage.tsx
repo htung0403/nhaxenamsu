@@ -12,6 +12,8 @@ const formatTime = (value?: string | null) => value ? new Date(value).toLocaleTi
 const getErrorMessage = (error: unknown) => error instanceof Error ? error.message : 'Có lỗi xảy ra';
 
 const isReceiptType = (value?: string | null): value is CrateReceiptType => value === 'intake' || value === 'allocation' || value === 'delivery';
+const formatCrateBalance = (value?: number | null) => `${formatNumber(Math.max(Number(value || 0), 0))} két`;
+const formatCrateDebt = (value?: number | null) => `${formatNumber(Math.max(-Number(value || 0), 0))} két`;
 
 type ReceiptTableRow = {
   time: string;
@@ -19,6 +21,7 @@ type ReceiptTableRow = {
   content: string;
   partner: string;
   balance: string;
+  debt?: string;
   note: string;
 };
 
@@ -77,7 +80,8 @@ const PrintCrateReceiptPage: React.FC = () => {
           quantity: `${formatNumber(record.quantity)} két`,
           content: record.notes || '-',
           partner: record.sender?.name || '-',
-          balance: `${formatNumber(record.sender_balance_after)} két`,
+          balance: formatCrateBalance(record.sender_balance_after),
+          debt: formatCrateDebt(record.sender_balance_after),
           note: record.notes || '-',
         }],
       }];
@@ -107,7 +111,8 @@ const PrintCrateReceiptPage: React.FC = () => {
           rows: [{
             ...commonRow,
             partner: receiverName,
-            balance: `${formatNumber(record.sender_balance_after)} két`,
+            balance: formatCrateBalance(record.sender_balance_after),
+            debt: formatCrateDebt(record.sender_balance_after),
           }],
         },
         {
@@ -122,6 +127,7 @@ const PrintCrateReceiptPage: React.FC = () => {
             ...commonRow,
             partner: senderName,
             balance: `${formatNumber(record.receiver_pending_after)} két`,
+            debt: `${formatNumber(Number(record.receiver_debt_after || 0) + Number(record.debt_applied || 0))} két`,
           }],
         },
       ];
@@ -144,6 +150,7 @@ const PrintCrateReceiptPage: React.FC = () => {
         content: 'Giao két',
         partner: record.receiver?.name || '-',
         balance: `${formatNumber(record.receiver_pending_after)} két`,
+        debt: `${formatNumber(record.receiver_debt_after)} két`,
         note: deliveryNote,
       }],
       images: record.image_urls || [],
@@ -207,19 +214,21 @@ const PrintCrateReceiptPage: React.FC = () => {
 
         <div className="receipt-scroll overflow-x-auto">
           {isIntakeReceipt ? (
-            <table className="w-full min-w-[760px] border-collapse text-[14px] md:text-[15px]">
+            <table className="w-full min-w-[880px] border-collapse text-[14px] md:text-[15px]">
               <colgroup>
+                <col className="w-[210px]" />
+                <col className="w-[210px]" />
+                <col className="w-[140px]" />
+                <col className="w-[120px]" />
                 <col className="w-[240px]" />
-                <col className="w-[240px]" />
-                <col className="w-[170px]" />
-                <col className="w-[250px]" />
               </colgroup>
               <thead>
                 <tr className="bg-slate-100">
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Ngày giờ</th>
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Nội dung</th>
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Số lượng</th>
-                  <th className="border-b border-slate-900 px-2 py-3 text-center font-bold">Tổng số két hiện tại</th>
+                  <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Nợ</th>
+                  <th className="border-b border-slate-900 px-2 py-3 text-center font-bold">Tổng số két</th>
                 </tr>
               </thead>
               <tbody>
@@ -228,18 +237,20 @@ const PrintCrateReceiptPage: React.FC = () => {
                     <td className="border-r border-slate-900 px-2 py-3 text-center">{view.date}</td>
                     <td className="border-r border-slate-900 px-2 py-3 text-center">{row.content}</td>
                     <td className="border-r border-slate-900 px-2 py-3 text-center font-bold">{row.quantity}</td>
+                    <td className="border-r border-slate-900 px-2 py-3 text-center font-bold text-red-600">{row.debt || '0 két'}</td>
                     <td className="px-2 py-3 text-center font-bold">{row.balance}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : isAllocationReceipt ? (
-            <table className="w-full min-w-[900px] border-collapse text-[14px] md:text-[15px]">
+            <table className="w-full min-w-[980px] border-collapse text-[14px] md:text-[15px]">
               <colgroup>
-                <col className="w-[175px]" />
-                <col className="w-[190px]" />
+                <col className="w-[165px]" />
+                <col className="w-[180px]" />
+                <col className="w-[115px]" />
+                <col className="w-[215px]" />
                 <col className="w-[120px]" />
-                <col className="w-[230px]" />
                 <col className="w-[185px]" />
               </colgroup>
               <thead>
@@ -248,7 +259,8 @@ const PrintCrateReceiptPage: React.FC = () => {
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">{view.receiptType === 'Nhận két' ? 'Người gửi' : 'Người nhận'}</th>
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Số lượng</th>
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Ghi chú</th>
-                  <th className="border-b border-slate-900 px-2 py-3 text-center font-bold">{view.receiptType === 'Nhận két' ? 'Két chờ giao' : 'Két còn gửi'}</th>
+                  <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Nợ</th>
+                  <th className="border-b border-slate-900 px-2 py-3 text-center font-bold">{view.receiptType === 'Nhận két' ? 'Tổng két chờ giao' : 'Két còn gửi'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -258,25 +270,28 @@ const PrintCrateReceiptPage: React.FC = () => {
                     <td className="border-r border-slate-900 px-2 py-3">{row.partner}</td>
                     <td className="border-r border-slate-900 px-2 py-3 text-center font-bold">{row.quantity}</td>
                     <td className="border-r border-slate-900 px-2 py-3">{row.content}</td>
+                    <td className="border-r border-slate-900 px-2 py-3 text-center font-bold text-red-600">{row.debt || '0 két'}</td>
                     <td className="px-2 py-3 text-center font-bold">{row.balance}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : isDeliveryReceipt ? (
-            <table className="w-full min-w-[760px] border-collapse text-[14px] md:text-[15px]">
+            <table className="w-full min-w-[900px] border-collapse text-[14px] md:text-[15px]">
               <colgroup>
-                <col className="w-[240px]" />
-                <col className="w-[160px]" />
-                <col className="w-[260px]" />
-                <col className="w-[240px]" />
+                <col className="w-[220px]" />
+                <col className="w-[150px]" />
+                <col className="w-[250px]" />
+                <col className="w-[120px]" />
+                <col className="w-[220px]" />
               </colgroup>
               <thead>
                 <tr className="bg-slate-100">
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Ngày giờ</th>
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Số lượng</th>
                   <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Ghi chú</th>
-                  <th className="border-b border-slate-900 px-2 py-3 text-center font-bold">Két còn chờ giao</th>
+                  <th className="border-b border-r border-slate-900 px-2 py-3 text-center font-bold">Nợ</th>
+                  <th className="border-b border-slate-900 px-2 py-3 text-center font-bold">Tổng két chờ giao</th>
                 </tr>
               </thead>
               <tbody>
@@ -285,6 +300,7 @@ const PrintCrateReceiptPage: React.FC = () => {
                     <td className="border-r border-slate-900 px-2 py-3 text-center">{view.date}</td>
                     <td className="border-r border-slate-900 px-2 py-3 text-center font-bold">{row.quantity}</td>
                     <td className="border-r border-slate-900 px-2 py-3">{row.note}</td>
+                    <td className="border-r border-slate-900 px-2 py-3 text-center font-bold text-red-600">{row.debt || '0 két'}</td>
                     <td className="px-2 py-3 text-center font-bold">{row.balance}</td>
                   </tr>
                 ))}

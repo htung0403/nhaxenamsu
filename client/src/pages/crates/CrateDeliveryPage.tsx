@@ -276,17 +276,13 @@ const CrateDeliveryPage: React.FC = () => {
       toast.error('Vui lòng chọn khách nhận két');
       return;
     }
-    if (!deliveryModal.vehicleId || !displayedVehicles.some((vehicle) => vehicle.id === deliveryModal.vehicleId)) {
+    if (deliveryModal.vehicleId && !(vehicles || []).some((vehicle) => vehicle.id === deliveryModal.vehicleId)) {
       toast.error('Vui lòng chọn xe tạo đơn giao hợp lệ');
       return;
     }
     const quantity = Number(deliveryForm.quantity || 0);
     if (!Number.isInteger(quantity) || quantity <= 0) {
       toast.error('Số lượng phải là số nguyên dương');
-      return;
-    }
-    if (quantity > deliveryModal.receiver.receiver_pending && !deliveryForm.notes.trim()) {
-      toast.error('Vui lòng nhập ghi chú khi giao vượt số két chờ giao');
       return;
     }
     const deliveredAt = toBangkokIso(deliveryForm.deliveredDate, deliveryForm.deliveredTime);
@@ -307,7 +303,7 @@ const CrateDeliveryPage: React.FC = () => {
         quantity,
         notes: deliveryForm.notes || null,
         image_urls: imageUrls,
-        vehicle_id: deliveryModal.vehicleId,
+        vehicle_id: deliveryModal.vehicleId || null,
         delivered_at: deliveredAt,
       });
       toast.success('Đã tạo phiếu giao két, chờ admin xác nhận');
@@ -340,7 +336,7 @@ const CrateDeliveryPage: React.FC = () => {
     return <span className="inline-flex rounded-lg bg-amber-500/10 px-2 py-1 text-[11px] font-black text-amber-700">Chờ admin xác nhận</span>;
   };
 
-  const deliveryVehicleOptions = displayedVehicles.map(vehicle => ({
+  const deliveryVehicleOptions = (vehicles || []).map(vehicle => ({
     value: vehicle.id,
     label: `${vehicle.license_plate}${vehicle.profiles?.full_name ? ` · ${vehicle.profiles.full_name}` : vehicle.responsible_profile?.full_name ? ` · ${vehicle.responsible_profile.full_name}` : ''}`,
     selectedLabel: vehicle.license_plate,

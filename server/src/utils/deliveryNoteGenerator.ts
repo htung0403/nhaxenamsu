@@ -74,6 +74,7 @@ export interface CrateReceiptNoteRow {
   content: string;
   partner?: string;
   balance: string;
+  debt?: string;
   note?: string;
 }
 
@@ -119,28 +120,29 @@ export class DeliveryNoteGenerator {
     const margin = 10;
     const tableWidth = width - margin * 2;
     const rowHeight = 40;
-    const rows = data.rows.length ? data.rows.slice(0, 4) : [{ time: '-', quantity: '-', content: '-', partner: '-', balance: '-', note: '-' }];
+    const rows = data.rows.length ? data.rows.slice(0, 4) : [{ time: '-', quantity: '-', content: '-', partner: '-', balance: '-', debt: '-', note: '-' }];
     const isIntakeReceipt = data.title === 'Phiếu nhập két' || data.receiptType === 'Nhập két';
     const isAllocationReceipt = data.receiptType === 'Chia két' || data.receiptType === 'Nhận két';
+    const isAllocationSenderReceipt = data.receiptType === 'Chia két';
     const isDeliveryReceipt = data.title === 'Phiếu giao két';
     const height = margin + rowHeight * (4 + rows.length) + margin;
     const font = "'DejaVu Sans', Arial, sans-serif";
     const titleFontSize = 21;
     const fontSize = 16;
     const smallFontSize = 15;
-    const colWidths = isIntakeReceipt ? [240, 240, 170, 250] : isAllocationReceipt ? [175, 190, 120, 230, 185] : isDeliveryReceipt ? [240, 160, 260, 240] : [95, 85, 170, 220, 220, 110];
+    const colWidths = isIntakeReceipt ? [210, 210, 140, 120, 240] : isAllocationReceipt ? [155, 175, 110, 210, 110, 160] : isDeliveryReceipt ? [210, 140, 240, 120, 210] : [95, 85, 170, 220, 220, 110];
     const colXs = colWidths.reduce<number[]>((acc, current, index) => {
       acc.push(index === 0 ? margin : acc[index - 1] + colWidths[index - 1]);
       return acc;
     }, []);
 
-    const cell = (x: number, y: number, w: number, h: number, text: string | number, options: { anchor?: 'start' | 'middle' | 'end'; bold?: boolean; max?: number; size?: number } = {}) => {
+    const cell = (x: number, y: number, w: number, h: number, text: string | number, options: { anchor?: 'start' | 'middle' | 'end'; bold?: boolean; max?: number; size?: number; color?: string } = {}) => {
       const anchor = options.anchor || 'middle';
       const textX = anchor === 'start' ? x + 10 : anchor === 'end' ? x + w - 10 : x + w / 2;
       const value = this.escapeXml(this.fitCellText(text, options.max || 22));
       return `
         <rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#111" stroke-width="1" />
-        <text x="${textX}" y="${y + h / 2 + 6}" font-family="${font}" font-size="${options.size || fontSize}" ${options.bold ? 'font-weight="700"' : ''} text-anchor="${anchor}">${value}</text>
+        <text x="${textX}" y="${y + h / 2 + 6}" font-family="${font}" font-size="${options.size || fontSize}" fill="${options.color || '#111'}" ${options.bold ? 'font-weight="700"' : ''} text-anchor="${anchor}">${value}</text>
       `;
     };
 
@@ -151,21 +153,33 @@ export class DeliveryNoteGenerator {
           this.fitCellText(data.date, 24),
           this.fitCellText(row.content, 18),
           this.fitCellText(row.quantity, 10),
-          this.fitCellText(row.balance, 26),
+          this.fitCellText(row.debt || '0 két', 10),
+          this.fitCellText(row.balance, 24),
         ]
-        : isAllocationReceipt
+        : isAllocationSenderReceipt
           ? [
             this.fitCellText(data.date, 24),
             this.fitCellText(row.partner || '-', 20),
             this.fitCellText(row.quantity, 10),
             this.fitCellText(row.content, 20),
+            this.fitCellText(row.debt || '0 két', 10),
             this.fitCellText(row.balance, 18),
           ]
+          : isAllocationReceipt
+            ? [
+              this.fitCellText(data.date, 24),
+              this.fitCellText(row.partner || '-', 20),
+              this.fitCellText(row.quantity, 10),
+              this.fitCellText(row.content, 20),
+              this.fitCellText(row.debt || '0 két', 10),
+              this.fitCellText(row.balance, 18),
+            ]
           : isDeliveryReceipt
             ? [
               this.fitCellText(data.date, 24),
               this.fitCellText(row.quantity, 10),
               this.fitCellText(row.note || '-', 24),
+              this.fitCellText(row.debt || '0 két', 10),
               this.fitCellText(row.balance, 18),
             ]
             : [
@@ -176,17 +190,17 @@ export class DeliveryNoteGenerator {
             this.fitCellText(row.balance, 26),
             this.fitCellText(row.note || '-', 14),
           ];
-      const maxes = isIntakeReceipt ? [24, 18, 10, 26] : isAllocationReceipt ? [24, 20, 10, 24, 18] : isDeliveryReceipt ? [24, 10, 24, 18] : [10, 8, 18, 24, 26, 14];
-      return values.map((value, index) => cell(colXs[index], y, colWidths[index], rowHeight, value, { max: maxes[index] })).join('');
+      const maxes = isIntakeReceipt ? [24, 18, 10, 10, 24] : isAllocationReceipt ? [24, 20, 10, 24, 10, 18] : isDeliveryReceipt ? [24, 10, 24, 10, 18] : [10, 8, 18, 24, 26, 14];
+      return values.map((value, index) => cell(colXs[index], y, colWidths[index], rowHeight, value, { max: maxes[index], color: ((isIntakeReceipt && index === 3) || (isAllocationReceipt && index === 4) || (isDeliveryReceipt && index === 3)) ? '#dc2626' : undefined })).join('');
     }).join('');
 
     const headerY = margin + rowHeight * 3;
     const headers = isIntakeReceipt
-      ? ['Ngày giờ', 'Nội dung', 'Số lượng', 'Tổng số két hiện tại']
+      ? ['Ngày giờ', 'Nội dung', 'Số lượng', 'Nợ', 'Tổng số két']
       : isAllocationReceipt
-        ? ['Ngày giờ', data.receiptType === 'Nhận két' ? 'Người gửi' : 'Người nhận', 'Số lượng', 'Ghi chú', data.receiptType === 'Nhận két' ? 'Két chờ giao' : 'Két còn gửi']
+        ? ['Ngày giờ', data.receiptType === 'Nhận két' ? 'Người gửi' : 'Người nhận', 'Số lượng', 'Ghi chú', 'Nợ', data.receiptType === 'Nhận két' ? 'Tổng két chờ giao' : 'Két còn gửi']
         : isDeliveryReceipt
-          ? ['Ngày giờ', 'Số lượng', 'Ghi chú', 'Két còn chờ giao']
+          ? ['Ngày giờ', 'Số lượng', 'Ghi chú', 'Nợ', 'Tổng két chờ giao']
           : ['Giờ', 'Số két', 'Nội dung', 'Liên quan', 'Số dư sau', 'Ghi chú'];
     const headerSvg = headers.map((header, index) => cell(colXs[index], headerY, colWidths[index], rowHeight, header, { bold: true, max: 12 })).join('');
     const shopName = this.escapeXml(data.shopName || 'Nhà xe Năm Sự');

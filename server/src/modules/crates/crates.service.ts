@@ -44,6 +44,7 @@ type CrateDeliveryVehicle = {
 };
 
 const receiptTokenDate = 'receipt';
+const defaultCrateDeliveryLicensePlate = 'Ra Chành Lấy';
 
 export class CratesService {
   private static buildPublicLink(type: CrateReceiptType, transactionId: string) {
@@ -116,6 +117,40 @@ export class CratesService {
     return data as CrateDeliveryVehicle;
   }
 
+  private static async getOrCreateDefaultDeliveryVehicle(): Promise<CrateDeliveryVehicle> {
+    const { data: existing, error: existingError } = await supabaseService
+      .from('vehicles')
+      .select('id, license_plate, driver_id, in_charge_id, profiles:profiles!vehicles_driver_id_fkey(full_name), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name)')
+      .eq('license_plate', defaultCrateDeliveryLicensePlate)
+      .maybeSingle();
+    if (existingError) throw existingError;
+    if (existing) return existing as CrateDeliveryVehicle;
+
+    const { data: created, error: createError } = await supabaseService
+      .from('vehicles')
+      .insert({
+        license_plate: defaultCrateDeliveryLicensePlate,
+        vehicle_type: 'pickup_point',
+        goods_categories: ['vegetable'],
+        status: 'available',
+      })
+      .select('id, license_plate, driver_id, in_charge_id, profiles:profiles!vehicles_driver_id_fkey(full_name), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name)')
+      .single();
+
+    if (createError) {
+      const { data: fallback, error: fallbackError } = await supabaseService
+        .from('vehicles')
+        .select('id, license_plate, driver_id, in_charge_id, profiles:profiles!vehicles_driver_id_fkey(full_name), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name)')
+        .eq('license_plate', defaultCrateDeliveryLicensePlate)
+        .maybeSingle();
+      if (fallbackError) throw fallbackError;
+      if (fallback) return fallback as CrateDeliveryVehicle;
+      throw createError;
+    }
+
+    return created as CrateDeliveryVehicle;
+  }
+
   private static isDriverOrLoaderRole(role?: string | null) {
     const normalizedRole = (role || '').toLowerCase();
     return normalizedRole === 'driver' ||
@@ -153,6 +188,14 @@ export class CratesService {
     return balance < 0 ? 'Nợ ' + Math.abs(balance) + ' két' : balance + ' két';
   }
 
+  private static formatSenderAvailableBalance(value?: number | null) {
+    return Math.max(Number(value || 0), 0) + ' két';
+  }
+
+  private static formatSenderDebt(value?: number | null) {
+    return Math.max(-Number(value || 0), 0) + ' két';
+  }
+
   private static buildIntakeReceiptImage(record: any): CrateReceiptNoteData {
     const createdAt = record.created_at;
     return {
@@ -166,7 +209,8 @@ export class CratesService {
         quantity: record.quantity,
         content: record.notes || '-',
         partner: record.sender?.name || '-',
-        balance: `${record.sender_balance_after} két`,
+        balance: this.formatSenderAvailableBalance(record.sender_balance_after),
+        debt: this.formatSenderDebt(record.sender_balance_after),
         note: record.notes || '-',
       }],
     };
@@ -188,7 +232,8 @@ export class CratesService {
         partner: isReceiver ? record.sender?.name || '-' : record.receiver?.name || '-',
         balance: isReceiver
           ? `${record.receiver_pending_after} két`
-          : `${record.sender_balance_after} két`,
+          : this.formatSenderAvailableBalance(record.sender_balance_after),
+        debt: isReceiver ? `${Number(record.receiver_debt_after || 0) + Number(record.debt_applied || 0)} két` : this.formatSenderDebt(record.sender_balance_after),
         note: isReceiver ? `Tăng chờ ${record.pending_added} két` : `Bù nợ ${record.debt_applied} két`,
       }],
     };
@@ -208,6 +253,7 @@ export class CratesService {
         content: 'Giao két',
         partner: record.receiver?.name || '-',
         balance: `${record.receiver_pending_after} két`,
+        debt: `${record.receiver_debt_after} két`,
         note: record.notes || (record.debt_created > 0 ? `Nợ phát sinh ${record.debt_created} két` : '-'),
       }],
     };
@@ -348,7 +394,8 @@ export class CratesService {
           quantity: payload.quantity,
           content: payload.notes || '-',
           partner: sender.name,
-          balance: this.formatSenderBalance(data.account.sender_balance),
+          balance: this.formatSenderAvailableBalance(data.account.sender_balance),
+          debt: this.formatSenderDebt(data.account.sender_balance),
           note: payload.notes || '-',
         }],
       },
@@ -436,9 +483,10 @@ export class CratesService {
   }
 
   static async createDelivery(payload: { receiver_customer_id: string; quantity: number; notes?: string | null; image_urls?: string[]; vehicle_id?: string | null; delivered_at?: string }, user?: UserPayload) {
-    if (!payload.vehicle_id) throw new Error('Vui lòng chọn xe giao két');
-    const vehicle = await this.getDeliveryVehicle(payload.vehicle_id);
-    if (!this.userCanDeliverWithVehicle(user, vehicle)) {
+    const vehicle = payload.vehicle_id
+      ? await this.getDeliveryVehicle(payload.vehicle_id)
+      : await this.getOrCreateDefaultDeliveryVehicle();
+    if (payload.vehicle_id && !this.userCanDeliverWithVehicle(user, vehicle)) {
       throw new Error('Bạn chỉ được giao két bằng xe mình phụ trách');
     }
     const deliveryDriverId = vehicle.driver_id || vehicle.in_charge_id || null;
@@ -510,6 +558,7 @@ export class CratesService {
           content: 'Giao két',
           partner: receiver.name,
           balance: `${data.receiver_account.receiver_pending} két`,
+          debt: `${data.receiver_account.receiver_debt} két`,
           note: delivery.notes || (delivery.debt_created > 0 ? `Nợ phát sinh ${delivery.debt_created} két` : '-'),
         }],
       },
