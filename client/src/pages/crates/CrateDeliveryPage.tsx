@@ -19,6 +19,7 @@ import { useVehicles } from '../../hooks/queries/useVehicles';
 import type { Vehicle } from '../../types';
 
 const formatNumber = (value?: number | null) => new Intl.NumberFormat('vi-VN').format(value || 0);
+const defaultCrateDeliveryVehicleName = 'Tới Chành Lấy';
 const formatDateTime = (value?: string | null) => value
   ? new Date(value).toLocaleString('vi-VN', { timeZone: 'Asia/Bangkok', hour12: false })
   : '-';
@@ -161,6 +162,10 @@ const CrateDeliveryPage: React.FC = () => {
     () => isDriverOrLoader ? eligibleVehicles.filter((vehicle) => myVehicleIdSet.has(vehicle.id)) : eligibleVehicles,
     [eligibleVehicles, isDriverOrLoader, myVehicleIdSet]
   );
+  const defaultDeliveryVehicleId = useMemo(
+    () => (vehicles || []).find((vehicle) => vehicle.license_plate.trim().toLocaleLowerCase('vi') === defaultCrateDeliveryVehicleName.toLocaleLowerCase('vi'))?.id || null,
+    [vehicles]
+  );
 
   const customerFilterOptions = useMemo(
     () => deliveries
@@ -259,7 +264,7 @@ const CrateDeliveryPage: React.FC = () => {
   }, [activeRows, rowMatchesFilters]);
 
   const openManualDeliveryModal = () => {
-    const resolvedVehicleId = myPrimaryVehicleId || (displayedVehicles.length === 1 ? displayedVehicles[0].id : null);
+    const resolvedVehicleId = defaultDeliveryVehicleId || myPrimaryVehicleId || (displayedVehicles.length === 1 ? displayedVehicles[0].id : null);
     setDeliveryModal({ receiver: null, vehicleId: resolvedVehicleId, isManual: true });
     setDeliveryForm(getDefaultForm());
   };

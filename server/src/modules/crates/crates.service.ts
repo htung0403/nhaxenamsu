@@ -44,7 +44,7 @@ type CrateDeliveryVehicle = {
 };
 
 const receiptTokenDate = 'receipt';
-const defaultCrateDeliveryLicensePlate = 'Ra Chành Lấy';
+const defaultCrateDeliveryLicensePlate = 'Tới Chành Lấy';
 
 export class CratesService {
   private static buildPublicLink(type: CrateReceiptType, transactionId: string) {
