@@ -35,6 +35,7 @@ import {
   getReceiverDisplayName,
   groupDeliveryOrderBuckets,
   groupDeliveryOrdersForView,
+  isReturnToSgDeliveryOrder,
   mergeDeliveryOrderGroup,
 } from '../../lib/deliveryGrouping';
 import type { DeliveryOrder, Vehicle } from '../../types';
@@ -59,6 +60,12 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> =
   hang_o_sg: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-500', dot: 'bg-blue-500' },
   can_giao: { bg: 'bg-orange-500/10', text: 'text-orange-600 dark:text-orange-500', dot: 'bg-orange-500' },
   da_giao: { bg: 'bg-green-500/10', text: 'text-green-600 dark:text-green-500', dot: 'bg-green-500' },
+};
+
+const getPageDeliveryStatus = (order: DeliveryOrder, remainingQuantity?: number) => {
+  const status = getEffectiveDeliveryStatus(order, remainingQuantity);
+  if (isReturnToSgDeliveryOrder(order) && status === 'hang_o_sg') return 'can_giao';
+  return status;
 };
 
 const ASSIGNMENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -141,6 +148,7 @@ type DeliverySourceRelation = {
   profiles?: { full_name?: string | null } | null;
   customers?: { name?: string | null; phone?: string | null } | null;
   receiver_phone?: string | null;
+  is_return_to_sg?: boolean;
   receipt_image_url?: string | null;
   receipt_image_urls?: string[] | null;
   import_order_items?: DeliveryItemImageRef[] | null;
@@ -176,6 +184,7 @@ const toWhatsappPhone = (digits: string) => {
 
 const getCustomerPhone = (order: DeliveryOrder) => {
   const src = pickRelation<DeliverySourceRelation>(order.import_orders) || pickRelation<DeliverySourceRelation>(order.vegetable_orders);
+  if (src?.is_return_to_sg) return src.receiver_phone || '';
   return src?.customers?.phone || src?.receiver_phone || '';
 };
 
@@ -351,7 +360,7 @@ const DeliveryPage: React.FC = () => {
     groupDeliveryOrderBuckets(baseOrders).forEach((group, key) => {
       const adminViewOrder = mergeDeliveryOrderGroup(group);
 
-      if (getEffectiveDeliveryStatus(adminViewOrder) === 'can_giao') {
+      if (getPageDeliveryStatus(adminViewOrder) === 'can_giao') {
         keys.add(key);
       }
     });
@@ -654,7 +663,7 @@ const DeliveryPage: React.FC = () => {
 
   const isDeliveredTabOrder = React.useCallback((order: DeliveryOrder) => {
     if (hasDeliveredSourceStatus(order)) return true;
-    const eff = getEffectiveDeliveryStatus(order);
+    const eff = getPageDeliveryStatus(order);
     if (eff === 'da_giao') return true;
     const totalAssigned = getTotalAssignedQuantity(order);
     return totalAssigned > 0 && totalAssigned < order.total_quantity;
@@ -678,7 +687,7 @@ const DeliveryPage: React.FC = () => {
 
     return next.filter(o => {
       const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
-      const rName = o.import_orders?.customers?.name || o.import_orders?.receiver_name?.trim() || o.import_orders?.profiles?.full_name;
+      const rName = getReceiverDisplayName(o);
       const customerPhone = getCustomerPhone(o);
       const searchPhoneDigits = extractPhoneDigits(searchQuery);
       const matchesCustomerSearch = matchesSearch(rName || '', searchQuery)
@@ -717,11 +726,11 @@ const DeliveryPage: React.FC = () => {
 
   const statusCounts = React.useMemo(() => ({
     all: filteredOrders.length,
-    hang_o_sg: filteredOrders.filter((o) => getEffectiveDeliveryStatus(o) === 'hang_o_sg').length,
+    hang_o_sg: filteredOrders.filter((o) => getPageDeliveryStatus(o) === 'hang_o_sg').length,
     can_giao: filteredOrders.filter((o) => {
       const remainingQty = o.total_quantity - getTotalAssignedQuantity(o);
       if (remainingQty <= 0) return false;
-      const eff = getEffectiveDeliveryStatus(o, remainingQty);
+      const eff = getPageDeliveryStatus(o, remainingQty);
       if (eff !== 'can_giao') return false;
       if (isDriverOrLoader && !isAdminCanGiaoOrder(o)) return false;
       return true;
@@ -741,7 +750,7 @@ const DeliveryPage: React.FC = () => {
       const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
       if (cName) cSet.add(cName);
 
-      const rName = o.import_orders?.customers?.name || o.import_orders?.receiver_name?.trim() || o.import_orders?.profiles?.full_name;
+      const rName = getReceiverDisplayName(o);
       if (rName) rSet.add(rName);
     });
     return {
@@ -765,12 +774,12 @@ const DeliveryPage: React.FC = () => {
     const statusFiltered = statusFilter === 'all'
       ? filteredOrders
       : filteredOrders.filter((o) => {
-        const eff = getEffectiveDeliveryStatus(o);
+        const eff = getPageDeliveryStatus(o);
         if (statusFilter === 'hang_o_sg') return eff === 'hang_o_sg';
         if (statusFilter === 'can_giao') {
           const remainingQty = o.total_quantity - getTotalAssignedQuantity(o);
           if (remainingQty <= 0) return false;
-          if (getEffectiveDeliveryStatus(o, remainingQty) !== 'can_giao') return false;
+          if (getPageDeliveryStatus(o, remainingQty) !== 'can_giao') return false;
           if (isDriverOrLoader && !isAdminCanGiaoOrder(o)) return false;
           return true;
         }
@@ -1141,8 +1150,9 @@ const DeliveryPage: React.FC = () => {
                           0
                         );
                         const remainingQty = o.total_quantity - totalAssigned;
-                        const effectiveStatus = getEffectiveDeliveryStatus(o, remainingQty);
-                        const statusColor = STATUS_COLORS[effectiveStatus] || STATUS_COLORS.can_giao;
+                        const effectiveStatus = getPageDeliveryStatus(o, remainingQty);
+                        const isReturnToSg = isReturnToSgDeliveryOrder(o);
+                        const statusColor = isReturnToSg ? STATUS_COLORS.hang_o_sg : (STATUS_COLORS[effectiveStatus] || STATUS_COLORS.can_giao);
                         const assignmentStatus = getAssignmentStatusSummary(o);
                         const paymentStatus = getOrderPaymentStatus(o);
                         const paymentConfig = PAYMENT_STATUS_CONFIG[paymentStatus];
@@ -1277,7 +1287,7 @@ const DeliveryPage: React.FC = () => {
                             <td className="px-2 py-3 border-r border-border">
                               <div className={clsx("flex items-center justify-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold mx-auto w-fit", statusColor.bg, statusColor.text)}>
                                 <div className={clsx("w-1.5 h-1.5 rounded-full", statusColor.dot)} />
-                                {STATUS_LABELS[effectiveStatus] || effectiveStatus}
+                                {isReturnToSg ? 'Hàng gửi SG' : (STATUS_LABELS[effectiveStatus] || effectiveStatus)}
                               </div>
                               {assignmentStatus && (
                                 <div className={clsx("mt-1 mx-auto w-fit rounded-md px-1.5 py-0.5 text-[9px] font-black", assignmentStatus.className)}>

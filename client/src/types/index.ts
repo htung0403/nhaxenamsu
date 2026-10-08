@@ -337,6 +337,7 @@ export interface DeliveryOrder {
       driver_name?: string | null;
       received_by?: string | null;
       admin_confirmed_at?: string | null;
+      is_return_to_sg?: boolean;
       customers?: { name: string; phone?: string };
       sender_customers?: { name: string; phone?: string };
       total_amount?: number;

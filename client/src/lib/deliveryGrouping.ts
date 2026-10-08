@@ -13,11 +13,20 @@ export const getReceiverDisplayName = (order: DeliveryOrder) => {
   const orderObj = pickRelation(order.import_orders) || pickRelation(order.vegetable_orders);
   if (!orderObj) return '-';
 
+  if ('is_return_to_sg' in orderObj && orderObj.is_return_to_sg) {
+    return orderObj.receiver_name?.trim() || '-';
+  }
+
   if (order.status === 'hang_o_sg' && orderObj.selected_alias) {
     return orderObj.selected_alias;
   }
 
   return orderObj.customers?.name || orderObj.receiver_name?.trim() || orderObj.profiles?.full_name || '-';
+};
+
+export const isReturnToSgDeliveryOrder = (order: DeliveryOrder) => {
+  const importOrder = pickRelation(order.import_orders);
+  return Boolean(importOrder?.is_return_to_sg);
 };
 
 export const getDeliveryGroupKey = (order: DeliveryOrder) => {
@@ -29,7 +38,7 @@ export const getDeliveryGroupKey = (order: DeliveryOrder) => {
 };
 
 export const getDeliveryViewGroupKey = (order: DeliveryOrder) =>
-  order.status === 'hang_o_sg' ? `single:${order.id}` : getDeliveryGroupKey(order);
+  order.status === 'hang_o_sg' && !isReturnToSgDeliveryOrder(order) ? `single:${order.id}` : getDeliveryGroupKey(order);
 
 export const groupDeliveryOrderBuckets = (orders: DeliveryOrder[]) => {
   const grouped = new Map<string, DeliveryOrder[]>();
@@ -54,7 +63,7 @@ export const mergeDeliveryOrderGroup = (
   const mergedDeliveryVehicles = ordered.flatMap((order) => order.delivery_vehicles || []);
   const mergedPaymentCollections = ordered.flatMap((order) => order.payment_collections || []);
   const sourceIds = ordered.map((order) => order.id);
-  const allHangOsg = ordered.every((order) => order.status === 'hang_o_sg');
+  const allHangOsg = ordered.every((order) => order.status === 'hang_o_sg' && !isReturnToSgDeliveryOrder(order));
   const hasDaGiao = ordered.some((order) => order.status === 'da_giao');
 
   const mergedOrder: DeliveryOrder = {
