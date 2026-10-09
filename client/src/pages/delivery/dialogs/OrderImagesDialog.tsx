@@ -99,6 +99,14 @@ const formatDateTime = (date?: string | null, time?: string | null, createdAt?: 
       return date;
     })();
     if (time) return `${time.slice(0, 5)} ${datePart}`;
+    if (createdAt) {
+      const createdDate = new Date(createdAt);
+      if (!Number.isNaN(createdDate.getTime())) {
+        const hh = String(createdDate.getHours()).padStart(2, '0');
+        const min = String(createdDate.getMinutes()).padStart(2, '0');
+        return `${hh}:${min} ${datePart}`;
+      }
+    }
     return datePart;
   }
 
@@ -134,6 +142,14 @@ const getDriverName = (deliveryVehicle?: DeliveryVehicleLike): string | undefine
   return deliveryVehicle?.profiles?.full_name?.trim() || undefined;
 };
 
+const getProductDisplayName = (productName?: string | null): string | undefined => {
+  if (!productName) return undefined;
+  const displayName = productName.includes(' - ')
+    ? productName.split(' - ').slice(1).join(' - ')
+    : productName;
+  return displayName.trim() || undefined;
+};
+
 const sumItemQuantity = (items?: OrderImageRef[] | null): number | null => {
   if (!items || items.length === 0) return null;
   const total = items.reduce((acc, item) => acc + (item.quantity ?? 0), 0);
@@ -159,6 +175,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
     deliveryDate?: string;
     deliveryTime?: string | null;
     productName?: string;
+    quantity?: number | null;
     driverName?: string;
     driverDeliveredAt?: string | null;
     createdAt?: string | null;
@@ -200,6 +217,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
       deliveryDate?: string,
       deliveryTime?: string | null,
       productName?: string,
+      quantity?: number | null,
       driverName?: string,
       driverDeliveredAt?: string | null,
       createdAt?: string | null
@@ -217,6 +235,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
               deliveryDate,
               deliveryTime,
               productName,
+              quantity,
               driverName,
               driverDeliveredAt,
               createdAt
@@ -232,6 +251,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           deliveryDate,
           deliveryTime,
           productName,
+          quantity,
           driverName,
           driverDeliveredAt,
           createdAt
@@ -324,6 +344,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
 
       const vehiclePlateMap = new Map<string, string>();
       const vehicleDriverMap = new Map<string, string>();
+      const vehicleQuantityMap = new Map<string, number>();
       const vehicleBatchTotals = new Map<string, number>();
       (currentOrder?.delivery_vehicles || []).forEach(dv => {
         if (dv.vehicle_id && dv.vehicles?.license_plate) {
@@ -331,6 +352,12 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
         }
         const driverName = getDriverName(dv);
         if (dv.vehicle_id && driverName) vehicleDriverMap.set(dv.vehicle_id, driverName);
+        if (dv.vehicle_id) {
+          vehicleQuantityMap.set(
+            dv.vehicle_id,
+            (vehicleQuantityMap.get(dv.vehicle_id) || 0) + (Number(dv.assigned_quantity) || 0)
+          );
+        }
 
         const batchKey = `${dv.vehicle_id || ''}|${dv.driver_id || ''}|${dv.delivery_date || ''}|${(dv.delivery_time || '').slice(0, 5)}`;
         vehicleBatchTotals.set(batchKey, (vehicleBatchTotals.get(batchKey) || 0) + (Number(dv.assigned_quantity) || 0));
@@ -340,10 +367,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
         const plate = dv?.vehicles?.license_plate?.trim();
         const batchKey = `${dv.vehicle_id || ''}|${dv.driver_id || ''}|${dv.delivery_date || ''}|${(dv.delivery_time || '').slice(0, 5)}`;
         const qty = vehicleBatchTotals.get(batchKey) ?? (Number(dv?.assigned_quantity) || 0);
-        const pName = currentOrder.product_name.includes(' - ') ? currentOrder.product_name.split(' - ').slice(1).join(' - ') : currentOrder.product_name;
-        const vehicleLabel = plate
-          ? (qty ? `Xe: ${plate} (${pName}: SL ${qty})` : `Xe: ${plate}`)
-          : undefined;
+        const vehicleLabel = plate ? `Xe: ${plate}` : undefined;
 
         (dv?.image_urls || []).forEach((u) => pushDeliveryMeta(
           u,
@@ -352,6 +376,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           dv.delivery_date || currentOrder.delivery_date,
           dv.delivery_time || currentOrder.delivery_time,
           currentOrder.product_name,
+          qty,
           getDriverName(dv),
           null,
           currentOrder.created_at
@@ -361,6 +386,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
       currentOrder?.payment_collections?.forEach(pc => {
         const plate = pc.vehicle_id ? vehiclePlateMap.get(pc.vehicle_id) : undefined;
         const driverName = pc.vehicle_id ? vehicleDriverMap.get(pc.vehicle_id) : undefined;
+        const quantity = pc.vehicle_id ? vehicleQuantityMap.get(pc.vehicle_id) : undefined;
         const vehicleLabel = plate ? `Thu tiền - Xe: ${plate}` : 'Thu tiền';
 
         if (pc.image_url) pushDeliveryMeta(
@@ -370,6 +396,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           currentOrder.delivery_date,
           currentOrder.delivery_time,
           currentOrder.product_name,
+          quantity,
           driverName,
           currentOrder.driver_delivered_at,
           currentOrder.created_at
@@ -382,6 +409,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
             currentOrder.delivery_date,
             currentOrder.delivery_time,
             currentOrder.product_name,
+            quantity,
             driverName,
             currentOrder.driver_delivered_at,
             currentOrder.created_at
@@ -396,6 +424,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
         currentOrder.delivery_date,
         currentOrder.delivery_time,
         currentOrder.product_name,
+        currentOrder.delivered_quantity || currentOrder.total_quantity,
         getDriverName(currentOrder.delivery_vehicles?.[0]),
         currentOrder.driver_delivered_at,
         currentOrder.created_at
@@ -408,6 +437,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           currentOrder.delivery_date,
           currentOrder.delivery_time,
           currentOrder.product_name,
+          currentOrder.delivered_quantity || currentOrder.total_quantity,
           getDriverName(currentOrder.delivery_vehicles?.[0]),
           currentOrder.driver_delivered_at,
           currentOrder.created_at
@@ -457,6 +487,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
       const vehicleLabel = plate ? `Xe: ${plate}` : undefined;
       const deliveryDate = vehicleDelivery?.delivery_date || delivery.delivery_date;
       const deliveryTime = vehicleDelivery?.delivery_time || delivery.delivery_time;
+      const quantity = vehicleDelivery?.assigned_quantity || delivery.delivered_quantity || delivery.total_quantity;
       const driverName = getDriverName(vehicleDelivery || delivery.delivery_vehicles?.[0]);
       const driverDeliveredAt = source === 'vehicle' ? null : delivery.driver_delivered_at;
       
@@ -472,6 +503,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
               deliveryDate,
               deliveryTime,
               productName: delivery.product_name,
+              quantity,
               driverName,
               driverDeliveredAt,
               createdAt: delivery.created_at
@@ -487,6 +519,7 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           deliveryDate,
           deliveryTime,
           productName: delivery.product_name,
+          quantity,
           driverName,
           driverDeliveredAt,
           createdAt: delivery.created_at
@@ -687,24 +720,15 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
                     {(() => {
                       const meta = nhanHangImageMeta[idx];
                       if (!meta) return null;
+                      const productDisplayName = getProductDisplayName(meta.productName);
                       
-                      const showMeta = meta.vehicleLabel || meta.driverName || meta.deliveryDate || meta.productName;
+                      const showMeta = meta.vehicleLabel || meta.driverName || meta.quantity || meta.deliveryDate || meta.productName;
                       if (!showMeta) return null;
 
                       return (
                         <div className="absolute inset-x-0 bottom-0 p-2 bg-black/60 backdrop-blur-[2px] text-white flex flex-col gap-0.5">
-                          {meta.vehicleLabel && (
-                            <div className="text-[11px] font-bold leading-tight">
-                              {meta.vehicleLabel}
-                            </div>
-                          )}
-                          {meta.driverName && (
-                            <div className="text-[11px] font-bold leading-tight">
-                              Tài xế: {meta.driverName}
-                            </div>
-                          )}
                           {(meta.deliveryDate || meta.deliveryTime) && (
-                            <div className="text-[10px] font-medium opacity-90 leading-tight">
+                            <div className="text-[11px] font-bold leading-tight">
                               {(() => {
                                 // Priority: driver_delivered_at > delivery_time > created_at fallback
                                 if (meta.driverDeliveredAt) {
@@ -740,6 +764,19 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
 
                                 return datePart;
                               })()}
+                            </div>
+                          )}
+                          <div className="text-[11px] font-bold leading-tight">
+                            SL: {meta.quantity ?? '--'}{productDisplayName ? ` ${productDisplayName}` : ''}
+                          </div>
+                          {meta.vehicleLabel && (
+                            <div className="text-[11px] font-bold leading-tight">
+                              {meta.vehicleLabel}
+                            </div>
+                          )}
+                          {meta.driverName && (
+                            <div className="text-[11px] font-bold leading-tight line-clamp-2">
+                              Tài xế: {meta.driverName}
                             </div>
                           )}
                         </div>
