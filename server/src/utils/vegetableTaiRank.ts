@@ -27,7 +27,8 @@ export function resolveVegetableOrderDriverKey(order: VegetableTaiRankOrder): st
 }
 
 export function isUnconfirmedVegetableCustomerOrder(order: VegetableTaiRankOrder): boolean {
-  return order.profiles?.role === 'customer' && !order.admin_confirmed_at;
+  const profile = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
+  return profile?.role === 'customer' && !order.admin_confirmed_at;
 }
 
 export function buildVegetableDailyDriverRankMap(orders: VegetableTaiRankOrder[]): Map<string, number> {

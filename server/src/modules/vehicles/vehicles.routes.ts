@@ -6,9 +6,8 @@ import { requirePolicy } from '../../middlewares/role';
 const router = Router();
 
 router.use(authMiddleware);
+router.get('/', requirePolicy('VEHICLES_OPERATIONS', 'VEHICLES_LOOKUP_READ'), VehicleController.getAll);
 router.use(requirePolicy('VEHICLES_OPERATIONS'));
-
-router.get('/', VehicleController.getAll);
 router.post('/', VehicleController.create);
 router.put('/:id', VehicleController.update);
 router.post('/:id/checkin', VehicleController.checkin);

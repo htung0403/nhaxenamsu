@@ -2,7 +2,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { Printer, ArrowLeft } from 'lucide-react';
 import { DatePicker } from '../../components/shared/DatePicker';
 import { CreatableSearchableSelect } from '../../components/ui/CreatableSearchableSelect';
-import { useImportOrders } from '../../hooks/queries/useImportOrders';
+import { useImportOrdersForPrint } from '../../hooks/queries/useImportOrders';
 import { useVehicles } from '../../hooks/queries/useVehicles';
 import type { DeliveryOrder, ImportOrder, ImportOrderFilters, Vehicle } from '../../types';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
@@ -61,7 +61,7 @@ const VEGETABLE_PRINT_TABLE_STYLE: React.CSSProperties = {
 interface FlatItem {
   senderName: string;
   supplierName: string;
-  taiRank: number;
+  taiRank: number | null;
   quantity: number;
   productName: string;
   priceK: number;
@@ -87,10 +87,9 @@ const PrintVegetableOrdersPage: React.FC = () => {
     dateFrom: selectedDate,
     dateTo: selectedDate,
     order_category: 'vegetable',
-    pageSize: 9999,
   };
 
-  const { data: ordersResponse, isLoading, isError, refetch } = useImportOrders(filters);
+  const { data: ordersResponse, isLoading, isError, refetch } = useImportOrdersForPrint(filters);
   const orders = useMemo<ImportOrderWithRelations[]>(
     () => ordersResponse?.data ?? [],
     [ordersResponse?.data]
@@ -118,7 +117,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
       const supplierName = getSupplierName(order);
       const senderName = order.sender_name || '';
       const supplierNote = order.notes || '';
-      const taiRank = getVegetableTaiRank(order, dailyTaiRankMap) || 1;
+      const taiRank = getVegetableTaiRank(order, dailyTaiRankMap);
 
       if (order.import_order_items && order.import_order_items.length > 0) {
         order.import_order_items.forEach((item) => {
@@ -162,7 +161,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
     items.sort((a, b) => {
       const cmp = a.supplierName.localeCompare(b.supplierName, 'vi');
       if (cmp !== 0) return cmp;
-      if (a.taiRank !== b.taiRank) return a.taiRank - b.taiRank;
+        if (a.taiRank !== b.taiRank) return (a.taiRank ?? Number.MAX_SAFE_INTEGER) - (b.taiRank ?? Number.MAX_SAFE_INTEGER);
       const cmpN = a.supplierNote.localeCompare(b.supplierNote, 'vi');
       if (cmpN !== 0) return cmpN;
       const cmpS = a.senderName.localeCompare(b.senderName, 'vi');
@@ -196,7 +195,8 @@ const PrintVegetableOrdersPage: React.FC = () => {
     const map = new Map<number, string>();
     orders.forEach((order) => {
       if (order.deleted_at) return;
-      const taiRank = getVegetableTaiRank(order, dailyTaiRankMap) || 1;
+        const taiRank = getVegetableTaiRank(order, dailyTaiRankMap);
+        if (taiRank === null) return;
       const plates = getOrderVehiclePlates(order);
       if (plates.length > 0 && !map.has(taiRank)) {
         map.set(taiRank, plates.join(', '));
@@ -206,7 +206,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
   }, [orders, dailyTaiRankMap]);
 
   const taiCount = useMemo(() => {
-    const ranks = new Set(flatItems.map((item) => item.taiRank));
+      const ranks = new Set(flatItems.map((item) => item.taiRank).filter(rank => rank !== null));
     return ranks.size;
   }, [flatItems]);
 
@@ -627,7 +627,7 @@ const PrintVegetableOrdersPage: React.FC = () => {
                                     borderRight: '1px solid #000',
                                     borderBottom: rowBorderBottom,
                                   }}>
-                                    {item.taiRank}
+                                    {item.taiRank ?? '-'}
                                   </td>
                                   <td style={{
                                     padding: '4px 6px',

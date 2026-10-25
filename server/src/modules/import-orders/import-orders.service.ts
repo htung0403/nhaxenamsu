@@ -1,6 +1,7 @@
 import { supabaseService } from '../../config/supabase';
 import { format } from 'date-fns';
 import type { UserPayload } from '../../types';
+import type { OrderCategory } from '../../types/order-category';
 import {
   fetchDriverScopeForUser,
   goodsScopeFullAccess,
@@ -9,7 +10,8 @@ import {
   importOrderRowMatchesGoodsScope,
   type DriverScope,
 } from '../../utils/goodsScope';
-import { assignVegetableTaiRanksByDate } from '../../utils/vegetableTaiRank';
+import { resolveGroceryFlag } from '../../utils/groceryDirection';
+import { listImportOrders } from './import-order-list';
 
 export class ImportOrderService {
   private static resolvePaymentAmounts(mainData: any) {
@@ -35,219 +37,21 @@ export class ImportOrderService {
   }
 
   static async getAll(filters: any, actor?: UserPayload) {
-    const isVegOnly = filters.order_category === 'vegetable';
-    const isStandardOnly = filters.order_category === 'standard';
-    const fetchBoth = !isVegOnly && !isStandardOnly;
-
-    // Pagination params
-    const page = filters.page ? parseInt(filters.page, 10) : 1;
-    const pageSize = filters.pageSize ? parseInt(filters.pageSize, 10) : 20;
-    const offset = (page - 1) * pageSize;
-    const limit = pageSize;
-
-    // Search param
-    const search = filters.search ? String(filters.search).trim() : null;
-
-    const buildQuery = (tName: string, iName: string, forCount = false) => {
-      // import_orders có 2 FK tới profiles (received_by, sg_cash_handover_confirmed_by) → bắt buộc chỉ rõ quan hệ
-      const receivedByProfile =
-        tName === 'import_orders'
-          ? 'profiles:profiles!received_by(full_name, role)'
-          : 'profiles:profiles!received_by(full_name, role)';
-      const senderCustomerJoin =
-        tName === 'import_orders'
-          ? 'sender_customers:customers!import_orders_sender_id_fkey(id, name, phone)'
-          : 'sender_customers:customers!vegetable_orders_sender_id_fkey(id, name, phone)';
-      const customerJoin =
-        tName === 'import_orders'
-          ? 'customers:customers!import_orders_customer_id_fkey(id, name, phone, address, aliases)'
-          : 'customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, address, aliases)';
-      
-      // Use count option for total count, otherwise select with joins
-      let q = forCount
-        ? supabaseService.from(tName).select('*', { count: 'exact', head: true })
-        : supabaseService
-            .from(tName)
-            .select(`*, ${receivedByProfile}, warehouses(name), ${customerJoin}, ${senderCustomerJoin}, ${iName}(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate, profiles:profiles!vehicles_driver_id_fkey(full_name, phone), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)), profiles!driver_id(full_name, phone)))`);
-
-      q = q.is('deleted_at', null);
-      
-      if (filters.dateFrom) q = q.gte('order_date', filters.dateFrom);
-      if (filters.dateTo) q = q.lte('order_date', filters.dateTo);
-      if (filters.status) {
-        if (filters.status.includes(',')) {
-          q = q.in('status', filters.status.split(','));
-        } else {
-          q = q.eq('status', filters.status);
-        }
-      }
-      if (filters.supplier_name) q = q.ilike('supplier_name', `%${filters.supplier_name}%`);
-      if (filters.license_plate) {
-        const plates = filters.license_plate.split(',').map((p: string) => p.trim()).filter(Boolean);
-        if (plates.length === 1) {
-          q = q.ilike('license_plate', `%${plates[0]}%`);
-        } else if (plates.length > 1) {
-          const orClause = plates.map((p: string) => `license_plate.ilike.%${p}%`).join(',');
-          q = q.or(orClause);
-        }
-      }
-      if (filters.sender) {
-        const senders = filters.sender.split(',').map((s: string) => s.trim()).filter(Boolean);
-        if (senders.length === 1) {
-          q = q.ilike('sender_name', `%${senders[0]}%`);
-        } else if (senders.length > 1) {
-          const orClause = senders.map((s: string) => `sender_name.ilike.%${s}%`).join(',');
-          q = q.or(orClause);
-        }
-      }
-      if (filters.receiver) {
-        const receivers = filters.receiver.split(',').map((r: string) => r.trim()).filter(Boolean);
-        if (receivers.length === 1) {
-          q = q.ilike('receiver_name', `%${receivers[0]}%`);
-        } else if (receivers.length > 1) {
-          const orClause = receivers.map((r: string) => `receiver_name.ilike.%${r}%`).join(',');
-          q = q.or(orClause);
-        }
-      }
-      if (filters.customer_id) {
-        const customerIds = String(filters.customer_id).split(',').map((id: string) => id.trim()).filter(Boolean);
-        if (customerIds.length === 1) q = q.eq('customer_id', customerIds[0]);
-        else if (customerIds.length > 1) q = q.in('customer_id', customerIds);
-      }
-      if (filters.admin_confirmation_status === 'pending_customer') {
-        q = q.is('admin_confirmed_at', null);
-      }
-      
-      // Apply search filter using .or() for order_code, sender_name, receiver_name, selected_alias
-      if (search) {
-        const searchPattern = `%${search}%`;
-        q = q.or(`order_code.ilike.${searchPattern},sender_name.ilike.${searchPattern},receiver_name.ilike.${searchPattern},selected_alias.ilike.${searchPattern}`);
-      }
-      
-      // Fix missing newly created orders by sorting descending BEFORE Supabase limits the results (max-rows)
-      q = q.order('created_at', { ascending: false });
-      
-      // Apply pagination at database level
-      if (!forCount) {
-        q = q.range(offset, offset + limit - 1);
-      }
-      
-      return q;
-    };
-
-    // Get total counts for pagination metadata
-    let totalStandard = 0;
-    let totalVeg = 0;
-    
-    if (fetchBoth || isStandardOnly) {
-      const { count: standardCount, error: standardCountError } = await buildQuery('import_orders', 'import_order_items', true);
-      if (standardCountError) throw standardCountError;
-      totalStandard = standardCount || 0;
-    }
-    
-    if (fetchBoth || isVegOnly) {
-      const { count: vegCount, error: vegCountError } = await buildQuery('vegetable_orders', 'vegetable_order_items', true);
-      if (vegCountError) throw vegCountError;
-      totalVeg = vegCount || 0;
-    }
-    
-    const total = totalStandard + totalVeg;
-
-    let allData: any[] = [];
-    
-    if (fetchBoth || isStandardOnly) {
-      const { data, error } = await buildQuery('import_orders', 'import_order_items');
-      if (error) throw error;
-      if (data) allData = allData.concat(data.map((d: any) => ({ ...d, order_category: 'standard' })));
-    }
-    
-    if (fetchBoth || isVegOnly) {
-      const { data, error } = await buildQuery('vegetable_orders', 'vegetable_order_items');
-      if (error) throw error;
-      if (data) {
-        allData = allData.concat(data.map((d: any) => {
-           const mapped = { ...d, order_category: 'vegetable' };
-           if (mapped.vegetable_order_items) {
-             mapped.import_order_items = mapped.vegetable_order_items;
-             delete mapped.vegetable_order_items;
-           }
-           return mapped;
-        }));
-      }
-    }
-
-    // Sort by created_at desc
-    allData.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-    // Compute total_order_amount
-    let mapped = allData.map((order: any) => {
-      return { ...order, total_order_amount: Number(order.total_amount) || 0 };
-    });
-
-    const isCustomerSubmittedOrder = (order: any) => {
-      const profile = Array.isArray(order.profiles) ? order.profiles[0] : order.profiles;
-      return profile?.role === 'customer';
-    };
-
-    const isReturnToSgOrder = (order: any) => {
-      if (typeof order.is_return_to_sg === 'boolean') return order.is_return_to_sg;
-      const notes = String(order.notes || '').toLocaleLowerCase('vi-VN');
-      return order.order_category === 'standard'
-        && Boolean(order.customer_id)
-        && (isCustomerSubmittedOrder(order) || notes.includes('trả hàng lỗi về lại sg'));
-    };
-
-    if (filters.admin_confirmation_status === 'pending_customer') {
-      mapped = mapped.filter((order: any) =>
-        order.order_category === 'standard' && !isReturnToSgOrder(order) && isCustomerSubmittedOrder(order) && Boolean(order.sender_id) && !order.admin_confirmed_at,
-      );
-    }
-
-    if (filters.admin_confirmation_status === 'return_to_sg') {
-      mapped = mapped.filter((order: any) =>
-        order.order_category === 'standard' && isReturnToSgOrder(order),
-      );
-    }
-
-    if (filters.admin_confirmation_status === 'official') {
-      mapped = mapped.filter((order: any) =>
-        !isReturnToSgOrder(order) && (!isCustomerSubmittedOrder(order) || Boolean(order.admin_confirmed_at)),
-      );
-    }
-
-    assignVegetableTaiRanksByDate(mapped);
-
-    if (actor && !goodsScopeFullAccess(actor.role)) {
-      const isStaff = goodsScopeIsStaffRole(actor.role);
-      const isDriver = goodsScopeIsDriverRole(actor.role);
-      if (isStaff || isDriver) {
-        let driverScope: DriverScope | null = null;
-        if (isDriver) {
-          driverScope = await fetchDriverScopeForUser(actor.id);
-        }
-        mapped = mapped.filter((row: any) => importOrderRowMatchesGoodsScope(row, actor, driverScope));
-      }
-    }
-
-    // Return paginated response with metadata
-    return {
-      data: mapped,
-      total: filters.admin_confirmation_status ? mapped.length : total,
-      page,
-      pageSize,
-    };
+    return listImportOrders(filters, actor);
   }
 
-  static async getById(id: string, actor?: UserPayload) {
+  static async getById(id: string, actor?: UserPayload, category?: OrderCategory) {
+    const table = category === 'vegetable' ? 'vegetable_orders' : 'import_orders';
+    const items = category === 'vegetable' ? 'vegetable_order_items' : 'import_order_items';
     let { data, error } = await supabaseService
-      .from('import_orders')
-      .select('*, profiles:profiles!received_by(full_name, role), warehouses(name), customers:customers!import_orders_customer_id_fkey(id, name, phone, address, aliases), sender_customers:customers!import_orders_sender_id_fkey(id, name, phone), import_order_items(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate, profiles:profiles!vehicles_driver_id_fkey(full_name, phone), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)), profiles!driver_id(full_name, phone)))')
+      .from(table)
+      .select(`*, profiles:profiles!received_by(full_name, role), warehouses(name), customers:customers!${table}_customer_id_fkey(id, name, phone, address, aliases), sender_customers:customers!${table}_sender_id_fkey(id, name, phone), ${items}(*, products(*)), delivery_orders(*, delivery_vehicles(*, vehicles(license_plate, profiles:profiles!vehicles_driver_id_fkey(full_name, phone), responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)), profiles!driver_id(full_name, phone)))`)
       .eq('id', id)
       .is('deleted_at', null)
       .maybeSingle();
 
-    let isVeg = false;
-    if (!data) {
+    let isVeg = category === 'vegetable';
+    if (!data && !category) {
       // Try vegetable_orders fallback
       const { data: vegData, error: vegError } = await supabaseService
         .from('vegetable_orders')
@@ -303,11 +107,12 @@ export class ImportOrderService {
   }
 
   static async create(orderData: any, userId: string) {
-    const { items, order_category, ...mainData } = orderData;
+    const { items, order_category, direction, ...mainData } = orderData;
     const isVeg = order_category === 'vegetable';
     const tName = isVeg ? 'vegetable_orders' : 'import_orders';
     const iName = isVeg ? 'vegetable_order_items' : 'import_order_items';
     const fkName = isVeg ? 'vegetable_order_id' : 'import_order_id';
+    mainData.is_return_to_sg = resolveGroceryFlag({ ...mainData, direction, order_category });
     const { paidAmount, debtAmount } = this.resolvePaymentAmounts(mainData);
 
     const orderDate = mainData.order_date || format(new Date(), 'yyyy-MM-dd');
@@ -392,9 +197,33 @@ export class ImportOrderService {
     return order;
   }
 
-  static async update(id: string, orderData: any) {
-    console.log('--- BACKEND UPDATE ORDER --- ID:', id, 'DATA:', orderData);
-    const { items, order_category, ...mainData } = orderData;
+  static async update(id: string, orderData: any, category?: OrderCategory) {
+    const existing = await this.getById(id, undefined, category);
+    if (orderData.order_category && existing.order_category !== orderData.order_category) throw new Error('Order category cannot be changed');
+    const { items: submittedItems, direction, ...rest } = orderData;
+    let items = submittedItems;
+    let itemPaymentUpdates: Array<{ id: string; payment_status: string }> = [];
+    if (items !== undefined) {
+      const fingerprint = (rows: any[]) => JSON.stringify(rows.map(item => ({
+        product_id: item.product_id || null, quantity: Number(item.quantity),
+        weight_kg: Number(item.weight_kg) || 0, package_type: item.package_type || null,
+        item_note: item.item_note || null, unit_price: Number(item.unit_price) || 0,
+        package_quantity: Number(item.package_quantity) || 0,
+        images: item.image_urls?.length ? item.image_urls : (item.image_url ? String(item.image_url).split(',').map((url: string) => url.trim()) : []),
+      })));
+      const unchanged = fingerprint(items) === fingerprint(existing.import_order_items || []);
+      const assigned = (existing.delivery_orders || []).some((delivery: any) => delivery.delivery_vehicles?.length);
+      if (unchanged) {
+        itemPaymentUpdates = items.flatMap((item: any, index: number) => {
+          const previous = existing.import_order_items[index];
+          return item.payment_status !== undefined && item.payment_status !== previous.payment_status
+            ? [{ id: previous.id, payment_status: item.payment_status }] : [];
+        });
+        items = undefined;
+      } else if (assigned) throw new Error('Cannot replace order items after vehicle assignment; edit the delivery instead');
+    }
+    const order_category = existing.order_category;
+    const mainData = { ...rest, is_return_to_sg: resolveGroceryFlag({ ...rest, direction, order_category }, existing) };
     const isVeg = order_category === 'vegetable';
     const tName = isVeg ? 'vegetable_orders' : 'import_orders';
     const iName = isVeg ? 'vegetable_order_items' : 'import_order_items';
@@ -443,6 +272,11 @@ export class ImportOrderService {
       .single();
 
     if (orderError) throw orderError;
+
+    for (const item of itemPaymentUpdates) {
+      const { error } = await supabaseService.from(iName).update({ payment_status: item.payment_status }).eq('id', item.id).eq(fkName, id);
+      if (error) throw error;
+    }
 
     if (!isVeg && mainData.is_return_to_sg === true) {
       const { error: deliveryStatusError } = await supabaseService
@@ -594,8 +428,21 @@ export class ImportOrderService {
     throw new Error('Đơn không tồn tại hoặc đã được xác nhận');
   }
 
-  static async delete(id: string) {
+  static async delete(id: string, category?: OrderCategory) {
     const deletedAt = new Date().toISOString();
+
+    if (category) {
+      const { data, error } = await supabaseService
+        .from(category === 'vegetable' ? 'vegetable_orders' : 'import_orders')
+        .update({ deleted_at: deletedAt })
+        .eq('id', id)
+        .is('deleted_at', null)
+        .select('id')
+        .maybeSingle();
+      if (error) throw error;
+      if (!data) throw new Error('Order not found or already deleted');
+      return;
+    }
 
     const { data: importOrder, error: importErr } = await supabaseService
       .from('import_orders')

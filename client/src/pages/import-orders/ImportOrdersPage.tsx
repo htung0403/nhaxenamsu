@@ -90,7 +90,7 @@ const getReceiverDisplayName = (order: ImportOrder, receiverByPhone: Map<string,
 
 const getSenderDisplayName = (order: ImportOrder, isReturnToSgPage: boolean) => {
   if (isReturnToSgPage) {
-    const senderName = order.selected_alias || order.customers?.name;
+    const senderName = order.customers?.name || order.sender_name || order.selected_alias;
     if (!senderName) return '-';
     return `${senderName}${order.customers?.phone ? ` (${order.customers.phone})` : ''}`;
   }
@@ -128,11 +128,12 @@ type ImportOrdersPageMode = 'official' | 'confirmation' | 'returnToSg';
 
 interface ImportOrdersPageProps {
   mode?: ImportOrdersPageMode;
+  direction?: import('../../types').GroceryDirection;
 }
 
-const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }) => {
+const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official', direction = mode === 'returnToSg' ? 'duc_trong_to_sg' : 'sg_to_duc_trong' }) => {
   const isConfirmationPage = mode === 'confirmation';
-  const isReturnToSgPage = mode === 'returnToSg';
+  const isReturnToSgPage = direction === 'duc_trong_to_sg';
   const [searchText, setSearchText] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState(getTodayVN());
   const [filterDateTo, setFilterDateTo] = useState(getTodayVN());
@@ -186,6 +187,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
     filters.receiver = filterReceiver.join(',');
   }
   filters.order_category = 'standard';
+  filters.direction = direction;
   filters.admin_confirmation_status = isConfirmationPage ? 'pending_customer' : isReturnToSgPage ? 'return_to_sg' : 'official';
   filters.page = page;
   filters.pageSize = pageSize;
@@ -211,7 +213,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
     return map;
   }, [groceryReceivers]);
 
-  const deleteMutation = useDeleteImportOrder();
+  const deleteMutation = useDeleteImportOrder('standard');
   const confirmMutation = useConfirmImportOrderByAdmin();
 
   const { vuaOptions, taiOptions, nguoiNhapOptions } = useMemo(() => {
@@ -329,9 +331,9 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
       <div className="hidden md:block">
         <PageHeader
           title={isConfirmationPage ? 'Xác nhận hàng gửi' : isReturnToSgPage ? 'Hàng gửi SG' : 'Nhập hàng'}
-          description={isConfirmationPage ? 'Xác nhận đơn tạp hóa khách hàng tự gửi trước khi vào danh sách nhập hàng chính thức' : isReturnToSgPage ? 'Theo dõi các đơn trả hàng do khách nhận tạp hóa tạo' : 'Quản lý danh sách đơn nhập hàng'}
+          description={isConfirmationPage ? 'Xác nhận đơn tạp hóa khách hàng tự gửi trước khi vào danh sách nhập hàng chính thức' : isReturnToSgPage ? 'Đức Trọng → SG · Tạo và theo dõi hàng gửi SG' : 'SG → Đức Trọng · Quản lý danh sách đơn nhập hàng'}
           backPath="/app/hang-hoa"
-          actions={!isConfirmationPage && !isReturnToSgPage ? (
+          actions={!isConfirmationPage ? (
             <button
               onClick={openAddDialog}
               className="flex items-center gap-2 px-4 py-2 rounded-xl bg-primary text-white text-[13px] font-bold hover:bg-primary/90 shadow-lg shadow-primary/20 transition-all"
@@ -612,7 +614,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
                                 >
                                   <Edit size={14} />
                                 </button>
-                                {!isConfirmationPage && !isReturnToSgPage && (
+                                {!isConfirmationPage && (
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setDeleteId(order.id); }}
                                     className="p-1.5 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
@@ -734,7 +736,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
                               <Edit size={13} />
                             </button>
                             {renderConfirmButton(order, 13)}
-                            {!isConfirmationPage && !isReturnToSgPage && (
+                            {!isConfirmationPage && (
                               <button
                                 onClick={(e) => { e.stopPropagation(); setDeleteId(order.id); }}
                                 className="p-1 rounded-lg text-red-400 hover:bg-red-500/10 transition-colors"
@@ -797,6 +799,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
         editingOrder={editingOrder}
         onClose={closeDialog}
         reverseParties={isReturnToSgPage}
+        direction={direction}
       />
 
       <ConfirmDialog
@@ -834,7 +837,7 @@ const ImportOrdersPage: React.FC<ImportOrdersPageProps> = ({ mode = 'official' }
         }}
       />
 
-      {!isConfirmationPage && !isReturnToSgPage && (
+      {!isConfirmationPage && (
         <DraggableFAB
           icon={<Plus size={24} />}
           onClick={openAddDialog}

@@ -20,7 +20,7 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { useAuth } from '../../context/AuthContext';
 import { useVehicles } from '../../hooks/queries/useVehicles';
 import { hasFullGoodsModuleAccess, importOrderVisibleToUser } from '../../utils/goodsModuleScope';
-import { matchesSearch } from '../../lib/str-utils';
+import { getHistorySender, getHistoryReceiver } from '../../lib/importOrderParties';
 
 const statusLabels: Record<OrderStatus, string> = {
   pending: 'Chờ xử lý',
@@ -30,21 +30,6 @@ const statusLabels: Record<OrderStatus, string> = {
 };
 
 const statusOptions = Object.entries(statusLabels).map(([value, label]) => ({ value, label }));
-
-const getOrderVehicles = (order: any) => {
-  const plates = new Set<string>();
-  if (order.license_plate) plates.add(order.license_plate);
-  if (order.delivery_orders) {
-    order.delivery_orders.forEach((d: any) => {
-      if (d.delivery_vehicles) {
-        d.delivery_vehicles.forEach((dv: any) => {
-          if (dv.vehicles?.license_plate) plates.add(dv.vehicles.license_plate);
-        });
-      }
-    });
-  }
-  return plates.size > 0 ? Array.from(plates).join(', ') : '';
-};
 
 const formatCurrency = (value?: number | null) => {
   if (value == null) return '-';
@@ -66,7 +51,7 @@ const defaultColumns: ColumnOption[] = [
   { id: 'actions', label: 'Thao tác', isVisible: true },
 ];
 
-const StandardImportOrderHistoryPage: React.FC = () => {
+const StandardImportOrderHistoryPage: React.FC<{ direction?: import('../../types').GroceryDirection }> = ({ direction = 'sg_to_duc_trong' }) => {
   const [searchText, setSearchText] = useState('');
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo, setFilterDateTo] = useState('');
@@ -105,7 +90,11 @@ const StandardImportOrderHistoryPage: React.FC = () => {
 
   const allFilters: ImportOrderFilters = {
     order_category: 'standard',
-    pageSize: 5000,
+    direction,
+    page,
+    pageSize,
+    history_search: searchText,
+    history_filters: JSON.stringify({ sender: filterCustomer, receiver: filterReceiver, vehicle: filterVehicle }),
   };
   if (filterDateFrom) allFilters.dateFrom = filterDateFrom;
   if (filterDateTo) allFilters.dateTo = filterDateTo;
@@ -123,87 +112,15 @@ const StandardImportOrderHistoryPage: React.FC = () => {
     );
   }, [apiResponse?.data, user, vehicles]);
 
-  const filteredOrders = useMemo(() => {
-    return allOrders.filter((o) => {
-      // Search filter (accent-insensitive)
-      if (searchText.trim()) {
-        const orderCode = o.order_code || '';
-        const senderName = o.selected_alias || o.customers?.name || o.sender_name || '';
-        const receiverName = (o as any).profiles?.full_name || o.receiver_name || o.received_by || '';
-        const items = o.import_order_items || [];
-        const itemNames = items.map((i: any) => i.products?.name).filter(Boolean).join(', ');
-
-        if (
-          !matchesSearch(orderCode, searchText) &&
-          !matchesSearch(senderName, searchText) &&
-          !matchesSearch(receiverName, searchText) &&
-          !matchesSearch(itemNames, searchText)
-        ) {
-          return false;
-        }
-      }
-
-      // Customer filter
-      if (filterCustomer.length > 0) {
-        const senderName = o.selected_alias || o.customers?.name || o.sender_name;
-        if (!senderName || !filterCustomer.includes(senderName)) return false;
-      }
-
-      // Vehicle filter
-      if (filterVehicle.length > 0) {
-        const plates = getOrderVehicles(o);
-        if (!plates) return false;
-        const plateList = plates.split(', ');
-        const hasMatch = filterVehicle.some((v) => plateList.includes(v));
-        if (!hasMatch) return false;
-      }
-
-      // Receiver filter
-      if (filterReceiver.length > 0) {
-        const receiver = (o as any).profiles?.full_name || o.receiver_name || o.received_by;
-        if (!receiver || !filterReceiver.includes(receiver)) return false;
-      }
-
-      return true;
-    });
-  }, [allOrders, searchText, filterCustomer, filterVehicle, filterReceiver]);
-
-  const totalItems = filteredOrders.length;
+  const totalItems = apiResponse?.total || 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  const orders = allOrders;
 
-  const orders = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredOrders.slice(start, start + pageSize);
-  }, [filteredOrders, page, pageSize]);
+  const deleteMutation = useDeleteImportOrder('standard');
 
-  const deleteMutation = useDeleteImportOrder();
-
-  const { vuaOptions, taiOptions, nguoiNhapOptions } = useMemo(() => {
-    if (!allOrders) return { vuaOptions: [], taiOptions: [], nguoiNhapOptions: [] };
-    const vuaSet = new Set<string>();
-    const taiSet = new Set<string>();
-    const receiverSet = new Set<string>();
-
-    allOrders.forEach(order => {
-      const senderName = order.selected_alias || order.customers?.name || order.sender_name;
-      if (senderName) vuaSet.add(senderName);
-
-      const tai = getOrderVehicles(order);
-      if (tai) {
-        tai.split(', ').forEach((t: string) => taiSet.add(t));
-      }
-
-      const receiver = (order as any).profiles?.full_name || order.receiver_name || order.received_by;
-      if (receiver) receiverSet.add(receiver);
-    });
-
-    return {
-      vuaOptions: Array.from(vuaSet).map(v => ({ label: v, value: v })),
-      taiOptions: Array.from(taiSet).map(v => ({ label: v, value: v })),
-      nguoiNhapOptions: Array.from(receiverSet).map(v => ({ label: v, value: v }))
-    };
-  }, [allOrders]);
-
+  const vuaOptions = (apiResponse?.filterOptions?.senders || []).map(value => ({ label: value, value }));
+  const taiOptions = (apiResponse?.filterOptions?.vehicles || []).map(value => ({ label: value, value }));
+  const nguoiNhapOptions = (apiResponse?.filterOptions?.receivers || []).map(value => ({ label: value, value }));
 
   const openAddDialog = () => {
     setEditingOrder(null);
@@ -259,7 +176,7 @@ const StandardImportOrderHistoryPage: React.FC = () => {
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
         <PageHeader
-          title="Lịch sử nhập hàng tạp hóa"
+          title={direction === 'duc_trong_to_sg' ? 'Lịch sử nhập hàng gửi SG' : 'Lịch sử nhập hàng · SG → Đức Trọng'}
           description="Xem toàn bộ lịch sử đơn nhập hàng tạp hóa"
           backPath="/app/hang-hoa"
           actions={
@@ -482,7 +399,7 @@ const StandardImportOrderHistoryPage: React.FC = () => {
                           );
                           case 'sender': return (
                             <td key={col.id} className="px-4 py-3">
-                              <span className="text-[13px] font-bold text-foreground">{order.selected_alias || order.customers?.name || order.sender_name || '-'}</span>
+                              <span className="text-[13px] font-bold text-foreground">{getHistorySender(order)}</span>
                             </td>
                           );
                           case 'item_name': {
@@ -521,7 +438,7 @@ const StandardImportOrderHistoryPage: React.FC = () => {
                           );
                           case 'receiver': return (
                             <td key={col.id} className="px-4 py-3">
-                              <span className="text-[13px] font-medium text-foreground">{(order as any).profiles?.full_name || order.selected_alias || order.receiver_name || '-'}</span>
+                              <span className="text-[13px] font-medium text-foreground">{getHistoryReceiver(order)}</span>
                             </td>
                           );
                           case 'status': return (
@@ -603,7 +520,7 @@ const StandardImportOrderHistoryPage: React.FC = () => {
 
                       <div className="flex-1 min-w-0 flex flex-col justify-center gap-1.5">
                         <div className="flex items-center justify-between">
-                          <span className="text-[13px] font-bold text-foreground truncate">{order.selected_alias || order.customers?.name || order.sender_name || '-'}</span>
+                          <span className="text-[13px] font-bold text-foreground truncate">{getHistorySender(order)}</span>
                           <StatusBadge status={order.status} label={statusLabels[order.status]} />
                         </div>
                         <div className="flex flex-wrap gap-x-2 gap-y-0.5">
@@ -708,6 +625,8 @@ const StandardImportOrderHistoryPage: React.FC = () => {
       </div>
 
       <AddEditStandardImportOrderDialog
+        reverseParties={direction === 'duc_trong_to_sg'}
+        direction={direction}
         isOpen={isDialogOpen}
         isClosing={isDialogClosing}
         editingOrder={editingOrder}

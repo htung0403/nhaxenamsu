@@ -150,7 +150,7 @@ const VegetablesPage: React.FC = () => {
   const [isDialogClosing, setIsDialogClosing] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const deleteMutation = useDeleteImportOrder();
+  const deleteMutation = useDeleteImportOrder('vegetable');
 
   const openEditDialog = (order: any) => {
     setEditingOrder(order);

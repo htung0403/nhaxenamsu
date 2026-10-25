@@ -84,8 +84,9 @@ export const buildVegetableDailyTaiRankMap = (orders: VegetableTaiRankOrder[]): 
 
 export const getVegetableTaiRank = (
   order: VegetableTaiRankOrder,
-  dailyTaiRankMap: Map<string, number>,
+  dailyTaiRankMap?: Map<string, number>,
 ): number | null => {
   if (isVegetableOrderSubmittedByUnconfirmedCustomer(order)) return null;
-  return dailyTaiRankMap.get(order.id) ?? order.tai_rank ?? 1;
+  if (Object.prototype.hasOwnProperty.call(order, 'tai_rank')) return order.tai_rank ?? null;
+  return dailyTaiRankMap?.get(order.id) ?? null;
 };

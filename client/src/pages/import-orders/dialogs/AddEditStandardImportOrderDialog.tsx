@@ -40,6 +40,7 @@ const importOrderSchema = z.object({
   sender_id: z.string().optional(),
   receiver_name: z.string().optional(),
   receiver_phone: z.string().optional(),
+  receiver_address: z.string().optional(),
   selected_alias: z.string().optional(),
   notes: z.string().optional(),
   payment_status: z.enum(['paid', 'unpaid']).default('unpaid'),
@@ -56,6 +57,7 @@ interface Props {
   onClose: () => void;
   defaultCategory?: 'standard' | 'vegetable';
   reverseParties?: boolean;
+  direction?: import('../../../types').GroceryDirection;
 }
 
 type CustomerLike = Pick<Customer, 'id' | 'name' | 'phone' | 'aliases' | 'customer_type'>;
@@ -124,7 +126,7 @@ const unwrapMutationData = <T extends { id: string }>(response: MutationResponse
   return response.data;
 };
 
-const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, editingOrder, onClose, defaultCategory = 'standard', reverseParties = false }) => {
+const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, editingOrder, onClose, defaultCategory = 'standard', reverseParties = false, direction }) => {
   const { user } = useAuth();
   const isEditMode = !!editingOrder;
   const createMutation = useCreateImportOrder();
@@ -325,6 +327,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
       sender_id: '',
       receiver_name: '',
       receiver_phone: '',
+      receiver_address: '',
       selected_alias: '',
       received_by: '',
       notes: '',
@@ -432,6 +435,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         sender_id: editingOrder.sender_id || '',
         receiver_name: editingOrder.receiver_name || '',
         receiver_phone: editingOrder.receiver_phone || '',
+        receiver_address: editingOrder.receiver_address || '',
         selected_alias: editingOrder.selected_alias || '',
         notes: editingOrder.notes || '',
         items: editingOrder.import_order_items?.map((item: ImportOrderItem) => {
@@ -465,6 +469,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
         sender_id: '',
         receiver_name: '',
         receiver_phone: '',
+        receiver_address: '',
         selected_alias: '',
         received_by: user?.id || employees?.[0]?.id || '',
         notes: '',
@@ -543,7 +548,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
     try {
       console.log('--- FORM SUBMIT DATA BEGIN ---', data);
       const { items, ...formPayload } = data;
-      const payload: ImportOrderSubmitPayload = { ...formPayload };
+      const payload: ImportOrderSubmitPayload = { ...formPayload, ...(defaultCategory === 'standard' ? { direction: direction || (editingOrder?.is_return_to_sg || reverseParties ? 'duc_trong_to_sg' : 'sg_to_duc_trong') } : {}) };
       if (reverseParties) {
         payload.sender_id = null;
         payload.sender_name = null;
@@ -643,7 +648,7 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                 {isEditMode ? 'Chỉnh sửa Phiếu Nhập' : 'Lập Phiếu Nhập Hàng'}
               </h2>
               <p className="text-[12px] font-medium text-muted-foreground">
-                {defaultCategory === 'standard' ? 'Tạo phiếu nhập kho mới cho cửa hàng' : 'Lưu trữ hàng hóa về vựa và cộng công nợ chủ hàng'}
+                {reverseParties ? 'Tạo đơn hàng từ Đức Trọng đến SG' : defaultCategory === 'standard' ? 'Tạo phiếu nhập kho mới cho cửa hàng' : 'Lưu trữ hàng hóa về vựa và cộng công nợ chủ hàng'}
               </p>
             </div>
           </div>
@@ -699,6 +704,14 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                                 placeholder="Số điện thoại (tùy chọn)"
                               />
                             </div>
+                            <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider" htmlFor="reverse-receiver-address">Địa chỉ nhận tại SG</label>
+                            <input
+                              id="reverse-receiver-address"
+                              type="text"
+                              {...register('receiver_address')}
+                              className="w-full px-3 py-2.5 bg-card border border-border rounded-xl text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
+                              placeholder="Địa chỉ giao hàng tại SG (tùy chọn)"
+                            />
                           </>
                         ) : (
                           <>

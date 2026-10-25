@@ -1,15 +1,9 @@
 import { supabaseService } from '../../config/supabase';
+import type { GroceryDirection } from '../../utils/groceryDirection';
+import { listDeliveryOrders, listDeliveryInventory } from './delivery-queries';
 import { format } from 'date-fns';
 import type { UserPayload } from '../../types';
-import {
-  deliveryOrderRowMatchesGoodsScope,
-  fetchDriverScopeForUser,
-  goodsScopeFullAccess,
-  goodsScopeIsDriverRole,
-  goodsScopeIsStaffRole,
-  importOrderRowMatchesGoodsScope,
-  type DriverScope,
-} from '../../utils/goodsScope';
+
 import { zaloService } from '../notifications/zalo.service';
 import { normalizePhoneForAuth } from '../../utils/phoneAuth';
 import { logger } from '../../utils/logger';
@@ -73,7 +67,8 @@ export class DeliveryService {
     totalAssigned: number,
     userId?: string,
     exportPaymentStatus?: 'unpaid' | 'paid',
-    assignments?: Array<{ expected_amount?: number | null }>
+    assignments?: Array<{ expected_amount?: number | null }>,
+    additionalPaidAmount?: number
   ) {
     const { data: deliveryOrder, error: deliveryError } = await supabaseService
       .from('delivery_orders')
@@ -132,7 +127,10 @@ export class DeliveryService {
       let nextPaidAmount = Math.min(paidAmount, debtAmount);
       let nextPaymentStatus: 'unpaid' | 'partial' | 'paid' = 'unpaid';
 
-      if (exportPaymentStatus === 'paid') {
+      if (additionalPaidAmount !== undefined) {
+        nextPaidAmount = Math.min(debtAmount, paidAmount + additionalPaidAmount);
+        nextPaymentStatus = nextPaidAmount > 0 ? (nextPaidAmount >= debtAmount ? 'paid' : 'partial') : 'unpaid';
+      } else if (exportPaymentStatus === 'paid') {
         nextPaidAmount = debtAmount;
         nextPaymentStatus = debtAmount > 0 ? 'paid' : 'unpaid';
       } else if (exportPaymentStatus === 'unpaid') {
@@ -184,6 +182,7 @@ export class DeliveryService {
       return;
     }
 
+    const initialPaidAmount = additionalPaidAmount !== undefined ? Math.min(debtAmount, additionalPaidAmount) : exportPaymentStatus === 'paid' ? debtAmount : 0;
     const createPayload: Record<string, any> = {
       export_date: exportDate,
       export_time: exportTimeFromDelivery || format(new Date(), 'HH:mm'),
@@ -191,8 +190,8 @@ export class DeliveryService {
       product_name: deliveryOrder.product_name,
       quantity: safeQuantity,
       debt_amount: debtAmount,
-      payment_status: exportPaymentStatus === 'paid' && debtAmount > 0 ? 'paid' : 'unpaid',
-      paid_amount: exportPaymentStatus === 'paid' ? debtAmount : 0,
+      payment_status: initialPaidAmount > 0 ? (initialPaidAmount >= debtAmount ? 'paid' : 'partial') : 'unpaid',
+      paid_amount: initialPaidAmount,
     };
 
     if (userId) {
@@ -223,129 +222,8 @@ export class DeliveryService {
     await supabaseService.from('delivery_orders').update({ status: exportSyncStatus }).eq('id', deliveryId);
   }
 
-  private static deliverySourceIsSoftDeleted(row: any): boolean {
-    const io = row?.import_orders;
-    const vo = row?.vegetable_orders;
-    const ioDel = Array.isArray(io) ? io[0]?.deleted_at : io?.deleted_at;
-    const voDel = Array.isArray(vo) ? vo[0]?.deleted_at : vo?.deleted_at;
-    return Boolean(ioDel || voDel);
-  }
-
-  private static pickDeliveryRelation(relation: any): any {
-    if (Array.isArray(relation)) return relation[0];
-    return relation || undefined;
-  }
-
-  private static getDeliveryReceiverForGroup(row: any): string {
-    const src = this.pickDeliveryRelation(row?.import_orders) || this.pickDeliveryRelation(row?.vegetable_orders);
-    if (!src) return '-';
-    if (row?.status === 'hang_o_sg' && src.selected_alias) return src.selected_alias;
-    return src.customers?.name || src.receiver_name?.trim() || src.profiles?.full_name || '-';
-  }
-
-  private static getDeliveryScopeGroupKey(row: any): string {
-    if (row?.status === 'hang_o_sg') return `single:${row?.id}`;
-    const src = this.pickDeliveryRelation(row?.import_orders) || this.pickDeliveryRelation(row?.vegetable_orders);
-    if (Number(src?.total_amount) > 0 && src?.payment_status !== 'paid') return `single:${row?.id}`;
-    const deliveryDate = row?.delivery_date || 'N/A';
-    const category = row?.order_category || 'standard';
-    const receiver = this.getDeliveryReceiverForGroup(row);
-    const product = (row?.product_name || '').trim();
-    return `${deliveryDate}|${category}|${receiver}|${product}`;
-  }
-
-  static async getAllToday(startDate?: string, endDate?: string, orderCategory?: string, actor?: UserPayload) {
-    let driverScope: DriverScope | null = null;
-    if (actor && goodsScopeIsDriverRole(actor.role) && !goodsScopeFullAccess(actor.role)) {
-      driverScope = await fetchDriverScopeForUser(actor.id);
-    }
-
-    const selectClause =
-      '*, import_orders(order_code, order_date, order_time, created_at, sender_name, sender_id, receiver_name, receiver_phone, customer_id, selected_alias, is_return_to_sg, license_plate, driver_name, received_by, admin_confirmed_at, customers:customers!import_orders_customer_id_fkey(name, phone), sender_customers:customers!import_orders_sender_id_fkey(name, phone), total_amount, payment_status, profiles:profiles!received_by(full_name, role), receipt_image_url, receipt_image_urls, import_order_items(id, image_url, image_urls, products(name)), deleted_at), vegetable_orders(order_code, order_date, order_time, created_at, sender_name, sender_id, receiver_name, receiver_phone, customer_id, selected_alias, license_plate, driver_name, received_by, customers:customers!vegetable_orders_customer_id_fkey(name, phone), sender_customers:customers!vegetable_orders_sender_id_fkey(name, phone), total_amount, payment_status, profiles:profiles!received_by(full_name), receipt_image_url, receipt_image_urls, vegetable_order_items(id, image_url, image_urls, products(name)), deleted_at), delivery_vehicles(*, profiles:profiles!delivery_vehicles_driver_id_fkey(full_name, phone), vehicles(license_plate, in_charge_id)), payment_collections(id, status, vehicle_id, delivery_vehicle_id, expected_amount, collected_amount, image_url)';
-
-    const pageSize = 1000;
-    const rawData: any[] = [];
-
-    for (let from = 0; ; from += pageSize) {
-      let query = supabaseService
-        .from('delivery_orders')
-        .select(selectClause)
-        .order('delivery_date', { ascending: false })
-        .order('created_at', { ascending: false })
-        .range(from, from + pageSize - 1);
-
-      if (orderCategory) query = query.eq('order_category', orderCategory);
-
-      if (startDate) {
-        const startT = `${startDate}T00:00:00.000Z`;
-        const endDateStr = endDate || startDate;
-        const endT = `${endDateStr}T23:59:59.999Z`;
-
-        // Filter by (confirmed_at in range) OR (created_at in range)
-        // Note: and() nested in or() is supported in modern PostgREST
-        query = query.or(`and(confirmed_at.gte.${startT},confirmed_at.lte.${endT}),and(created_at.gte.${startT},created_at.lte.${endT})`);
-      } else {
-        const sevenDaysAgo = new Date();
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        query = query.gte('created_at', sevenDaysAgo.toISOString());
-      }
-
-      const { data: pageData, error } = await query;
-      if (error) throw error;
-
-      rawData.push(...(pageData || []));
-      if (!pageData || pageData.length < pageSize) break;
-    }
-
-    let data = (rawData || []).filter((row: any) => !this.deliverySourceIsSoftDeleted(row));
-    data = data.filter((row: any) => {
-      if ((row.order_category || 'standard') !== 'standard') return true;
-      const sourceOrder = Array.isArray(row.import_orders) ? row.import_orders[0] : row.import_orders;
-      if (sourceOrder?.profiles?.role !== 'customer') return true;
-      return Boolean(sourceOrder.admin_confirmed_at);
-    });
-
-    if (actor && !goodsScopeFullAccess(actor.role)) {
-      const isStaff = goodsScopeIsStaffRole(actor.role);
-      const isDriver = goodsScopeIsDriverRole(actor.role);
-      if (isStaff || isDriver) {
-        const visibleRows = data.filter((row: any) => deliveryOrderRowMatchesGoodsScope(row, actor, driverScope));
-        const visibleGroupKeys = new Set(
-          visibleRows.map((row: any) => this.getDeliveryScopeGroupKey(row))
-        );
-        data = data.filter((row: any) => visibleGroupKeys.has(this.getDeliveryScopeGroupKey(row)));
-      }
-    }
-
-    if (data.length === 0) return data;
-
-    const deliveryIds = data.map((row: any) => row.id).filter(Boolean);
-    if (deliveryIds.length === 0) return data;
-
-    const chunkSize = 100;
-    let exportOrders: any[] = [];
-    for (let i = 0; i < deliveryIds.length; i += chunkSize) {
-      const chunk = deliveryIds.slice(i, i + chunkSize);
-      const { data: chunkData, error: exportOrdersError } = await supabaseService
-        .from('export_orders')
-        .select('product_id, payment_status, created_at')
-        .in('product_id', chunk)
-        .order('created_at', { ascending: false });
-
-      if (exportOrdersError) throw exportOrdersError;
-      if (chunkData) exportOrders = exportOrders.concat(chunkData);
-    }
-
-    const paymentStatusByDeliveryId = new Map<string, 'unpaid' | 'partial' | 'paid'>();
-    (exportOrders || []).forEach((row: any) => {
-      if (!row.product_id || paymentStatusByDeliveryId.has(row.product_id)) return;
-      paymentStatusByDeliveryId.set(row.product_id, row.payment_status || 'unpaid');
-    });
-
-    return data.map((row: any) => ({
-      ...row,
-      export_order_payment_status: paymentStatusByDeliveryId.get(row.id),
-    }));
+  static async getAllToday(startDate?: string, endDate?: string, orderCategory?: string, actor?: UserPayload, directions?: readonly GroceryDirection[], includeExportPaymentStatus = true) {
+    return listDeliveryOrders(startDate, endDate, orderCategory, actor, directions, includeExportPaymentStatus);
   }
 
   static async create(deliveryData: any, userId?: string) {
@@ -394,6 +272,12 @@ export class DeliveryService {
     delivery_time?: string,
     appendOnly?: boolean
   ) {
+    const { data: sourceOrder, error: sourceError } = await supabaseService.from('delivery_orders')
+      .select('total_quantity, delivery_vehicles(assigned_quantity)').eq('id', deliveryId).single();
+    if (sourceError || !sourceOrder) throw sourceError || new Error('Delivery order not found');
+    const existingQuantity = appendOnly ? (sourceOrder.delivery_vehicles || []).reduce((sum: number, row: any) => sum + Number(row.assigned_quantity || 0), 0) : 0;
+    const requestedQuantity = assignments.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
+    if (assignments.some(row => !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0) || requestedQuantity + existingQuantity > Number(sourceOrder.total_quantity)) throw new Error('Assigned quantity exceeds remaining quantity');
     const updateData: any = {};
     if (image_url !== undefined) {
       updateData.image_url = image_url;
@@ -567,7 +451,8 @@ export class DeliveryService {
       totalAssigned,
       userId,
       exportPaymentStatus,
-      allDvs
+      allDvs,
+      appendOnly ? assignments.reduce((sum, assignment) => sum + ((assignment.export_payment_status || exportPaymentStatus) === 'paid' ? Math.max(0, Number(assignment.expected_amount || 0)) : 0), 0) : undefined
     );
 
     // Trigger immediate Zalo send asynchronously (fire-and-forget).
@@ -617,12 +502,12 @@ export class DeliveryService {
 
     const { data: sourceOrders, error: sourceError } = await supabaseService
       .from('delivery_orders')
-      .select('id, total_quantity, created_at')
+      .select('id, total_quantity, created_at, delivery_vehicles(assigned_quantity)')
       .in('id', uniqueSourceIds);
 
     if (sourceError) throw sourceError;
-    if (!sourceOrders || sourceOrders.length === 0) {
-      throw new Error('Không tìm thấy đơn nguồn để phân xe theo nhóm.');
+    if (!sourceOrders || sourceOrders.length !== uniqueSourceIds.length) {
+      throw new Error('Không tìm thấy đầy đủ đơn nguồn để phân xe theo nhóm.');
     }
 
     const sourceById = new Map<string, any>();
@@ -641,35 +526,24 @@ export class DeliveryService {
       return rows.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
     };
 
-    // Phân bổ: Không xé lẻ một dòng xe (assignment) ra nhiều đơn hàng.
-    // Ưu tiên điền vào các đơn hàng còn trống, nếu hết đơn hàng còn trống thì dồn vào đơn cuối.
     for (const row of assignments) {
-      const rowQty = Number(row.quantity) || 0;
-      if (rowQty <= 0) continue;
-
-      const rowExpectedAmount = Math.max(0, Number(row.expected_amount || 0));
-
-      // Tìm đơn hàng nguồn đầu tiên còn "chỗ" (SL tổng > SL đã dùng trong đợt phân này)
-      let targetSource = orderedSources.find(source => {
-        const used = getUsedOfOrder(source.id);
-        return (Number(source.total_quantity) || 0) > used;
-      });
-
-      // Nếu tất cả đã đầy hoặc vượt, dồn vào đơn cuối cùng của nhóm (để đảm bảo không bị mất dòng xe)
-      if (!targetSource) {
-        targetSource = orderedSources[orderedSources.length - 1];
+      let remaining = Number(row.quantity);
+      let remainingAmount = Math.max(0, Number(row.expected_amount || 0));
+      if (!Number.isFinite(remaining) || remaining <= 0) throw new Error('Invalid assigned quantity');
+      for (const source of orderedSources) {
+        const existingQuantity = appendOnly ? (source.delivery_vehicles || []).reduce((sum: number, vehicle: any) => sum + Number(vehicle.assigned_quantity || 0), 0) : 0;
+        const capacity = Math.max(0, Number(source.total_quantity) - existingQuantity - getUsedOfOrder(source.id));
+        const quantity = Math.min(remaining, capacity);
+        if (!quantity) continue;
+        const amount = quantity === remaining ? remainingAmount : Math.round(remainingAmount * quantity / remaining);
+        const rows = perOrderAssignments.get(source.id) || [];
+        rows.push({ ...row, quantity, expected_amount: amount });
+        perOrderAssignments.set(source.id, rows);
+        remaining -= quantity;
+        remainingAmount -= amount;
+        if (!remaining) break;
       }
-
-      if (!targetSource) continue; // Safety
-
-      const sourceId = targetSource.id as string;
-      const sourceRows = perOrderAssignments.get(sourceId) || [];
-      sourceRows.push({
-        ...row,
-        quantity: rowQty,
-        expected_amount: rowExpectedAmount,
-      });
-      perOrderAssignments.set(sourceId, sourceRows);
+      if (remaining > 0) throw new Error('Assigned quantity exceeds remaining group quantity');
     }
 
     const result: Record<string, any> = {};
@@ -771,49 +645,8 @@ export class DeliveryService {
   }
 
 
-  static async getInventory(orderCategory?: string, actor?: UserPayload) {
-    const fetchVeg = !orderCategory || orderCategory === 'vegetable';
-    const fetchStd = !orderCategory || orderCategory === 'standard';
-
-    const nestedDv =
-      'delivery_orders(*, delivery_vehicles(*, vehicles(license_plate), profiles(full_name)))';
-
-    let allData: any[] = [];
-    if (fetchStd) {
-      const { data, error } = await supabaseService
-        .from('import_orders')
-        .select(`*, warehouses(name), ${nestedDv}`)
-        .eq('status', 'pending')
-        .is('deleted_at', null);
-
-      if (error) throw error;
-      if (data) allData = allData.concat(data.map(d => ({ ...d, order_category: 'standard' })));
-    }
-
-    if (fetchVeg) {
-      const { data, error } = await supabaseService
-        .from('vegetable_orders')
-        .select(`*, warehouses(name), ${nestedDv}`)
-        .eq('status', 'pending')
-        .is('deleted_at', null);
-
-      if (error) throw error;
-      if (data) allData = allData.concat(data.map(d => ({ ...d, order_category: 'vegetable' })));
-    }
-
-    if (actor && !goodsScopeFullAccess(actor.role)) {
-      const isStaff = goodsScopeIsStaffRole(actor.role);
-      const isDriver = goodsScopeIsDriverRole(actor.role);
-      if (isStaff || isDriver) {
-        let driverScope: DriverScope | null = null;
-        if (isDriver) {
-          driverScope = await fetchDriverScopeForUser(actor.id);
-        }
-        allData = allData.filter((row: any) => importOrderRowMatchesGoodsScope(row, actor, driverScope));
-      }
-    }
-
-    return allData;
+  static async getInventory(orderCategory?: string, actor?: UserPayload, directions?: readonly GroceryDirection[]) {
+    return listDeliveryInventory(orderCategory, actor, directions);
   }
 
   static async update(id: string, updateData: any) {

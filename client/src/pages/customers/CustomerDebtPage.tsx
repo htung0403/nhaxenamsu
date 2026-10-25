@@ -184,7 +184,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
     });
   }, [debts, searchQuery, filterCustomer, filterVehicle, startDate, endDate]);
 
-  const totalDebt = filteredDebts.reduce((sum, debt) => sum + Number(debt.expected_amount || 0), 0);
+  const totalDebt = filteredDebts.reduce((sum, debt) => sum + (debt.export_payment_status === 'paid' ? 0 : Number(debt.expected_amount || 0)), 0);
   const totalCustomers = new Set(filteredDebts.map((debt) => debt.customer?.id || debt.customer?.name).filter(Boolean)).size;
   const debtTotalItems = filteredDebts.length;
   const debtTotalPages = Math.max(1, Math.ceil(debtTotalItems / PAGE_SIZE));
@@ -253,11 +253,12 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   const historyGroupKeys = React.useMemo(() => Object.keys(groupedPaymentHistory).sort((a, b) => a.localeCompare(b, 'vi')), [groupedPaymentHistory]);
 
   const selectedDebts = React.useMemo(
-    () => filteredDebts.filter((debt) => selectedDebtIds.includes(debt.id)),
+    () => filteredDebts.filter((debt) => debt.export_payment_status !== 'paid' && selectedDebtIds.includes(debt.id)),
     [filteredDebts, selectedDebtIds],
   );
 
-  const isAllFilteredDebtsSelected = paginatedDebts.length > 0 && paginatedDebts.every((debt) => selectedDebtIds.includes(debt.id));
+  const payableDebts = paginatedDebts.filter((debt) => debt.export_payment_status !== 'paid');
+  const isAllFilteredDebtsSelected = payableDebts.length > 0 && payableDebts.every((debt) => selectedDebtIds.includes(debt.id));
 
   React.useEffect(() => {
     setDebtPage(1);
@@ -273,7 +274,8 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   }, [historyTotalPages]);
 
   const openPaymentForm = React.useCallback((debtOrDebts: VehicleDebt | VehicleDebt[]) => {
-    const nextDebts = Array.isArray(debtOrDebts) ? debtOrDebts : [debtOrDebts];
+    const nextDebts = (Array.isArray(debtOrDebts) ? debtOrDebts : [debtOrDebts])
+      .filter((debt) => debt.export_payment_status !== 'paid');
     if (nextDebts.length === 0) return;
 
     setPaymentForm({
@@ -319,7 +321,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   }, []);
 
   const toggleAllFilteredDebts = React.useCallback(() => {
-    const visibleIds = paginatedDebts.map((debt) => debt.id);
+    const visibleIds = paginatedDebts.filter((debt) => debt.export_payment_status !== 'paid').map((debt) => debt.id);
     setSelectedDebtIds((current) => visibleIds.every((id) => current.includes(id))
       ? current.filter((id) => !visibleIds.includes(id))
       : Array.from(new Set([...current, ...visibleIds])));
@@ -330,7 +332,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   }, []);
 
   const toggleDebtDateSelection = React.useCallback((date: string) => {
-    const dateIds = (groupedDebts[date] || []).map((debt) => debt.id);
+    const dateIds = (groupedDebts[date] || []).filter((debt) => debt.export_payment_status !== 'paid').map((debt) => debt.id);
     if (dateIds.length === 0) return;
     setSelectedDebtIds((current) => dateIds.every((id) => current.includes(id))
       ? current.filter((id) => !dateIds.includes(id))
@@ -711,7 +713,8 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
             <td className="px-4 py-3 align-top">
               <input
                 type="checkbox"
-                checked={selectedDebtIds.includes(debt.id)}
+                checked={debt.export_payment_status !== 'paid' && selectedDebtIds.includes(debt.id)}
+                disabled={debt.export_payment_status === 'paid'}
                 onChange={() => toggleDebtSelection(debt.id)}
                 className="h-4 w-4 rounded border-border text-emerald-600 accent-emerald-600"
               />
@@ -735,18 +738,18 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
             </td>
             <td className="px-4 py-3 text-right align-top tabular-nums font-semibold">{debt.assigned_quantity.toLocaleString('vi-VN')}</td>
             <td className="px-4 py-3 text-right align-top tabular-nums text-muted-foreground">{formatCurrency(debt.unit_price)}</td>
-            <td className="px-4 py-3 text-right align-top tabular-nums font-black text-red-600">{formatCurrency(debt.expected_amount)}</td>
+            <td className="px-4 py-3 text-right align-top tabular-nums font-black text-red-600">{formatCurrency(debt.export_payment_status === 'paid' ? 0 : debt.expected_amount)}</td>
             <td className="px-4 py-3 text-center align-top">
-              <span className="inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase bg-red-100 text-red-700">Chưa TT</span>
+              <span className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase ${debt.export_payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>{debt.export_payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa TT'}</span>
             </td>
             <td className="px-4 py-3 text-right align-top">
-              <button
+              {debt.export_payment_status !== 'paid' && <button
                 type="button"
                 onClick={() => openPaymentForm(debt)}
                 className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-black uppercase text-white shadow-sm hover:bg-emerald-700"
               >
                 <CheckCircle2 size={13} /> Nhập tiền trả
-              </button>
+              </button>}
             </td>
           </tr>
         </React.Fragment>
@@ -755,7 +758,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   )), [groupedDebts, mode, openPaymentForm, selectedDebtIds, sortedDates, toggleDebtSelection]);
 
   const renderDebtMobileCard = React.useCallback((debt: VehicleDebt) => {
-    const isSelected = selectedDebtIds.includes(debt.id);
+    const isSelected = debt.export_payment_status !== 'paid' && selectedDebtIds.includes(debt.id);
     return (
       <div key={debt.id} className={`bg-card border rounded-2xl p-3 transition-all ${isSelected ? 'border-emerald-400 ring-2 ring-emerald-100' : 'border-border'}`}>
         <div className="flex items-start justify-between gap-3">
@@ -763,6 +766,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
           <input
             type="checkbox"
             checked={isSelected}
+            disabled={debt.export_payment_status === 'paid'}
             onChange={() => toggleDebtSelection(debt.id)}
             className="mt-0.5 h-4 w-4 shrink-0 rounded border-border text-emerald-600 accent-emerald-600"
           />
@@ -771,7 +775,7 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
             <p className="mt-0.5 text-[11px] font-semibold text-muted-foreground">{formatDate(getDebtDate(debt))}</p>
           </div>
         </div>
-        <span className="shrink-0 rounded-full bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase text-red-600">Chưa TT</span>
+        <span className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-black uppercase ${debt.export_payment_status === 'paid' ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{debt.export_payment_status === 'paid' ? 'Đã thanh toán' : 'Chưa TT'}</span>
       </div>
       <div className="mt-3 space-y-2 text-[12px]">
         <div className="flex items-center gap-2 font-black text-foreground"><Store size={13} className="shrink-0 text-slate-500" /> <span className="truncate">{debt.customer?.name || 'Chưa có khách'}</span></div>
@@ -792,16 +796,16 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
         </div>
         <div className="rounded-xl bg-red-50 px-2 py-2">
           <p className="text-[10px] uppercase font-bold text-muted-foreground">Công nợ</p>
-          <p className="text-[13px] font-black text-red-600 tabular-nums">{formatCurrency(debt.expected_amount)}</p>
+          <p className="text-[13px] font-black text-red-600 tabular-nums">{formatCurrency(debt.export_payment_status === 'paid' ? 0 : debt.expected_amount)}</p>
         </div>
       </div>
-      <button
+      {debt.export_payment_status !== 'paid' && <button
         type="button"
         onClick={() => openPaymentForm(debt)}
         className="mt-3 w-full inline-flex items-center justify-center gap-1.5 rounded-xl bg-emerald-600 px-3 py-2.5 text-[12px] font-black uppercase text-white shadow-sm hover:bg-emerald-700"
       >
         <CheckCircle2 size={14} /> Nhập tiền trả
-      </button>
+      </button>}
     </div>
     );
   }, [mode, openPaymentForm, selectedDebtIds, toggleDebtSelection]);
@@ -809,10 +813,10 @@ const CustomerDebtPage: React.FC<CustomerDebtPageProps> = ({ mode = 'loyal' }) =
   const debtMobileGroups = React.useMemo(() => sortedDates.map((date) => {
     const dateDebts = groupedDebts[date] || [];
     const isCollapsed = collapsedDebtDates[date] === true;
-    const dateIds = dateDebts.map((debt) => debt.id);
+    const dateIds = dateDebts.filter((debt) => debt.export_payment_status !== 'paid').map((debt) => debt.id);
     const selectedCount = dateIds.filter((id) => selectedDebtIds.includes(id)).length;
     const isAllDateSelected = dateIds.length > 0 && selectedCount === dateIds.length;
-    const dateDebtTotal = dateDebts.reduce((sum, debt) => sum + Number(debt.expected_amount || 0), 0);
+    const dateDebtTotal = dateDebts.reduce((sum, debt) => sum + (debt.export_payment_status === 'paid' ? 0 : Number(debt.expected_amount || 0)), 0);
 
     return (
       <div key={date} className="w-full overflow-hidden rounded-2xl border border-border bg-card shadow-sm">

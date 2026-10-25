@@ -16,13 +16,7 @@ const PaymentCollectionsPage: React.FC = () => {
 
   const isDriver = isDriverLikeRoleKey(role);
 
-  // Default tab logic based on role
-  const getDefaultTab = () => {
-    if (isDriver) return 'thu-tien';
-    return 'xac-nhan';
-  };
-
-  const [activeTab, setActiveTab] = useState<PaymentCollectionTab>(getDefaultTab());
+  const [activeTab, setActiveTab] = useState<PaymentCollectionTab>('thu-tien');
 
   const tabs = [];
   if (isDriver || role === 'staff' || role === 'manager' || role === 'admin') {

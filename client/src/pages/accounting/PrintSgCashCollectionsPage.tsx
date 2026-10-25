@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from 'react';
+import React, { useLayoutEffect, useMemo, useState, useRef } from 'react';
 import { Printer, ArrowLeft, CalendarDays, Store, User, Truck } from 'lucide-react';
 import { DateRangePicker } from '../../components/shared/DateRangePicker';
 import { MultiSearchableSelect } from '../../components/ui/MultiSearchableSelect';
@@ -170,9 +170,73 @@ const PrintSgCashCollectionsPage: React.FC = () => {
     });
   }, [rows, isUnconfirmed, statusParam, filterCustomer, filterDriver, filterVehicle, searchQuery]);
 
-  const totalAmount = useMemo(() => {
-    return filteredRows.reduce((sum, r) => sum + Number(r.total_amount || 0), 0);
-  }, [filteredRows]);
+  const [pagination, setPagination] = useState<{ rows: SgRow[]; sizes: number[] } | null>(null);
+
+  const printPages = useMemo(() => {
+    const sizes = pagination?.rows === filteredRows ? pagination.sizes : [];
+    const pages: { rows: SgRow[]; startIndex: number; totalAmount: number }[] = [];
+    let startIndex = 0;
+
+    while (startIndex < filteredRows.length) {
+      const pageRows = filteredRows.slice(startIndex, startIndex + (sizes[pages.length] || 15));
+      pages.push({
+        rows: pageRows,
+        startIndex,
+        totalAmount: pageRows.reduce((sum, row) => sum + Number(row.total_amount || 0), 0),
+      });
+      startIndex += pageRows.length;
+    }
+
+    return pages;
+  }, [filteredRows, pagination]);
+
+  useLayoutEffect(() => {
+    const container = printRef.current;
+    if (!container || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      const sheets = container.querySelectorAll<HTMLElement>('.print-sheet');
+      const firstSheet = sheets?.[0];
+      if (!firstSheet) return;
+
+      const rowHeights = Array.from(container.querySelectorAll('tbody tr'), (row) => row.getBoundingClientRect().height);
+      if (rowHeights.length !== filteredRows.length || rowHeights.some((height) => height <= 0)) return;
+
+      const header = firstSheet.querySelector<HTMLElement>('.print-sheet-header');
+      const signature = firstSheet.querySelector<HTMLElement>('.print-sheet-signature');
+      const tableHead = firstSheet.querySelector('thead');
+      const tableFoot = firstSheet.querySelector('tfoot');
+      if (!header || !signature || !tableHead || !tableFoot) return;
+
+      const availableHeight = 277 * 96 / 25.4
+        - header.getBoundingClientRect().height - 20
+        - signature.getBoundingClientRect().height - 20
+        - tableHead.getBoundingClientRect().height
+        - tableFoot.getBoundingClientRect().height - 8;
+      if (availableHeight <= 0) return;
+
+      const sizes: number[] = [];
+      let rowCount = 0;
+      let usedHeight = 0;
+      rowHeights.forEach((height) => {
+        if (rowCount > 0 && (rowCount === 15 || usedHeight + height > availableHeight)) {
+          sizes.push(rowCount);
+          rowCount = 0;
+          usedHeight = 0;
+        }
+        rowCount += 1;
+        usedHeight += height;
+      });
+      if (rowCount > 0) sizes.push(rowCount);
+      setPagination((previous) => {
+        if (previous?.rows === filteredRows && previous.sizes.length === sizes.length
+          && previous.sizes.every((size, index) => size === sizes[index])) return previous;
+        return { rows: filteredRows, sizes };
+      });
+    });
+    observer.observe(container);
+    return () => observer.disconnect();
+  }, [filteredRows, isLoading, isError]);
 
   const handlePrint = () => {
     window.print();
@@ -181,6 +245,26 @@ const PrintSgCashCollectionsPage: React.FC = () => {
   return (
     <>
       <style>{`
+        .print-sheet {
+          width: 180mm;
+          box-sizing: content-box;
+        }
+        .print-table {
+          table-layout: fixed;
+          font-size: 13px;
+          line-height: 1.5;
+        }
+        .print-table th,
+        .print-table td {
+          padding: 6px 8px;
+          overflow-wrap: anywhere;
+        }
+        .print-table tr {
+          break-inside: avoid;
+        }
+        .print-table tfoot {
+          display: table-row-group;
+        }
         @media print {
           body * { visibility: hidden !important; }
           .print-area, .print-area * { visibility: visible !important; }
@@ -211,8 +295,8 @@ const PrintSgCashCollectionsPage: React.FC = () => {
 
         @media screen {
           .print-sheet {
-            max-width: 210mm;
-            min-height: 297mm;
+            max-width: none;
+            min-height: 267mm;
             margin: 0 auto 24px auto;
             padding: 15mm 15mm;
             background: white;
@@ -330,62 +414,73 @@ const PrintSgCashCollectionsPage: React.FC = () => {
         </div>
       ) : (
         <div className="print-area" ref={printRef}>
-          <div className="print-sheet">
-            <div style={{ textAlign: 'center', marginBottom: 20 }}>
-              <p style={{ fontWeight: 'bold', fontSize: 20, fontFamily: 'serif', marginBottom: 10 }}>NHÀ XE NĂM SỰ</p>
-              <h2 style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 8, fontFamily: 'serif' }}>
-                BẢNG KÊ THU TIỀN SG
-              </h2>
-              <p style={{ fontStyle: 'italic', fontSize: 13 }}>
-                {dateFrom === dateTo 
-                  ? `Ngày ${formatOnlyDate(dateFrom)}`
-                  : `Từ ngày ${formatOnlyDate(dateFrom)} đến ngày ${formatOnlyDate(dateTo)}`
-                }
-              </p>
-            </div>
+          {printPages.map((page) => (
+            <div className="print-sheet" key={page.startIndex}>
+              <div className="print-sheet-header" style={{ textAlign: 'center', marginBottom: 20 }}>
+                <p style={{ fontWeight: 'bold', fontSize: 20, fontFamily: 'serif', marginBottom: 10 }}>NHÀ XE NĂM SỰ</p>
+                <h2 style={{ fontSize: 22, fontWeight: 'bold', marginBottom: 8, fontFamily: 'serif' }}>
+                  BẢNG KÊ THU TIỀN SG
+                </h2>
+                <p style={{ fontStyle: 'italic', fontSize: 13 }}>
+                  {dateFrom === dateTo
+                    ? `Ngày ${formatOnlyDate(dateFrom)}`
+                    : `Từ ngày ${formatOnlyDate(dateFrom)} đến ngày ${formatOnlyDate(dateTo)}`
+                  }
+                </p>
+              </div>
 
-            <table
-              className="print-table"
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontFamily: "'Times New Roman', serif",
-                border: '1px solid #000',
-              }}
-            >
-              <thead>
-                <tr>
-                  <th style={{ border: '1px solid #000', textAlign: 'center', width: 30 }}>STT</th>
-                  <th style={{ border: '1px solid #000', textAlign: 'center', width: 100 }}>Ngày nhập</th>
-                  <th style={{ border: '1px solid #000', textAlign: 'left', width: 130 }}>NV thu tiền</th>
-                  <th style={{ border: '1px solid #000', textAlign: 'left', width: 150 }}>Khách hàng</th>
-                  <th style={{ border: '1px solid #000', textAlign: 'left' }}>Tên hàng</th>
-                  <th style={{ border: '1px solid #000', textAlign: 'center', width: 50 }}>SL</th>
-                  <th style={{ border: '1px solid #000', textAlign: 'right', width: 80 }}>Đơn giá</th>
-                  <th style={{ border: '1px solid #000', textAlign: 'right', width: 90 }}>Thành tiền</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((r, idx) => (
-                  <tr key={r.id}>
-                    <td style={{ border: '1px solid #000', textAlign: 'center' }}>{idx + 1}</td>
-                    <td style={{ border: '1px solid #000', textAlign: 'center' }}>
-                      {r.order_date} {r.order_time}
-                    </td>
-                    <td style={{ border: '1px solid #000' }}>{r.collector?.full_name || '—'}</td>
-                    <td style={{ border: '1px solid #000' }}>
-                      {r.customers?.name || '—'}
-                      {r.customers?.phone ? ` (${r.customers.phone})` : ''}
-                    </td>
-                    <td style={{ border: '1px solid #000' }}>{getRowItemNames(r)}</td>
-                    <td style={{ border: '1px solid #000', textAlign: 'center' }}>{getRowTotalQuantity(r) || ''}</td>
-                    <td style={{ border: '1px solid #000', textAlign: 'right' }}>
-                      {formatNumber(getRowUnitPrice(r))}
-                    </td>
-                    <td style={{ border: '1px solid #000', textAlign: 'right', fontWeight: 'bold' }}>
-                      {formatNumber(Number(r.total_amount))}
-                    </td>
+              <table
+                className="print-table"
+                style={{
+                  width: '100%',
+                  borderCollapse: 'collapse',
+                  fontFamily: "'Times New Roman', serif",
+                  border: '1px solid #000',
+                }}
+              >
+                <colgroup>
+                  <col style={{ width: '5%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '18%' }} />
+                  <col style={{ width: '21%' }} />
+                  <col style={{ width: '8%' }} />
+                  <col style={{ width: '7%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '15%' }} />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th style={{ border: '1px solid #000', textAlign: 'center', width: 30 }}>STT</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'center', width: 100 }}>Ngày nhập</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'left', width: 130 }}>NV thu tiền</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'left', width: 150 }}>Khách hàng</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'left' }}>Tên hàng</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'center', width: 50 }}>SL</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'right', width: 80 }}>Đơn giá</th>
+                    <th style={{ border: '1px solid #000', textAlign: 'right', width: 90 }}>Thành tiền</th>
                   </tr>
+                </thead>
+                <tbody>
+                  {page.rows.map((r, idx) => (
+                    <tr key={r.id}>
+                      <td style={{ border: '1px solid #000', textAlign: 'center' }}>{page.startIndex + idx + 1}</td>
+                      <td style={{ border: '1px solid #000', textAlign: 'center' }}>
+                        {r.order_date} {r.order_time}
+                      </td>
+                      <td style={{ border: '1px solid #000' }}>{r.collector?.full_name || '—'}</td>
+                      <td style={{ border: '1px solid #000' }}>
+                        {r.customers?.name || '—'}
+                        {r.customers?.phone ? ` (${r.customers.phone})` : ''}
+                      </td>
+                      <td style={{ border: '1px solid #000' }}>{getRowItemNames(r)}</td>
+                      <td style={{ border: '1px solid #000', textAlign: 'center' }}>{getRowTotalQuantity(r) || ''}</td>
+                      <td style={{ border: '1px solid #000', textAlign: 'right' }}>
+                        {formatNumber(getRowUnitPrice(r))}
+                      </td>
+                      <td style={{ border: '1px solid #000', textAlign: 'right', fontWeight: 'bold' }}>
+                        {formatNumber(Number(r.total_amount))}
+                      </td>
+                    </tr>
                 ))}
               </tbody>
               <tfoot>
@@ -394,13 +489,13 @@ const PrintSgCashCollectionsPage: React.FC = () => {
                     TỔNG CỘNG:
                   </td>
                   <td style={{ border: '1px solid #000', textAlign: 'right', fontWeight: 'bold', fontSize: 13, color: '#000' }}>
-                    {formatNumber(totalAmount)}
+                    {formatNumber(page.totalAmount)}
                   </td>
                 </tr>
               </tfoot>
             </table>
 
-            <div style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', fontFamily: "'Times New Roman', serif" }}>
+            <div className="print-sheet-signature" style={{ marginTop: 20, display: 'flex', justifyContent: 'flex-end', fontFamily: "'Times New Roman', serif" }}>
               <div style={{ textAlign: 'center', width: 250 }}>
                 <p style={{ fontStyle: 'italic', fontSize: 13, marginBottom: 8 }}>
                   Ngày ..... tháng ..... năm 20...
@@ -410,6 +505,7 @@ const PrintSgCashCollectionsPage: React.FC = () => {
               </div>
             </div>
           </div>
+          ))}
         </div>
       )}
     </>

@@ -186,7 +186,10 @@ export interface Customer {
 export type PackageType = 'thùng' | 'bao' | 'kiện' | 'pallet' | 'khác';
 export type OrderStatus = 'pending' | 'processing' | 'delivered' | 'returned';
 
+export type GroceryDirection = 'sg_to_duc_trong' | 'duc_trong_to_sg';
+
 export interface ImportOrder {
+  direction?: GroceryDirection;
   id: string;
   order_code: string;
   order_date: string;
@@ -256,6 +259,7 @@ export interface ImportOrderItem {
 }
 
 export interface ImportOrderCreatePayload {
+  direction?: GroceryDirection;
   order_date: string;
   order_time: string;
   received_by?: string;
@@ -274,6 +278,7 @@ export interface ImportOrderCreatePayload {
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
 
 export interface ExportOrder {
+  direction?: GroceryDirection;
   id: string;
   export_date: string;
   product_id?: string;
@@ -296,6 +301,7 @@ export interface ExportOrder {
 export type DeliveryStatus = 'hang_o_sg' | 'can_giao' | 'da_giao';
 
 export interface DeliveryOrder {
+  direction?: GroceryDirection;
   id: string;
   import_order_id?: string;
   vegetable_order_id?: string;
@@ -652,6 +658,10 @@ export interface ApiResponse<T = unknown> {
 
 // --- Filter helpers ---
 export interface ImportOrderFilters {
+  supplier_search?: string;
+  direction?: GroceryDirection;
+  history_search?: string;
+  history_filters?: string;
   dateFrom?: string;
   dateTo?: string;
   status?: string;

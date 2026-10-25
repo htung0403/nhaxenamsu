@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { groupDeliveryOrdersForView } from './deliveryGrouping';
+import { createDeliveryGroupSourceIdsMap, groupDeliveryOrdersForView } from './deliveryGrouping';
 import type { DeliveryOrder } from '../types';
 
 const makeOrder = (overrides: Partial<DeliveryOrder>): DeliveryOrder => ({
@@ -25,6 +25,45 @@ const makeOrder = (overrides: Partial<DeliveryOrder>): DeliveryOrder => ({
 });
 
 describe('groupDeliveryOrdersForView', () => {
+  it.each(['unpaid', 'partial', undefined] as const)(
+    'keeps paid SG freight separate from %s freight regardless of input order',
+    (paymentStatus) => {
+      const unpaidOrder = makeOrder({ id: 'unpaid-order', total_quantity: 2 });
+      unpaidOrder.import_orders!.payment_status = paymentStatus;
+      const paidOrder = makeOrder({ id: 'paid-order', total_quantity: 3 });
+      paidOrder.import_orders!.payment_status = 'paid';
+
+      for (const orders of [[unpaidOrder, paidOrder], [paidOrder, unpaidOrder]]) {
+        const grouped = groupDeliveryOrdersForView(orders);
+
+        expect(grouped).toHaveLength(2);
+        expect(grouped.find((order) => order.id === 'paid-order')).toMatchObject({
+          total_quantity: 3,
+          source_order_ids: ['paid-order'],
+        });
+        expect(grouped.find((order) => order.id === 'unpaid-order')).toMatchObject({
+          total_quantity: 2,
+          source_order_ids: ['unpaid-order'],
+        });
+        expect(createDeliveryGroupSourceIdsMap(grouped).get('paid-order')).toEqual(['paid-order']);
+      }
+    }
+  );
+
+  it('groups matching freight statuses independently in a mixed list', () => {
+    const orders = (['unpaid', 'paid', 'unpaid', 'paid'] as const).map((paymentStatus, index) => {
+      const order = makeOrder({ id: `order-${index}`, total_quantity: index + 1 });
+      order.import_orders!.payment_status = paymentStatus;
+      return order;
+    });
+
+    const grouped = groupDeliveryOrdersForView(orders);
+
+    expect(grouped).toHaveLength(2);
+    expect(grouped[0]).toMatchObject({ total_quantity: 4, source_order_ids: ['order-0', 'order-2'] });
+    expect(grouped[1]).toMatchObject({ total_quantity: 6, source_order_ids: ['order-1', 'order-3'] });
+  });
+
   it('merges same receiver and package orders when SG freight is unpaid', () => {
     const grouped = groupDeliveryOrdersForView([
       makeOrder({ id: 'order-1', created_at: '2026-08-04T01:00:00.000Z' }),

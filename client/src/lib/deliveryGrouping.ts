@@ -34,7 +34,9 @@ export const getDeliveryGroupKey = (order: DeliveryOrder) => {
   const category = order.order_category || 'standard';
   const receiver = getReceiverDisplayName(order);
   const product = (order.product_name || '').trim();
-  return `${deliveryDate}|${category}|${receiver}|${product}`;
+  const sourceOrder = pickRelation(order.import_orders) || pickRelation(order.vegetable_orders);
+  const sgPaymentStatus = sourceOrder?.payment_status || 'unpaid';
+  return `${deliveryDate}|${category}|${isReturnToSgDeliveryOrder(order) ? 'duc_trong_to_sg' : 'sg_to_duc_trong'}|${receiver}|${product}|${sgPaymentStatus}`;
 };
 
 export const getDeliveryViewGroupKey = (order: DeliveryOrder) =>

@@ -13,7 +13,14 @@ export const importOrderKeys = {
 export function useImportOrders(filters?: ImportOrderFilters) {
   return useQuery({
     queryKey: importOrderKeys.list(filters),
-    queryFn: () => importOrdersApi.getAll(filters),
+    queryFn: ({ signal }) => importOrdersApi.getAll(filters, signal),
+  });
+}
+
+export function useImportOrdersForPrint(filters?: ImportOrderFilters) {
+  return useQuery({
+    queryKey: [...importOrderKeys.all, 'print', filters],
+    queryFn: ({ signal }) => importOrdersApi.getAllForPrint(filters, signal),
   });
 }
 
@@ -31,6 +38,7 @@ export function useCreateImportOrder() {
     mutationFn: (payload: ImportOrderCreatePayload) => importOrdersApi.create(payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: importOrderKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['delivery'] });
       toast.success('Tạo đơn nhập hàng thành công');
     },
     onError: () => {
@@ -46,6 +54,8 @@ export function useUpdateImportOrder() {
       importOrdersApi.update(id, payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: importOrderKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['delivery'] });
+      queryClient.invalidateQueries({ queryKey: ['export-orders'] });
       toast.success('Cập nhật đơn nhập hàng thành công');
     },
     onError: () => {
@@ -54,10 +64,10 @@ export function useUpdateImportOrder() {
   });
 }
 
-export function useDeleteImportOrder() {
+export function useDeleteImportOrder(category?: 'standard' | 'vegetable') {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => importOrdersApi.delete(id),
+    mutationFn: (id: string) => importOrdersApi.delete(id, category),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: importOrderKeys.all });
       queryClient.invalidateQueries({ queryKey: ['delivery'] });
@@ -70,10 +80,10 @@ export function useDeleteImportOrder() {
   });
 }
 
-export function useBulkDeleteImportOrders() {
+export function useBulkDeleteImportOrders(category?: 'standard' | 'vegetable') {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => importOrdersApi.delete(id))),
+    mutationFn: (ids: string[]) => Promise.all(ids.map((id) => importOrdersApi.delete(id, category))),
     onSuccess: (_, ids) => {
       queryClient.invalidateQueries({ queryKey: importOrderKeys.all });
       queryClient.invalidateQueries({ queryKey: ['delivery'] });

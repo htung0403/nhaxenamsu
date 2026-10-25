@@ -2090,34 +2090,44 @@ export class ZaloService {
     date: string,
     taiRank: number,
   ): Promise<VegetableArrivalNoticeTarget[]> {
-    const { data: orders, error } = await supabaseService
-      .from('vegetable_orders')
-      .select(`
-        id,
-        order_date,
-        created_at,
-        driver_name,
-        received_by,
-        customer_id,
-        receiver_name,
-        receiver_phone,
-        selected_alias,
-        customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, customer_type),
-        delivery_orders(id, delivery_vehicles(
+    const orders: any[] = [];
+    for (let from = 0; ; from += 500) {
+      const { data: batch, error } = await supabaseService
+        .from('vegetable_orders')
+        .select(`
           id,
-          driver_id,
-          vehicles(
-            license_plate,
-            profiles:profiles!vehicles_driver_id_fkey(full_name, phone),
-            responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)
-          ),
-          profiles!driver_id(full_name, phone)
-        ))
-      `)
-      .eq('order_date', date)
-      .is('deleted_at', null);
+          order_date,
+          created_at,
+          driver_name,
+          received_by,
+          admin_confirmed_at,
+          profiles:profiles!received_by(role),
+          customer_id,
+          receiver_name,
+          receiver_phone,
+          selected_alias,
+          customers:customers!vegetable_orders_customer_id_fkey(id, name, phone, customer_type),
+          delivery_orders(id, delivery_vehicles(
+            id,
+            driver_id,
+            vehicles(
+              license_plate,
+              profiles:profiles!vehicles_driver_id_fkey(full_name, phone),
+              responsible_profile:profiles!vehicles_in_charge_id_fkey(full_name, phone)
+            ),
+            profiles!driver_id(full_name, phone)
+          ))
+        `)
+        .eq('order_date', date)
+        .is('deleted_at', null)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, from + 499);
 
-    if (error) throw error;
+      if (error) throw error;
+      orders.push(...(batch || []));
+      if (!batch || batch.length < 500) break;
+    }
 
     const rankedOrders = assignVegetableTaiRanksByDate((orders || []).map((order: any) => ({ ...order })));
     const targetOrders = rankedOrders.filter((order: any) => Number(order.tai_rank) === taiRank);

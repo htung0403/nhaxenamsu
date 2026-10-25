@@ -1,4 +1,6 @@
 import { supabaseService } from '../../config/supabase';
+import { measureOrderRead } from '../../utils/orderReadMetrics';
+import { groceryDirection, sourceMatchesDirections } from '../../utils/groceryDirection';
 import type { UserPayload, PaginationMeta } from '../../types';
 import { getPagination, getPaginationMeta } from '../../utils/pagination';
 import {
@@ -20,26 +22,32 @@ function deliverySourceSoftDeleted(d: any): boolean {
 
 export class ExportOrderService {
   static async getAll(filters: any, actor?: UserPayload) {
-    const page = Number(filters.page) || 1;
-    const limit = Number(filters.limit) || 50;
+    const page = Math.max(1, Math.floor(Number(filters.page) || 1));
+    const limit = Math.max(1, Math.min(9999, Math.floor(Number(filters.limit) || 50)));
     const { offset } = getPagination(page, limit);
 
-    console.log('[ExportOrderService.getAll] Starting query...');
-    let query = supabaseService.from('export_orders').select('*, profiles(full_name), customers(id, name, debt)');
+    const buildQuery = (hydrate = false) => {
+      let query = supabaseService.from('export_orders').select(hydrate
+        ? '*, profiles(full_name), customers(id, name, debt)'
+        : 'id, product_id, product_name, created_at');
 
-    if (filters.date) query = query.eq('export_date', filters.date);
-    if (filters.customer_id) query = query.eq('customer_id', filters.customer_id);
+      if (filters.date) query = query.eq('export_date', filters.date);
+      if (filters.customer_id) query = query.eq('customer_id', filters.customer_id);
+      if (filters.dateFrom) query = query.gte('export_date', filters.dateFrom);
+      if (filters.dateTo) query = query.lte('export_date', filters.dateTo);
+      return query;
+    };
 
-    const { data, error } = await query;
-    console.log('[ExportOrderService.getAll] Supabase query result - data length:', data?.length ?? 0, 'error:', error);
-    if (error) {
-      console.error('[ExportOrderService.getAll] Supabase error details:', JSON.stringify(error, null, 2));
-      throw error;
+    const data: any[] = [];
+    for (let from = 0; ; from += 500) {
+      const { data: rows, error } = await measureOrderRead(buildQuery().order('created_at', { ascending: false }).order('id', { ascending: false }).range(from, from + 499));
+      if (error) throw error;
+      data.push(...(rows || []));
+      if (!rows || rows.length < 500) break;
     }
     if (!data || data.length === 0) return { data: [], meta: getPaginationMeta(0, page, limit) };
 
     const deliveryIds = [...new Set(data.map((o: any) => o.product_id).filter(Boolean))] as string[];
-    console.log('[ExportOrderService.getAll] deliveryIds count:', deliveryIds.length);
 
     let filtered = data;
     if (deliveryIds.length > 0) {
@@ -48,32 +56,31 @@ export class ExportOrderService {
       for (let i = 0; i < deliveryIds.length; i += CHUNK_SIZE) {
         chunks.push(deliveryIds.slice(i, i + CHUNK_SIZE));
       }
-      console.log('[ExportOrderService.getAll] Split into', chunks.length, 'chunks');
 
       const allDeliveries: any[] = [];
-      for (const chunk of chunks) {
-        const { data: chunkDeliveries, error: delErr } = await supabaseService
-          .from('delivery_orders')
-          .select(
-            'id, import_orders(deleted_at, received_by, license_plate, driver_name), vegetable_orders(deleted_at, received_by, license_plate, driver_name), delivery_vehicles(driver_id, vehicle_id, vehicles(license_plate))'
-          )
-          .in('id', chunk);
+      for (let from = 0; from < chunks.length; from += 4) {
+        const batches = await Promise.all(chunks.slice(from, from + 4).map(async chunk => {
+          const { data: chunkDeliveries, error: delErr } = await measureOrderRead(supabaseService
+            .from('delivery_orders')
+            .select(
+              'id, import_orders(deleted_at, received_by, license_plate, driver_name, is_return_to_sg), vegetable_orders(deleted_at, received_by, license_plate, driver_name), delivery_vehicles(driver_id, vehicle_id, vehicles(license_plate))'
+            )
+            .in('id', chunk));
 
-        if (delErr) {
-          console.error('[ExportOrderService.getAll] delivery_orders chunk error:', JSON.stringify(delErr, null, 2));
-          throw delErr;
-        }
-        if (chunkDeliveries) allDeliveries.push(...chunkDeliveries);
+          if (delErr) {
+            console.error('[ExportOrderService.getAll] delivery_orders chunk error:', JSON.stringify(delErr, null, 2));
+            throw delErr;
+          }
+          return chunkDeliveries || [];
+        }));
+        batches.forEach(batch => allDeliveries.push(...batch));
       }
 
-      console.log('[ExportOrderService.getAll] Total deliveries fetched:', allDeliveries.length);
       const deliveryById = new Map(allDeliveries.map((d: any) => [d.id, d]));
 
       let driverScope: DriverScope | null = null;
       if (actor && goodsScopeIsDriverRole(actor.role) && !goodsScopeFullAccess(actor.role)) {
-        console.log('[ExportOrderService.getAll] Fetching driver scope for user:', actor.id);
         driverScope = await fetchDriverScopeForUser(actor.id);
-        console.log('[ExportOrderService.getAll] Driver scope:', driverScope);
       }
 
       const needScope =
@@ -81,22 +88,45 @@ export class ExportOrderService {
         !goodsScopeFullAccess(actor.role) &&
         (goodsScopeIsStaffRole(actor.role) || goodsScopeIsDriverRole(actor.role));
 
-      console.log('[ExportOrderService.getAll] needScope:', needScope, 'role:', actor?.role);
       filtered = data.filter((o: any) => {
-        if (!o.product_id) return true;
+        if (!o.product_id) return !filters.direction && (!filters.allowedDirections || filters.allowedDirections.length === 2);
         const d = deliveryById.get(o.product_id);
-        if (!d) return true;
+        if (!d) return !filters.direction && (!filters.allowedDirections || filters.allowedDirections.length === 2);
+        const directions = filters.direction ? [filters.direction] : filters.allowedDirections;
+        if (directions && !sourceMatchesDirections(d.import_orders, directions)) return false;
         if (deliverySourceSoftDeleted(d)) return false;
         if (needScope && actor && !exportOrderRowMatchesGoodsScope(o, d, actor, driverScope)) return false;
         return true;
+      }).map((row: any) => {
+        const source = deliveryById.get(row.product_id)?.import_orders;
+        const resolved = Array.isArray(source) ? source[0] : source;
+        return { ...row, direction: resolved ? groceryDirection(resolved) : undefined };
       });
+    } else if (filters.direction || (filters.allowedDirections && filters.allowedDirections.length < 2)) {
+      filtered = [];
     }
-    console.log('[ExportOrderService.getAll] Filtered result:', filtered.length, 'from', data.length);
 
+    if (filters.search) {
+      const normalize = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/g, 'd').toLowerCase();
+      const term = normalize(String(filters.search).trim());
+      filtered = filtered.filter((row: any) => normalize(row.product_name || '').includes(term));
+    }
     const total = filtered.length;
     const paginatedData = filtered.slice(offset, offset + limit);
-
-    return { data: paginatedData, meta: getPaginationMeta(total, page, limit) };
+    const hydrated = new Map<string, any>();
+    for (let from = 0; from < paginatedData.length; from += 100) {
+      const ids = paginatedData.slice(from, from + 100).map(row => row.id);
+      const { data: rows, error } = await measureOrderRead(buildQuery(true).in('id', ids).range(0, 99));
+      if (error) throw error;
+      for (const row of (rows || []) as any[]) hydrated.set(row.id, row);
+    }
+    return {
+      data: paginatedData.flatMap(row => {
+        const detail = hydrated.get(row.id);
+        return detail && detail.product_id === row.product_id ? [{ ...detail, direction: row.direction }] : [];
+      }),
+      meta: getPaginationMeta(total, page, limit),
+    };
   }
 
   static async create(orderData: any, userId: string) {

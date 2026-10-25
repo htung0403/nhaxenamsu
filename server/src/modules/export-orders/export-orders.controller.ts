@@ -26,7 +26,7 @@ export class ExportOrderController {
       const { page, limit, date, customer_id } = req.query;
       console.log('[ExportOrderController.getAll] User:', req.user?.id, 'Role:', req.user?.role);
       console.log('[ExportOrderController.getAll] Query params:', { page, limit, date, customer_id });
-      const { data, meta } = await ExportOrderService.getAll(req.query, req.user);
+      const { data, meta } = await ExportOrderService.getAll({ ...req.query, allowedDirections: res.locals.groceryDirections }, req.user);
       console.log('[ExportOrderController.getAll] Success, rows:', data?.length ?? 0, 'total:', meta?.total);
       return res.status(200).json(successResponse(data, undefined, meta));
     } catch (err: any) {

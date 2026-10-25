@@ -32,7 +32,7 @@ export interface VehicleDebtRow {
   assigned_quantity: number;
   unit_price: number;
   expected_amount: number;
-  export_payment_status: 'unpaid';
+  export_payment_status: 'unpaid' | 'paid';
 }
 
 export interface VehicleDebtPaymentRow {
@@ -143,6 +143,7 @@ export class AccountingService {
             id,
             order_code,
             order_date,
+            payment_status,
             customer_id,
             receiver_name,
             receiver_phone,
@@ -209,7 +210,7 @@ export class AccountingService {
           assigned_quantity: assignedQuantity,
           unit_price: unitPrice,
           expected_amount: expectedAmount,
-          export_payment_status: 'unpaid',
+          export_payment_status: importOrder.payment_status === 'paid' ? 'paid' : 'unpaid',
         };
       })
       .filter((row): row is VehicleDebtRow => row !== null);
@@ -240,8 +241,9 @@ export class AccountingService {
             id,
             order_code,
             customer_id,
+            payment_status,
             receiver_name,
-            customers!import_orders_customer_id_fkey(id, name)
+            customers!import_orders_customer_id_fkey(id, name, is_loyal)
           )
         )
       `)
@@ -256,6 +258,9 @@ export class AccountingService {
     const deliveryOrder = Array.isArray((row as any).delivery_orders) ? (row as any).delivery_orders[0] : (row as any).delivery_orders;
     const importOrder = Array.isArray(deliveryOrder?.import_orders) ? deliveryOrder.import_orders[0] : deliveryOrder?.import_orders;
     const customer = Array.isArray(importOrder?.customers) ? importOrder.customers[0] : importOrder?.customers;
+    if (importOrder?.payment_status === 'paid') {
+      throw new Error('Cước SG đã thanh toán, không cần nhập tiền trả');
+    }
     const customerId = customer?.id || importOrder?.customer_id || null;
     const quantity = Number(payload.quantity || 0);
     const unitPrice = Number(payload.unit_price || 0);

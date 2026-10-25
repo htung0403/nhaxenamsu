@@ -1,16 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { exportOrdersApi } from '../../api/exportOrdersApi';
+import type { GroceryDirection } from '../../types';
 import toast from 'react-hot-toast';
 
 export const exportOrderKeys = {
   all: ['export-orders'] as const,
-  list: (params?: { page?: number; limit?: number }) => [...exportOrderKeys.all, 'list', params] as const,
+  list: (params?: { page?: number; limit?: number; direction?: GroceryDirection; dateFrom?: string; dateTo?: string; search?: string }) => [...exportOrderKeys.all, 'list', params] as const,
 };
 
-export function useExportOrders(params?: { page?: number; limit?: number }) {
+export function useExportOrders(params?: { page?: number; limit?: number; direction?: GroceryDirection; dateFrom?: string; dateTo?: string; search?: string }) {
   return useQuery({
     queryKey: exportOrderKeys.list(params),
-    queryFn: () => exportOrdersApi.getAll(params),
+    queryFn: ({ signal }) => exportOrdersApi.getAll(params, signal),
   });
 }
 

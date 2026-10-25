@@ -1,3 +1,6 @@
+export const GROCERY_REVERSE_PAGES = ['kho', 'nhap-hang', 'nhap-hang/lich-su', 'xuat-hang', 'giao-hang', 'cai-dat'].map(path => `/hang-hoa/duc-trong-sg/${path}`);
+const GROCERY_LOOKUP_PAGES = [...GROCERY_REVERSE_PAGES, '/hang-hoa/nhap-hang/lich-su'];
+
 export const PAGE_POLICIES = {
   PROFILE_VIEW: ['/ho-so'],
   CUSTOMER_ORDERS_MANAGE: ['/tai-khoan/don-hang', '/tai-khoan/khach-hang'],
@@ -14,8 +17,10 @@ export const PAGE_POLICIES = {
     '/hang-hoa/in-phieu-ket',
   ],
   PRODUCTS_WAREHOUSE_ACCESS: ['/hang-hoa/kho', '/hang-hoa/kho-rau'],
-  PRODUCTS_SETTINGS: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau'],
-  PRODUCTS_CATALOG_ACCESS: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau', '/hang-hoa/nhap-hang', '/hang-hoa/nhap-hang-rau'],
+  PRODUCTS_SETTINGS: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau', '/hang-hoa/duc-trong-sg/cai-dat'],
+  PRODUCTS_CATALOG_ACCESS: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau', '/hang-hoa/nhap-hang', '/hang-hoa/nhap-hang-rau', '/hang-hoa/hang-gui-sg', ...GROCERY_LOOKUP_PAGES],
+  PRODUCTS_CATALOG_MANAGE: ['/hang-hoa/cai-dat', '/hang-hoa/cai-dat-rau', '/hang-hoa/nhap-hang', '/hang-hoa/nhap-hang-rau', '/hang-hoa/hang-gui-sg', '/hang-hoa/duc-trong-sg/cai-dat'],
+  PRODUCTS_CATALOG_CREATE: ['/hang-hoa/duc-trong-sg/nhap-hang'],
 
   CUSTOMERS_DIRECTORY_READ: [
     '/khach-hang/nguoi-gui-tap-hoa',
@@ -27,6 +32,8 @@ export const PAGE_POLICIES = {
     '/ke-toan/khach-hang-rau',
     '/ke-toan/vua-rau',
   ],
+  CUSTOMERS_LOOKUP_READ: GROCERY_LOOKUP_PAGES,
+  CUSTOMERS_CREATE: ['/hang-hoa/duc-trong-sg/nhap-hang'],
   CUSTOMERS_SHARED_LOOKUP: [
     '/ke-toan/khach-hang-tap-hoa',
     '/ke-toan/khach-hang-rau',
@@ -51,6 +58,7 @@ export const PAGE_POLICIES = {
   ACCOUNTING_REPORTS_VIEW: ['/ke-toan/cong-no', '/ke-toan/doanh-thu'],
   ACCOUNTING_SG_CASH_VIEW: ['/ke-toan/thu-tien-sg'],
 
+  VEHICLES_LOOKUP_READ: GROCERY_LOOKUP_PAGES,
   VEHICLES_OPERATIONS: [
     '/quan-ly-xe/danh-sach',
     '/quan-ly-xe/check-in',
@@ -65,7 +73,7 @@ export const PAGE_POLICIES = {
   VEHICLES_PAYMENT_COLLECTIONS: ['/app/ke-toan/thu-tien-hang', '/ke-toan/thu-tien-hang', '/app/quan-ly-xe/thu-tien', '/quan-ly-xe/thu-tien'],
 
   HR_PERMISSIONS_MANAGE: ['/hanh-chinh-nhan-su/phan-quyen'],
-  HR_EMPLOYEES_VIEW: ['/hanh-chinh-nhan-su/nhan-su', '/hang-hoa/nhap-hang', '/hang-hoa/nhap-hang-rau'],
+  HR_EMPLOYEES_VIEW: ['/hanh-chinh-nhan-su/nhan-su', '/hang-hoa/nhap-hang', '/hang-hoa/nhap-hang-rau', '/hang-hoa/hang-gui-sg', ...GROCERY_LOOKUP_PAGES],
   HR_EMPLOYEES_MANAGE: ['/hanh-chinh-nhan-su/nhan-su'],
   HR_LEAVE_REQUESTS: ['/hanh-chinh-nhan-su/nghi-phep'],
   HR_APPROVALS: ['/hanh-chinh-nhan-su/duyet-don'],

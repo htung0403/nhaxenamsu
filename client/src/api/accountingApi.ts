@@ -32,7 +32,7 @@ export interface VehicleDebt {
   assigned_quantity: number;
   unit_price: number;
   expected_amount: number;
-  export_payment_status: 'unpaid';
+  export_payment_status: 'unpaid' | 'paid';
 }
 
 export interface VehicleDebtPayment {

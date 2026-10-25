@@ -1,12 +1,14 @@
 import { Router } from 'express';
+import { orderReadMetrics } from '../../middlewares/orderReadMetrics';
 import { ExportOrderController } from './export-orders.controller';
 import { authMiddleware } from '../../middlewares/auth';
-import { requirePolicy } from '../../middlewares/role';
+import { requireGroceryAccess } from '../../middlewares/groceryDirection';
 
 const router = Router();
+router.use(orderReadMetrics('export-orders'));
 
 router.use(authMiddleware);
-router.use(requirePolicy('PRODUCTS_EXPORT_ACCESS'));
+router.use(requireGroceryAccess('export'));
 
 router.get('/', ExportOrderController.getAll);
 router.post('/', ExportOrderController.create);

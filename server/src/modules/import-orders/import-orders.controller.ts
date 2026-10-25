@@ -1,7 +1,12 @@
 import { Request, Response } from 'express';
 import { ImportOrderService } from './import-orders.service';
+import type { ImportOrderOperations } from './category-order.service';
 import { successResponse, errorResponse } from '../../utils/response';
 import { z } from 'zod';
+
+function serviceFor(res: Response): ImportOrderOperations {
+  return res.locals.importOrderService || ImportOrderService;
+}
 
 const importOrderItemSchema = z.object({
   product_id: z.string().uuid().optional().nullable(),
@@ -29,6 +34,7 @@ const importOrderSchema = z.object({
     total_amount: z.number().optional().nullable(),
     is_custom_amount: z.boolean().optional(),
     is_return_to_sg: z.boolean().optional(),
+    direction: z.enum(['sg_to_duc_trong', 'duc_trong_to_sg']).optional(),
     license_plate: z.string().optional().nullable(),
     driver_name: z.string().optional().nullable(),
     supplier_name: z.string().optional().nullable(),
@@ -50,7 +56,7 @@ const confirmOrderSchema = z.object({
 export class ImportOrderController {
   static async getAll(req: Request, res: Response) {
     try {
-      const data = await ImportOrderService.getAll(req.query, req.user ?? undefined);
+      const data = await serviceFor(res).getAll({ ...req.query, allowedDirections: res.locals.groceryDirections, order_category: res.locals.groceryCategory || req.query.order_category }, req.user ?? undefined);
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -59,7 +65,7 @@ export class ImportOrderController {
 
   static async getById(req: Request, res: Response) {
     try {
-      const data = await ImportOrderService.getById(req.params.id as string, req.user ?? undefined);
+      const data = await serviceFor(res).getById(req.params.id as string, req.user ?? undefined);
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -69,7 +75,7 @@ export class ImportOrderController {
   static async create(req: Request, res: Response) {
     try {
       const validated = importOrderSchema.parse(req.body);
-      const data = await ImportOrderService.create(validated, req.user!.id);
+      const data = await serviceFor(res).create(validated, req.user!.id);
       return res.status(201).json(successResponse(data, 'Đã tạo đơn nhập hàng'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -79,7 +85,7 @@ export class ImportOrderController {
   static async update(req: Request, res: Response) {
     try {
       const validated = importOrderSchema.partial().parse(req.body);
-      const data = await ImportOrderService.update(req.params.id as string, validated);
+      const data = await serviceFor(res).update(req.params.id as string, validated);
       return res.status(200).json(successResponse(data, 'Đã cập nhật đơn nhập hàng'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -88,7 +94,7 @@ export class ImportOrderController {
 
   static async delete(req: Request, res: Response) {
     try {
-      await ImportOrderService.delete(req.params.id as string);
+      await serviceFor(res).delete(req.params.id as string);
       return res.status(200).json(successResponse(null, 'Import order deleted'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -98,7 +104,7 @@ export class ImportOrderController {
   static async getNextSequence(req: Request, res: Response) {
     try {
       const date = (req.query.date as string) || new Date().toISOString().split('T')[0];
-      const nextCode = await ImportOrderService.generateOrderCode(date, false);
+      const nextCode = await serviceFor(res).generateOrderCode(date, false);
       return res.status(200).json(successResponse({ next_code: nextCode }));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -108,7 +114,7 @@ export class ImportOrderController {
   static async confirmByAdmin(req: Request, res: Response) {
     try {
       const validated = confirmOrderSchema.parse(req.body || {});
-      const data = await ImportOrderService.confirmByAdmin(
+      const data = await serviceFor(res).confirmByAdmin(
         req.params.id as string,
         req.user!.id,
         validated.order_category,

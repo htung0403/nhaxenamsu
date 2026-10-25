@@ -56,7 +56,7 @@ const VegetableWarehousePage: React.FC = () => {
     }
     return d;
   }, [deliveriesRaw, user, vehicles]);
-  const deleteMutation = useDeleteDeliveryOrders();
+  const deleteMutation = useDeleteDeliveryOrders('vegetable');
   const isAdmin = user?.role === 'admin';
   // Filter states
   const [searchQuery, setSearchQuery] = useState('');

@@ -79,6 +79,7 @@ const vehicleSupportsGoodsCategory = (vehicle: Vehicle, category: 'grocery' | 'v
 const getOrderData = (order: DeliveryOrder) => order.vegetable_orders || order.import_orders;
 
 const getSenderName = (order: DeliveryOrder) => getOrderData(order)?.sender_name || getOrderData(order)?.customers?.name || '-';
+const getAgeRefDate = (order: DeliveryOrder) => order.confirmed_at ? order.confirmed_at.slice(0, 10) : order.delivery_date;
 
 const getDisplayProductName = (order: DeliveryOrder) =>
   order.product_name.includes(' - ') ? order.product_name.split(' - ').slice(1).join(' - ') : order.product_name;
@@ -125,6 +126,17 @@ const getOrderPaymentStatus = (order: DeliveryOrder): keyof typeof PAYMENT_STATU
   return 'partial';
 };
 
+const deliveryPageSize = 50;
+
+const groupOrdersByDateAndSupplier = (orders: DeliveryOrder[]) => orders.reduce<Record<string, Record<string, DeliveryOrder[]>>>((groups, order) => {
+  const date = order.delivery_date || 'N/A';
+  const supplier = getSenderName(order) || 'Chưa rõ vựa';
+  if (!groups[date]) groups[date] = {};
+  if (!groups[date][supplier]) groups[date][supplier] = [];
+  groups[date][supplier].push(order);
+  return groups;
+}, {});
+
 const getTodayString = () => {
   const d = new Date();
   const yyyy = d.getFullYear();
@@ -149,10 +161,17 @@ const VegetableDeliveryPage: React.FC = () => {
   const [endDate, setEndDate] = useState<string>(today);
   const [statusFilter, setStatusFilter] = useState<'all' | 'can_giao' | 'da_giao'>('can_giao');
   const [ageFilter, setAgeFilter] = useState<'all' | 'new' | 'old'>('all');
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+  const listRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
 
   const { user } = useAuth();
   const { data: vehicles } = useVehicles();
-  const { data: ordersRaw, isLoading: ordersLoading, isError, refetch } = useDeliveryOrders(startDate, endDate, 'vegetable');
+  const { data: ordersRaw, isLoading: ordersLoading, isError, refetch } = useDeliveryOrders(startDate, endDate, 'vegetable', undefined, { includeExportPaymentStatus: false });
   const orders = React.useMemo(() => {
     let base = (ordersRaw || []).filter((o) => !isSoftDeletedSourceOrder(o));
     if (user && !hasFullGoodsModuleAccess(user)) {
@@ -162,7 +181,7 @@ const VegetableDeliveryPage: React.FC = () => {
     }
     return base;
   }, [ordersRaw, user, vehicles]);
-  const deleteMutation = useDeleteDeliveryOrders();
+  const deleteMutation = useDeleteDeliveryOrders('vegetable');
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -390,53 +409,45 @@ const VegetableDeliveryPage: React.FC = () => {
     };
   }, [orders]);
 
-  let filteredOrders = orders || [];
-
-    // Filter by status
-  if (statusFilter !== 'all') {
-    filteredOrders = filteredOrders.filter(o => {
-      const normalized = normalizeVegetableStatus(o.status);
-      if (statusFilter === 'can_giao') return normalized === 'can_giao';
-      if (statusFilter === 'da_giao') {
-        let isDaGiao = false;
-        if (normalized === 'da_giao') isDaGiao = true;
-        else {
-          const totalAssigned = (o.delivery_vehicles || []).reduce((sum, dv) => sum + (dv.assigned_quantity || 0), 0);
-          isDaGiao = totalAssigned > 0 && totalAssigned < o.total_quantity;
-        }
-
-        if (!isDaGiao) return false;
-
-        if (isDriverOrLoader) {
-          const hasMyAssignment = (o.delivery_vehicles || []).some(dv => 
-            dv.vehicle_id && myVehicleIdSet.has(dv.vehicle_id) && (dv.assigned_quantity || 0) > 0
-          );
-          return hasMyAssignment;
-        }
-
-        return true;
-      }
-      return true;
-    });
-  }
-
-  // Filter by age (mốc 19:00 — giống trang giao tạp hóa)
   const anchorStr = getDeliveryAnchorDateString();
-  const getAgeRefDate = (o: DeliveryOrder) => o.confirmed_at ? o.confirmed_at.slice(0, 10) : o.delivery_date;
-  if (ageFilter === 'new') {
-    filteredOrders = filteredOrders.filter((o) => {
-      const ref = getAgeRefDate(o);
-      return !ref || ref >= anchorStr;
-    });
-  } else if (ageFilter === 'old') {
-    filteredOrders = filteredOrders.filter((o) => {
-      const ref = getAgeRefDate(o);
-      return ref != null && ref < anchorStr;
-    });
-  }
+  const filteredOrders = React.useMemo(() => {
+    let filteredOrders = orders || [];
+    if (statusFilter !== 'all') {
+      filteredOrders = filteredOrders.filter(o => {
+        const normalized = normalizeVegetableStatus(o.status);
+        if (statusFilter === 'can_giao') return normalized === 'can_giao';
+        if (statusFilter === 'da_giao') {
+          let isDaGiao = false;
+          if (normalized === 'da_giao') isDaGiao = true;
+          else {
+            const totalAssigned = (o.delivery_vehicles || []).reduce((sum, dv) => sum + (dv.assigned_quantity || 0), 0);
+            isDaGiao = totalAssigned > 0 && totalAssigned < o.total_quantity;
+          }
+          if (!isDaGiao) return false;
+          if (isDriverOrLoader) {
+            const hasMyAssignment = (o.delivery_vehicles || []).some(dv =>
+              dv.vehicle_id && myVehicleIdSet.has(dv.vehicle_id) && (dv.assigned_quantity || 0) > 0
+            );
+            return hasMyAssignment;
+          }
+          return true;
+        }
+        return true;
+      });
+    }
+    if (ageFilter === 'new') {
+      filteredOrders = filteredOrders.filter((o) => {
+        const ref = getAgeRefDate(o);
+        return !ref || ref >= anchorStr;
+      });
+    } else if (ageFilter === 'old') {
+      filteredOrders = filteredOrders.filter((o) => {
+        const ref = getAgeRefDate(o);
+        return ref != null && ref < anchorStr;
+      });
+    }
 
-    // Text & Select Filters logic
-  filteredOrders = filteredOrders.filter(o => {
+    filteredOrders = filteredOrders.filter(o => {
       const orderData = o.vegetable_orders || o.import_orders;
       const cName = orderData?.sender_name || orderData?.customers?.name;
       const rName = orderData?.receiver_name?.trim() || orderData?.profiles?.full_name;
@@ -458,6 +469,8 @@ const VegetableDeliveryPage: React.FC = () => {
 
       return true;
     });
+    return filteredOrders;
+  }, [orders, statusFilter, isDriverOrLoader, myVehicleIdSet, ageFilter, anchorStr, searchQuery, filterCustomer, filterReceiver, filterProduct]);
 
   // Selection helpers (admin only)
   const isAllSelected = filteredOrders.length > 0 && filteredOrders.every(o => selectedIds.has(o.id));
@@ -470,18 +483,17 @@ const VegetableDeliveryPage: React.FC = () => {
     }
   };
 
-  // Grouping logic: Date -> Supplier -> [Orders]
-  const groupedOrders = (filteredOrders || []).reduce<Record<string, Record<string, DeliveryOrder[]>>>((acc, order) => {
-    const date = order.delivery_date || 'N/A';
-    const supplierName = getSenderName(order) || 'Chưa rõ vựa';
-
-    if (!acc[date]) acc[date] = {};
-    if (!acc[date][supplierName]) acc[date][supplierName] = [];
-    acc[date][supplierName].push(order);
-    return acc;
-  }, {});
-
-  const sortedDates = Object.keys(groupedOrders).sort((a, b) => b.localeCompare(a)); // Newest first
+  const allGroupedOrders = React.useMemo(() => groupOrdersByDateAndSupplier(filteredOrders), [filteredOrders]);
+  const ordersByDate = React.useMemo(() => Object.fromEntries(Object.entries(allGroupedOrders).map(([date, suppliers]) => [date, Object.values(suppliers).flat()])), [allGroupedOrders]);
+  const orderedOrders = React.useMemo(() => Object.keys(ordersByDate).sort((first, second) => second.localeCompare(first)).flatMap(date => ordersByDate[date]), [ordersByDate]);
+  const [pagination, setPagination] = useState<{ orders: DeliveryOrder[] | null; page: number }>({ orders: null, page: 1 });
+  const totalPages = Math.max(1, Math.ceil(orderedOrders.length / deliveryPageSize));
+  const page = pagination.orders === orderedOrders ? Math.min(pagination.page, totalPages) : 1;
+  const groupedOrders = React.useMemo(() => groupOrdersByDateAndSupplier(orderedOrders.slice((page - 1) * deliveryPageSize, page * deliveryPageSize)), [orderedOrders, page]);
+  const sortedDates = React.useMemo(() => Object.keys(groupedOrders).sort((first, second) => second.localeCompare(first)), [groupedOrders]);
+  React.useEffect(() => {
+    if (listRef.current) listRef.current.scrollTop = 0;
+  }, [orderedOrders, page]);
 
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
@@ -638,9 +650,9 @@ const VegetableDeliveryPage: React.FC = () => {
             description={`Không có đơn hàng nào với trạng thái "${STATUS_LABELS[statusFilter]}" phù hợp với bộ lọc.`} 
           />
         ) : (
-          <div className="flex-1 overflow-auto custom-scrollbar bg-muted/30 md:bg-transparent relative">
+          <div ref={listRef} className="flex-1 overflow-auto custom-scrollbar bg-muted/30 md:bg-transparent relative">
             {/* Desktop View */}
-            <div className="hidden md:block">
+            {!isMobile && <div data-delivery-layout="desktop" className="hidden md:block">
               <table className="w-full border-collapse bg-card">
                 <thead className="sticky top-0 z-20">
                   <tr className="bg-card border-b border-border text-muted-foreground">
@@ -694,10 +706,11 @@ const VegetableDeliveryPage: React.FC = () => {
                         <td colSpan={(isAdmin ? 11 : 10) + (displayedVehicles.length || ((statusFilter === 'da_giao' && isDriverOrLoader) ? 0 : 10))} className="px-4 py-2.5">
                           <div className="flex items-center gap-2">
                             {isAdmin && (() => {
-                              const dateOrders = Object.values(groupedOrders[date]).flat();
+                              const dateOrders = ordersByDate[date];
                               return (
                                 <input
                                   type="checkbox"
+                                  aria-label={`Chọn ngày ${date}`}
                                   className="w-4 h-4 rounded border-border text-primary focus:ring-primary cursor-pointer mr-2"
                                   checked={dateOrders.length > 0 && dateOrders.every(o => selectedIds.has(o.id))}
                                   onChange={(e) => {
@@ -749,7 +762,7 @@ const VegetableDeliveryPage: React.FC = () => {
                         const paymentConfig = PAYMENT_STATUS_CONFIG[paymentStatus];
 
                             return (
-                          <tr key={o.id} className={clsx("transition-colors group", selectedIds.has(o.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50")}>
+                          <tr key={o.id} data-delivery-id={o.id} className={clsx("transition-colors group", selectedIds.has(o.id) ? "bg-primary/5 dark:bg-primary/10" : "hover:bg-muted/50")}>
                             {isAdmin && (
                               <td className="px-3 py-3 border-r border-border text-center">
                                 <div className="flex items-center justify-center">
@@ -996,18 +1009,19 @@ const VegetableDeliveryPage: React.FC = () => {
                   ))}
                 </tbody>
               </table>
-            </div>
+            </div>}
 
             {/* Mobile View */}
-            <div className="md:hidden flex flex-col gap-3 px-3 pt-0 pb-20 relative">
+            {isMobile && <div data-delivery-layout="mobile" className="md:hidden flex flex-col gap-3 px-3 pt-0 pb-20 relative">
               {sortedDates.map((date) => (
                 <div key={`mobile-${date}`} className="flex flex-col gap-2.5">
                   <div className="flex items-center gap-2 sticky top-0 bg-muted/80 dark:bg-muted/40 backdrop-blur-md p-3 -mx-3 px-5 z-10 border-b border-border shadow-sm">
                     {isAdmin && (() => {
-                      const dateOrders = Object.values(groupedOrders[date]).flat();
+                      const dateOrders = ordersByDate[date];
                       return (
                         <input
                           type="checkbox"
+                          aria-label={`Chọn ngày ${date}`}
                           className="w-5 h-5 rounded-md border-border text-primary focus:ring-primary mr-1"
                           checked={dateOrders.length > 0 && dateOrders.every(o => selectedIds.has(o.id))}
                           onChange={(e) => {
@@ -1051,6 +1065,7 @@ const VegetableDeliveryPage: React.FC = () => {
                           return (
                         <div
                           key={`mobile-order-${o.id}`}
+                          data-delivery-id={o.id}
                           onClick={() => {
                             handleOrderClick(o, undefined, 'add-new');
                           }}
@@ -1224,8 +1239,20 @@ const VegetableDeliveryPage: React.FC = () => {
                   </div>
                 </div>
               ))}
-            </div>
+            </div>}
           </div>
+        )}
+        {!isLoading && !isError && filteredOrders.length > 0 && (
+          <nav aria-label="Phân trang đơn giao rau" className="shrink-0 flex items-center justify-between gap-2 border-t border-border px-3 py-3 bg-card">
+            <span className="text-[12px] text-muted-foreground">
+              {(page - 1) * deliveryPageSize + 1}-{Math.min(page * deliveryPageSize, filteredOrders.length)} / Tổng {filteredOrders.length}
+            </span>
+            <div className="flex items-center gap-2">
+              <button type="button" aria-label="Trang trước" disabled={page <= 1} onClick={() => setPagination({ orders: orderedOrders, page: page - 1 })} className="px-2 py-1 rounded-lg text-[12px] font-bold hover:bg-muted disabled:opacity-30">Trước</button>
+              <span className="text-[12px] font-bold">{page} / {totalPages}</span>
+              <button type="button" aria-label="Trang sau" disabled={page >= totalPages} onClick={() => setPagination({ orders: orderedOrders, page: page + 1 })} className="px-2 py-1 rounded-lg text-[12px] font-bold hover:bg-muted disabled:opacity-30">Sau</button>
+            </div>
+          </nav>
         )}
       </div>
 

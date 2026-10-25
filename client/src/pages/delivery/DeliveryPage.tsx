@@ -322,7 +322,7 @@ const getOneWeekAgoString = () => {
 const isAgeFilterValue = (value: string): value is 'all' | 'new' | 'old' =>
   value === 'all' || value === 'new' || value === 'old';
 
-const DeliveryPage: React.FC = () => {
+const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirection }> = ({ direction = 'sg_to_duc_trong' }) => {
   const navigate = useNavigate();
   const today = getTodayString();
   const oneWeekAgo = getOneWeekAgoString();
@@ -334,7 +334,7 @@ const DeliveryPage: React.FC = () => {
   const ITEMS_PER_PAGE = 30;
 
   const { user } = useAuth();
-  const { data: ordersRaw, isLoading: ordersLoading, isError, refetch } = useDeliveryOrders(startDate || undefined, endDate || undefined, 'standard');
+  const { data: ordersRaw, isLoading: ordersLoading, isError, refetch } = useDeliveryOrders(startDate || undefined, endDate || undefined, 'standard', direction);
   const { data: vehicles } = useVehicles();
   const baseOrders = React.useMemo(
     () => (ordersRaw || []).filter((o) => !isSoftDeletedSourceOrder(o)),
@@ -383,7 +383,7 @@ const DeliveryPage: React.FC = () => {
   }, [groupToSourceIdsMap]);
 
   const confirmMutation = useConfirmDelivery();
-  const deleteMutation = useDeleteDeliveryOrders();
+  const deleteMutation = useDeleteDeliveryOrders('standard');
 
   const [revertingOrder, setRevertingOrder] = useState<DeliveryOrder | null>(null);
   const [isRevertClosing, setIsRevertClosing] = useState(false);
@@ -844,7 +844,7 @@ const DeliveryPage: React.FC = () => {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
-        <PageHeader title="Hàng cần giao" description="Danh sách đơn hàng cần giao" backPath="/app/hang-hoa" />
+        <PageHeader title={direction === 'duc_trong_to_sg' ? 'Hàng cần giao tại SG' : 'Hàng cần giao'} description={direction === 'duc_trong_to_sg' ? 'Đức Trọng → SG' : 'SG → Đức Trọng'} backPath="/app/hang-hoa" />
       </div>
 
       <div className="bg-card flex flex-row w-full gap-2 items-center rounded-2xl shadow-sm border border-border p-2.5 md:mb-6 mb-3 overflow-x-auto custom-scrollbar">
@@ -961,7 +961,7 @@ const DeliveryPage: React.FC = () => {
         {/* ACTIONS */}
         <div className="flex items-center gap-2 shrink-0">
           <button
-            onClick={() => navigate(`/app/hang-hoa/in-phieu-giao?dateFrom=${startDate}&dateTo=${endDate}`)}
+            onClick={() => navigate(`/app/hang-hoa/in-phieu-giao?dateFrom=${startDate}&dateTo=${endDate}&direction=${direction}`)}
             className="flex items-center gap-2 justify-center h-9.5 px-3 shrink-0 border border-primary/20 rounded-xl transition-all bg-primary/10 text-primary hover:bg-primary/20 font-bold text-[13px]"
             title="In phiếu nhập hàng tạp hóa"
           >

@@ -203,8 +203,8 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
       importOrderVisibleToUser(o, { id: user.id, role: user.role, full_name: user.full_name }, vehicles || [])
     );
   }, [allApiResponse?.data, user, vehicles]);
-  const deleteMutation = useDeleteImportOrder();
-  const bulkDeleteMutation = useBulkDeleteImportOrders();
+  const deleteMutation = useDeleteImportOrder('vegetable');
+  const bulkDeleteMutation = useBulkDeleteImportOrders('vegetable');
   const bulkUpdateReceivedByMutation = useBulkUpdateImportOrdersReceivedBy();
 
   const normalizedSearchText = useMemo(
@@ -651,7 +651,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
                                   case 'tai_rank': return (
                                     <td key={col.id} className="px-4 py-3 text-center">
                                       <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-amber-500/10 text-amber-700 text-[12px] font-black">
-                                        {getVegetableTaiRank(order, dailyTaiRankMap) || 1}
+                                          {getVegetableTaiRank(order, dailyTaiRankMap) ?? '-'}
                                       </span>
                                     </td>
                                   );
@@ -732,7 +732,7 @@ const VegetableImportOrderHistoryPage: React.FC = () => {
 
                       {ordersInSupplier.map((order) => {
                         const orderImage = order.receipt_image_url || order.import_order_items?.[0]?.image_url;
-                        const taiRank = getVegetableTaiRank(order, dailyTaiRankMap) || 1;
+                        const taiRank = getVegetableTaiRank(order, dailyTaiRankMap) ?? '-';
                         
                         const totalQuantity = order.import_order_items?.reduce((sum, item) => sum + (item.quantity || 0), 0) || 0;
                         const itemNames = order.import_order_items?.map(item => item.products?.name).filter(Boolean).join(', ') || '';

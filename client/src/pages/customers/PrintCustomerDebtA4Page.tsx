@@ -99,9 +99,11 @@ const PrintCustomerDebtA4Page: React.FC = () => {
   const navigate = useNavigate();
   const payload = React.useMemo(() => loadPrintPayload(), []);
   const orders = React.useMemo(() => {
-    return [...(payload.orders || [])].sort((a, b) =>
-      (a.customer_name || '').localeCompare(b.customer_name || '', 'vi'),
-    );
+    return [...(payload.orders || [])].sort((firstOrder, secondOrder) => {
+      const firstDate = new Date(firstOrder.delivery_date || firstOrder.order_date || '').getTime() || 0;
+      const secondDate = new Date(secondOrder.delivery_date || secondOrder.order_date || '').getTime() || 0;
+      return firstDate - secondDate;
+    });
   }, [payload.orders]);
 
   const customerGroups = React.useMemo(() => buildCustomerGroups(orders), [orders]);

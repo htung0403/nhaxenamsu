@@ -59,6 +59,7 @@ const getReceiverDisplayName = (order: DeliveryOrder) => {
   const orderObj = order.import_orders || order.vegetable_orders;
   if (!orderObj) return '-';
 
+  if ('is_return_to_sg' in orderObj && orderObj.is_return_to_sg) return orderObj.receiver_name?.trim() || '-';
   if (order.status === 'hang_o_sg' && orderObj.selected_alias) {
     return orderObj.selected_alias;
   }
@@ -77,6 +78,7 @@ const mergePrintOrders = (orders: DeliveryOrder[]): DeliveryOrder[] => {
     const receiverName = getReceiverDisplayName(order);
     const productName = getDisplayProductName(order);
     const key = [
+      order.import_orders?.is_return_to_sg ? 'duc_trong_to_sg' : 'sg_to_duc_trong',
       normalizePrintMergeKeyPart(date),
       normalizePrintMergeKeyPart(receiverName),
       normalizePrintMergeKeyPart(productName),
@@ -158,13 +160,14 @@ const paginateOrders = (orders: DeliveryOrder[]): DeliveryOrder[][] => {
 const PrintDeliveryPage: React.FC = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const direction = searchParams.get('direction') === 'duc_trong_to_sg' ? 'duc_trong_to_sg' : 'sg_to_duc_trong';
   const initialDateFrom = searchParams.get('dateFrom') || format(new Date(), 'yyyy-MM-dd');
   const initialDateTo = searchParams.get('dateTo') || format(new Date(), 'yyyy-MM-dd');
 
   const [startDate, setStartDate] = useState<string>(initialDateFrom);
   const [endDate, setEndDate] = useState<string>(initialDateTo);
 
-  const { data: ordersRaw, isLoading, isError, refetch } = useDeliveryOrders(startDate, endDate, 'standard');
+  const { data: ordersRaw, isLoading, isError, refetch } = useDeliveryOrders(startDate, endDate, 'standard', direction);
 
   const orders = React.useMemo(() => {
     return mergePrintOrders((ordersRaw || []).filter((o) => !isSoftDeletedSourceOrder(o)));
@@ -365,7 +368,7 @@ const PrintDeliveryPage: React.FC = () => {
           </button>
           <div>
             <h1 className="text-[18px] font-black text-foreground">In Phiếu Giao Hàng</h1>
-            <p className="text-[12px] text-muted-foreground">Hàng tạp hóa</p>
+            <p className="text-[12px] text-muted-foreground">{direction === 'duc_trong_to_sg' ? 'Hàng tạp hóa · Đức Trọng → SG' : 'Hàng tạp hóa · SG → Đức Trọng'}</p>
           </div>
         </div>
 

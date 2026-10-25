@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { deliveryApi } from '../../api/deliveryApi';
+import { deliveryApi, type DeliveryReadOptions } from '../../api/deliveryApi';
+import type { GroceryDirection } from '../../types';
 import toast from 'react-hot-toast';
 import { importOrderKeys } from './useImportOrders';
 import { exportOrderKeys } from './useExportOrders';
@@ -10,24 +11,24 @@ export const deliveryKeys = {
   inventory: () => [...deliveryKeys.all, 'inventory'] as const,
 };
 
-export function useDeliveryOrders(startDate?: string, endDate?: string, orderCategory?: 'standard' | 'vegetable') {
+export function useDeliveryOrders(startDate?: string, endDate?: string, orderCategory?: 'standard' | 'vegetable', direction?: GroceryDirection, options?: DeliveryReadOptions) {
   return useQuery({
-    queryKey: [...deliveryKeys.all, 'filter', startDate, endDate, orderCategory],
-    queryFn: () => deliveryApi.getAllToday(startDate || undefined, endDate || undefined, orderCategory),
+    queryKey: [...deliveryKeys.all, 'filter', startDate, endDate, orderCategory, direction, options?.includeExportPaymentStatus !== false],
+    queryFn: ({ signal }) => deliveryApi.getAllToday(startDate || undefined, endDate || undefined, orderCategory, direction, signal, options),
   });
 }
 
-export function useDeliveryInventory(orderCategory?: 'standard' | 'vegetable') {
+export function useDeliveryInventory(orderCategory?: 'standard' | 'vegetable', direction?: GroceryDirection) {
   return useQuery({
-    queryKey: [...deliveryKeys.inventory(), orderCategory],
-    queryFn: () => deliveryApi.getInventory(orderCategory),
+    queryKey: [...deliveryKeys.inventory(), orderCategory, direction],
+    queryFn: ({ signal }) => deliveryApi.getInventory(orderCategory, direction, signal),
   });
 }
 
 export function useAllPendingDeliveries() {
   return useQuery({
     queryKey: [...deliveryKeys.all, 'all-pending'],
-    queryFn: () => deliveryApi.getAllToday(), // No params means all (based on service change)
+    queryFn: ({ signal }) => deliveryApi.getAllToday(undefined, undefined, undefined, undefined, signal),
   });
 }
 
@@ -94,10 +95,10 @@ export function useConfirmWarehouse() {
   });
 }
 
-export function useDeleteDeliveryOrders() {
+export function useDeleteDeliveryOrders(category?: 'standard' | 'vegetable') {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (ids: string[]) => deliveryApi.deleteOrders(ids),
+    mutationFn: (ids: string[]) => deliveryApi.deleteOrders(ids, category),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: deliveryKeys.all });
       toast.success('Đã xóa đơn giao hàng');

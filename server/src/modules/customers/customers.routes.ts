@@ -52,13 +52,13 @@ router.put(
 
 router.get(
 	'/',
-	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP', 'CUSTOMERS_LOOKUP_READ'),
 	CustomerController.getAll
 );
 
 router.post(
 	'/',
-	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP', 'CUSTOMERS_CREATE'),
 	CustomerController.create
 );
 
@@ -70,19 +70,19 @@ router.post(
 
 router.post(
 	'/geocode',
-	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP', 'CUSTOMERS_CREATE'),
 	CustomerController.geocode
 );
 
 router.post(
 	'/address-suggestions',
-	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP', 'CUSTOMERS_CREATE'),
 	CustomerController.autocompleteAddress
 );
 
 router.post(
 	'/address-suggestions/resolve',
-	requirePolicy('CUSTOMERS_SHARED_LOOKUP'),
+	requirePolicy('CUSTOMERS_SHARED_LOOKUP', 'CUSTOMERS_CREATE'),
 	CustomerController.resolveAddress
 );
 

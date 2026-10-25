@@ -1,7 +1,12 @@
 import { Request, Response } from 'express';
 import { DeliveryService } from './delivery.service';
+import type { DeliveryQueries } from './category-delivery.service';
 import { successResponse, errorResponse } from '../../utils/response';
 import { z } from 'zod';
+
+function queriesFor(res: Response): DeliveryQueries {
+  return res.locals.deliveryQueryService || DeliveryService;
+}
 
 const deliveryOrderSchema = z.object({
   import_order_id: z.string().uuid(),
@@ -42,7 +47,8 @@ export class DeliveryController {
   static async getAllToday(req: Request, res: Response) {
     try {
       const { startDate, endDate, order_category } = req.query as { startDate?: string; endDate?: string; order_category?: string; };
-      const data = await DeliveryService.getAllToday(startDate, endDate, order_category, req.user);
+      const includeExportPaymentStatus = z.enum(['true', 'false']).optional().parse(req.query.include_export_payment_status) !== 'false';
+      const data = await queriesFor(res).getAllToday(startDate, endDate, res.locals.groceryCategory || order_category, req.user, res.locals.groceryDirections, includeExportPaymentStatus);
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
@@ -207,7 +213,7 @@ export class DeliveryController {
   static async getInventory(req: Request, res: Response) {
     try {
       const { order_category } = req.query as { order_category?: string };
-      const data = await DeliveryService.getInventory(order_category, req.user);
+      const data = await queriesFor(res).getInventory(res.locals.groceryCategory || order_category, req.user, res.locals.groceryDirections);
       return res.status(200).json(successResponse(data));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));

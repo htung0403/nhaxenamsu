@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import PageHeader from '../../components/shared/PageHeader';
 import { useExportOrders, useDeleteExportOrders } from '../../hooks/queries/useExportOrders';
@@ -15,7 +15,6 @@ import AddEditExportOrderDialog from './dialogs/AddEditExportOrderDialog';
 import ConfirmDialog from '../../components/shared/ConfirmDialog';
 import { useAuth } from '../../context/AuthContext';
 import { SearchInput } from '../../components/ui/SearchInput';
-import { matchesSearch } from '../../lib/str-utils';
 import { cloudinaryFull } from '../../lib/cloudinaryUrl';
 
 const paymentLabels: Record<string, string> = {
@@ -31,9 +30,12 @@ const formatCurrency = (value?: number | null) => {
 
 const PAGE_SIZE = 50;
 
-const ExportOrdersPage: React.FC = () => {
+const ExportOrdersPage: React.FC<{ direction?: import('../../types').GroceryDirection }> = ({ direction = 'sg_to_duc_trong' }) => {
   const [page, setPage] = useState(1);
-  const { data: response, isLoading, isError, refetch } = useExportOrders({ page, limit: PAGE_SIZE });
+  const [searchText, setSearchText] = useState('');
+  const [filterDateFrom, setFilterDateFrom] = useState('');
+  const [filterDateTo, setFilterDateTo] = useState('');
+  const { data: response, isLoading, isError, refetch } = useExportOrders({ page, limit: PAGE_SIZE, direction, dateFrom: filterDateFrom, dateTo: filterDateTo, search: searchText });
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const deleteMutation = useDeleteExportOrders();
@@ -44,10 +46,6 @@ const ExportOrdersPage: React.FC = () => {
 
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isAddClosing, setIsAddClosing] = useState(false);
-
-  const [searchText, setSearchText] = useState('');
-  const [filterDateFrom, setFilterDateFrom] = useState('');
-  const [filterDateTo, setFilterDateTo] = useState('');
 
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [isFilterClosing, setIsFilterClosing] = useState(false);
@@ -67,18 +65,7 @@ const ExportOrdersPage: React.FC = () => {
     }, 300);
   };
 
-  const filteredOrders = useMemo(() => {
-    return orders.filter((o) => {
-      if (searchText.trim()) {
-        if (!matchesSearch((o as any).product_name || '', searchText)) {
-          return false;
-        }
-      }
-      if (filterDateFrom && o.export_date < filterDateFrom) return false;
-      if (filterDateTo && o.export_date > filterDateTo) return false;
-      return true;
-    });
-  }, [orders, searchText, filterDateFrom, filterDateTo]);
+  const filteredOrders = orders;
 
   const closeAddDialog = () => {
     setIsAddClosing(true);
@@ -92,7 +79,7 @@ const ExportOrdersPage: React.FC = () => {
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
         <PageHeader
-          title="Xuất hàng"
+          title={direction === 'duc_trong_to_sg' ? 'Xuất hàng gửi SG' : 'Xuất hàng · SG → Đức Trọng'}
           description="Quản lý phiếu xuất kho"
           backPath="/app/hang-hoa"
           actions={
@@ -419,6 +406,7 @@ const ExportOrdersPage: React.FC = () => {
       />
 
       <AddEditExportOrderDialog
+        direction={direction}
         isOpen={isAddOpen}
         isClosing={isAddClosing}
         onClose={closeAddDialog}

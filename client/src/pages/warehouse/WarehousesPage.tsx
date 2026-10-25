@@ -120,7 +120,7 @@ const getOneWeekAgoString = () => {
   return `${yyyy}-${mm}-${dd}`;
 };
 
-const WarehousesPage: React.FC = () => {
+const WarehousesPage: React.FC<{ direction?: import('../../types').GroceryDirection }> = ({ direction = 'sg_to_duc_trong' }) => {
   const { user } = useAuth();
   const today = getTodayString();
   const oneWeekAgo = getOneWeekAgoString();
@@ -149,7 +149,8 @@ const WarehousesPage: React.FC = () => {
   const { data: ordersRaw, isLoading, isError, refetch } = useDeliveryOrders(
     startDate || undefined,
     endDate || undefined,
-    'standard'
+    'standard',
+    direction
   );
   const { data: vehicles } = useVehicles();
   const confirmWarehouseMutation = useConfirmWarehouse();
@@ -253,9 +254,7 @@ const WarehousesPage: React.FC = () => {
       const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
       if (cName) cSet.add(cName);
       const rName =
-        o.import_orders?.customers?.name ||
-        o.import_orders?.receiver_name?.trim() ||
-        o.import_orders?.profiles?.full_name;
+        getReceiverDisplayName(o);
       if (rName) rSet.add(rName);
       const pName = getDisplayProductName(o);
       if (pName) pSet.add(pName);
@@ -292,9 +291,7 @@ const WarehousesPage: React.FC = () => {
       .filter((o) => {
         const cName = o.import_orders?.sender_name || o.import_orders?.customers?.name;
         const rName =
-          o.import_orders?.customers?.name ||
-          o.import_orders?.receiver_name?.trim() ||
-          o.import_orders?.profiles?.full_name;
+          getReceiverDisplayName(o);
         const pName = getDisplayProductName(o);
         const staffRecv = getImportReceivedByStaffName(o);
 
@@ -451,7 +448,7 @@ const WarehousesPage: React.FC = () => {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0">
       <div className="hidden md:block">
-        <PageHeader title="Tồn kho" description="Đơn hàng cũ chờ xác nhận tồn kho" backPath="/app/hang-hoa" />
+        <PageHeader title={direction === 'duc_trong_to_sg' ? 'Tồn kho hàng gửi SG' : 'Tồn kho'} description={direction === 'duc_trong_to_sg' ? 'Đức Trọng → SG · Đơn hàng cũ chờ xác nhận tồn kho' : 'SG → Đức Trọng · Đơn hàng cũ chờ xác nhận tồn kho'} backPath="/app/hang-hoa" />
       </div>
 
       {/* Search / filter bar */}

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, CheckCircle2, Send, Users } from 'lucide-react';
 import { clsx } from 'clsx';
@@ -29,7 +29,7 @@ import type { DeliveryOrder, DeliveryVehicle, Vehicle } from '../../types';
 
 import { removeAccents } from '../../lib/str-utils';
 import { cloudinaryLarge } from '../../lib/cloudinaryUrl';
-import { buildVegetableDailyTaiRankMap, getVegetableTaiRank } from '../../utils/vegetableTaiRank';
+import { getVegetableTaiRank } from '../../utils/vegetableTaiRank';
 
 const statusLabels: Record<OrderStatus, string> = {
   pending: 'Chờ xử lý',
@@ -200,6 +200,7 @@ const VegetableImportsPage: React.FC = () => {
   const [viewingImageIndex, setViewingImageIndex] = useState(0);
 
   const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useEffect(() => () => clearTimeout(searchTimeoutRef.current), []);
 
   const allFilters: ImportOrderFilters = {};
   if (filterDate) {
@@ -208,7 +209,9 @@ const VegetableImportsPage: React.FC = () => {
   }
   if (filterStatus.length > 0) allFilters.status = filterStatus.join(',');
   allFilters.order_category = 'vegetable';
-  allFilters.pageSize = 9999;
+  allFilters.page = page;
+  allFilters.pageSize = pageSize;
+  allFilters.supplier_search = searchText;
 
   const { data: vehicles } = useVehicles();
   const { data: employees } = useEmployees();
@@ -223,8 +226,8 @@ const VegetableImportsPage: React.FC = () => {
       importOrderVisibleToUser(o, { id: user.id, role: user.role, full_name: user.full_name }, vehicles || [])
     );
   }, [rankSourceOrders, user, vehicles]);
-  const deleteMutation = useDeleteImportOrder();
-  const bulkDeleteMutation = useBulkDeleteImportOrders();
+  const deleteMutation = useDeleteImportOrder('vegetable');
+  const bulkDeleteMutation = useBulkDeleteImportOrders('vegetable');
   const bulkUpdateReceivedByMutation = useBulkUpdateImportOrdersReceivedBy();
   const confirmMutation = useConfirmImportOrderByAdmin();
   const assignVehicleMutation = useAssignVehicle();
@@ -258,28 +261,23 @@ const VegetableImportsPage: React.FC = () => {
     [vegetableDeliveryVehicles],
   );
 
-  const normalizedSearchText = useMemo(
-    () => removeAccents(searchText || '').toLowerCase().trim(),
-    [searchText]
-  );
-
-  const filteredOrders = useMemo(() => {
-    if (!normalizedSearchText) return allOrders;
-    return allOrders.filter((order) =>
-      removeAccents(getSupplierName(order)).toLowerCase().includes(normalizedSearchText)
-    );
-  }, [allOrders, normalizedSearchText]);
-
-  const dailyTaiRankMap = useMemo(() => buildVegetableDailyTaiRankMap(rankSourceOrders), [rankSourceOrders]);
-
   const getTaiRank = useCallback(
     (order: ImportOrderWithRelations) => {
-      return getVegetableTaiRank(order, dailyTaiRankMap);
+      return getVegetableTaiRank(order);
     },
-    [dailyTaiRankMap]
+    []
   );
 
   const { vuaOptions, taiOptions, nguoiNhapOptions } = useMemo(() => {
+    const options = allApiResponse?.vegetableFilterOptions;
+    if (options) {
+      const toOption = (value: string) => ({ label: value, value });
+      return {
+        vuaOptions: options.suppliers.map(toOption),
+        taiOptions: options.vehicles.map(toOption),
+        nguoiNhapOptions: options.receivers.map(toOption),
+      };
+    }
     if (!allOrders) return { vuaOptions: [], taiOptions: [], nguoiNhapOptions: [] };
     const vuaSet = new Set<string>();
     const taiSet = new Set<string>();
@@ -303,15 +301,11 @@ const VegetableImportsPage: React.FC = () => {
       taiOptions: Array.from(taiSet).map(v => ({ label: v, value: v })),
       nguoiNhapOptions: Array.from(receiverSet).map(v => ({ label: v, value: v }))
     };
-  }, [allOrders]);
+  }, [allOrders, allApiResponse?.vegetableFilterOptions]);
 
-  // Pagination handled client-side so tai rank is computed across full day
-  const totalItems = filteredOrders.length;
+  const totalItems = allApiResponse?.total || 0;
   const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
-  const orders = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return filteredOrders.slice(start, start + pageSize);
-  }, [filteredOrders, page, pageSize]);
+  const orders = allOrders;
 
   const groupedByDateThenCustomer = useMemo(() => {
     const byDate = new Map<string, ImportOrder[]>();
@@ -571,7 +565,7 @@ const VegetableImportsPage: React.FC = () => {
                   searchTimeoutRef.current = setTimeout(() => {
                     setSearchText(val);
                     setPage(1);
-                  }, 500);
+                  }, 300);
                 }}
               />
             </div>

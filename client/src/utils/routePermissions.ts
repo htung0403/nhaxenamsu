@@ -15,6 +15,9 @@ const expandPermissionPath = (path: string): string[] => {
     paths.add(`/app${normalizedPath}`);
   }
 
+  const groceryAliases = ['/hang-hoa/hang-gui-sg', '/app/hang-hoa/hang-gui-sg', '/hang-hoa/duc-trong-sg/nhap-hang', '/app/hang-hoa/duc-trong-sg/nhap-hang'];
+  if (groceryAliases.includes(normalizedPath)) groceryAliases.forEach(alias => paths.add(alias));
+
   if (PAYMENT_COLLECTIONS_LEGACY_PATHS.has(normalizedPath)) {
     paths.add(PAYMENT_COLLECTIONS_CURRENT_PATH);
   }
@@ -133,6 +136,7 @@ const LEGACY_ALLOWED_PATHS_BY_ROLE: Record<string, string[]> = {
 const hasBaselineRoleAccess = (path: string, role: UserRole): boolean => {
   const roleKey = role || '';
   const baselinePaths = LEGACY_ALLOWED_PATHS_BY_ROLE[roleKey];
+  if (path === '/app/hang-hoa/duc-trong-sg/nhap-hang' && baselinePaths?.includes('/app/hang-hoa/hang-gui-sg')) return true;
   return Boolean(baselinePaths?.includes(path));
 };
 

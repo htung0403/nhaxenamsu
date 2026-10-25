@@ -51,6 +51,7 @@ axiosClient.interceptors.response.use(
     return response;
   },
   (error) => {
+    if (axios.isCancel(error)) return Promise.reject(error);
     const isUnauthorized = error.response?.status === 401;
     const isTimeLocked =
       error.response?.status === 403 &&

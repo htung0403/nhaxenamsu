@@ -15,15 +15,25 @@ export interface ModuleCardWithPath extends ModuleCardProps {
 export const moduleData: Record<string, { section: string; items: ModuleCardWithPath[] }[]> = {
   '/app/hang-hoa': [
     {
-      section: 'Hàng hóa',
+      section: 'Hàng tạp hóa · SG → Đức Trọng',
       items: [
         { icon: Warehouse, title: 'Tồn kho thực tế', description: 'Quản lý sản phẩm còn tồn kho chờ giao.', colorScheme: 'teal', path: '/app/hang-hoa/kho' },
         { icon: Upload, title: 'Xuất hàng', description: 'Quản lý phiếu xuất kho.', colorScheme: 'red', path: '/app/hang-hoa/xuat-hang' },
         { icon: Download, title: 'Nhập hàng', description: 'Quản lý phiếu nhập kho.', colorScheme: 'green', path: '/app/hang-hoa/nhap-hang' },
         { icon: History, title: 'Lịch sử nhập hàng', description: 'Xem toàn bộ lịch sử đơn nhập hàng tạp hóa.', colorScheme: 'slate', path: '/app/hang-hoa/nhap-hang/lich-su' },
         { icon: DeliveryIcon, title: 'Hàng cần giao', description: 'Danh sách các đơn hàng cần giao.', colorScheme: 'orange', path: '/app/hang-hoa/giao-hang' },
-        { icon: Send, title: 'Hàng gửi SG', description: 'Theo dõi đơn trả hàng do khách nhận tạp hóa tạo.', colorScheme: 'blue', path: '/app/hang-hoa/hang-gui-sg' },
         { icon: Settings2, title: 'Cài đặt hàng tạp hóa', description: 'Quản lý từ điển hàng tạp hóa.', colorScheme: 'slate', path: '/app/hang-hoa/cai-dat' },
+      ]
+    },
+    {
+      section: 'Hàng tạp hóa · Đức Trọng → SG',
+      items: [
+        { icon: Warehouse, title: 'Tồn kho hàng gửi SG', description: 'Hàng Đức Trọng gửi SG còn chờ giao.', colorScheme: 'teal', path: '/app/hang-hoa/duc-trong-sg/kho' },
+        { icon: Upload, title: 'Xuất hàng gửi SG', description: 'Quản lý phiếu xuất chiều Đức Trọng đến SG.', colorScheme: 'red', path: '/app/hang-hoa/duc-trong-sg/xuat-hang' },
+        { icon: Send, title: 'Hàng gửi SG', description: 'Tạo và theo dõi hàng gửi từ Đức Trọng đến SG.', colorScheme: 'blue', path: '/app/hang-hoa/duc-trong-sg/nhap-hang' },
+        { icon: History, title: 'Lịch sử nhập hàng gửi SG', description: 'Tra cứu các đơn hàng gửi SG.', colorScheme: 'slate', path: '/app/hang-hoa/duc-trong-sg/nhap-hang/lich-su' },
+        { icon: DeliveryIcon, title: 'Hàng cần giao tại SG', description: 'Phân xe và theo dõi giao hàng tại SG.', colorScheme: 'orange', path: '/app/hang-hoa/duc-trong-sg/giao-hang' },
+        { icon: Settings2, title: 'Cài đặt hàng gửi SG', description: 'Danh mục tạp hóa dùng chung cho hai chiều.', colorScheme: 'slate', path: '/app/hang-hoa/duc-trong-sg/cai-dat' },
       ]
     },
     {

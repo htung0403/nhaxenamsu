@@ -10,8 +10,8 @@ router.use(requirePolicy('PRODUCTS_CATALOG_ACCESS'));
 
 router.get('/', ProductController.getAll);
 router.get('/:id', ProductController.getById);
-router.post('/', ProductController.create);
-router.put('/:id', ProductController.update);
-router.delete('/:id', ProductController.delete);
+router.post('/', requirePolicy('PRODUCTS_CATALOG_MANAGE', 'PRODUCTS_CATALOG_CREATE'), ProductController.create);
+router.put('/:id', requirePolicy('PRODUCTS_CATALOG_MANAGE'), ProductController.update);
+router.delete('/:id', requirePolicy('PRODUCTS_CATALOG_MANAGE'), ProductController.delete);
 
 export default router;

@@ -122,7 +122,7 @@ const ConfirmDialog: React.FC<{
   );
 };
 
-const ProductSettingsPage: React.FC = () => {
+const ProductSettingsPage: React.FC<{ direction?: import('../../types').GroceryDirection }> = ({ direction = 'sg_to_duc_trong' }) => {
   const { data: products, isLoading: isProductsLoading, isError: isProductsError, refetch: refetchProducts } = useProducts(true, 'standard');
 
   const createProduct = useCreateProduct();
@@ -277,8 +277,8 @@ const ProductSettingsPage: React.FC = () => {
   return (
     <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 w-full flex-1 flex flex-col -mt-2 min-h-0 pb-6 relative">
       <PageHeader
-        title="Cài đặt hàng tạp hóa"
-        description="Quản lý danh sách từ điển hàng tạp hóa trong hệ thống"
+        title={direction === 'duc_trong_to_sg' ? 'Cài đặt hàng gửi SG' : 'Cài đặt hàng tạp hóa'}
+        description="Danh mục hàng tạp hóa dùng chung cho cả hai chiều SG ↔ Đức Trọng"
         backPath="/app/hang-hoa"
         actions={<div />}
       />

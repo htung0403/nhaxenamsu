@@ -114,6 +114,9 @@ const hasAnyPagePermissionByRoleKey = async (roleKey: Role, pagePaths: string[])
   return !!rolePermissions?.length;
 };
 
+export const userHasAnyPagePermission = async (user: { id: string; role: Role }, paths: string[]) =>
+  user.role === 'admin' || await hasAnyPagePermission(user.id, paths) || await hasAnyPagePermissionByRoleKey(user.role, paths);
+
 export const requirePagePermission = (...pagePaths: string[]) => {
   const normalizedPaths = pagePaths
     .map((path) => normalizePagePath(path))

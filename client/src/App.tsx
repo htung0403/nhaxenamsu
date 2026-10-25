@@ -158,6 +158,12 @@ function AppRoutes() {
         <Route path="/app/hang-hoa/nhap-hang" element={<ImportOrdersPage />} />
         <Route path="/app/hang-hoa/xac-nhan-hang-gui" element={<ConfirmSenderImportOrdersPage />} />
         <Route path="/app/hang-hoa/hang-gui-sg" element={<ReturnToSgOrdersPage />} />
+        <Route path="/app/hang-hoa/duc-trong-sg/nhap-hang" element={<ImportOrdersPage key="reverse-import" direction="duc_trong_to_sg" />} />
+        <Route path="/app/hang-hoa/duc-trong-sg/nhap-hang/lich-su" element={<StandardImportOrderHistoryPage key="reverse-history" direction="duc_trong_to_sg" />} />
+        <Route path="/app/hang-hoa/duc-trong-sg/kho" element={<WarehousesPage key="reverse-warehouse" direction="duc_trong_to_sg" />} />
+        <Route path="/app/hang-hoa/duc-trong-sg/xuat-hang" element={<ExportOrdersPage key="reverse-export" direction="duc_trong_to_sg" />} />
+        <Route path="/app/hang-hoa/duc-trong-sg/giao-hang" element={<DeliveryPage key="reverse-delivery" direction="duc_trong_to_sg" />} />
+        <Route path="/app/hang-hoa/duc-trong-sg/cai-dat" element={<ProductSettingsPage key="reverse-settings" direction="duc_trong_to_sg" />} />
         <Route path="/app/hang-hoa/nhap-hang/lich-su" element={<StandardImportOrderHistoryPage />} />
         <Route path="/app/hang-hoa/nhap-hang-rau" element={<VegetableImportsPage />} />
         <Route path="/app/hang-hoa/nhap-hang-rau/lich-su" element={<VegetableImportOrderHistoryPage />} />

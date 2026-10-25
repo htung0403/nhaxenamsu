@@ -37,6 +37,7 @@ const exportOrderSchema = z.object({
 type ExportOrderFormData = z.infer<typeof exportOrderSchema>;
 
 interface Props {
+  direction?: import('../../../types').GroceryDirection;
   isOpen: boolean;
   isClosing: boolean;
   onClose: () => void;
@@ -47,7 +48,7 @@ const formatCurrency = (val?: number) => {
   return new Intl.NumberFormat('vi-VN').format(val);
 };
 
-const AddEditExportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, onClose }) => {
+const AddEditExportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, onClose, direction = 'sg_to_duc_trong' }) => {
   const { user } = useAuth();
   const createMutation = useCreateExportOrder();
   const assignVehicleMutation = useAssignVehicle();
@@ -55,7 +56,7 @@ const AddEditExportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, onClose 
   const { data: vehicles } = useVehicles(isOpen);
   const { data: employees } = useEmployees(isOpen);
   const today = format(new Date(), 'yyyy-MM-dd');
-  const { data: deliveryOrders } = useDeliveryOrders(today, today, 'standard');
+  const { data: deliveryOrders } = useDeliveryOrders(today, today, 'standard', direction);
 
   const normalizedRole = (user?.role || '').toLowerCase();
   const isLoader = normalizedRole.includes('lo_xe');
@@ -370,7 +371,7 @@ const AddEditExportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, onClose 
         paid_amount: data.payment_status === 'paid' ? Number(data.debt_amount) : 0,
       };
       if (data.image_url) payload.image_url = data.image_url;
-      await createMutation.mutateAsync(payload);
+      if (direction !== 'duc_trong_to_sg') await createMutation.mutateAsync(payload);
 
       // Tự động gán xe giao cho đơn delivery tương ứng
       const deliveryOrderId = data.product_id; // product_id = delivery order ID
@@ -380,6 +381,10 @@ const AddEditExportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, onClose 
       const assignedVehicleId = data.vehicle_id || myVehicle?.id;
       const assignedDriverId = data.delivery_staff || selectedVehicle?.driver_id || selectedVehicle?.in_charge_id || user?.id;
 
+      if (direction === 'duc_trong_to_sg' && (!deliveryOrder || !assignedVehicleId || !assignedDriverId)) {
+        toast.error('Vui lòng chọn đơn hàng, xe và tài xế trước khi xuất hàng.');
+        return;
+      }
       if (deliveryOrder && assignedVehicleId && assignedDriverId) {
         const existingDvs = deliveryOrder.delivery_vehicles || [];
         const assignPayload: any[] = [];
@@ -412,15 +417,17 @@ const AddEditExportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, onClose 
         }
 
         try {
+          const newReverseAssignment = { vehicle_id: assignedVehicleId, driver_id: assignedDriverId, quantity: qty, expected_amount: formDebtAmount, export_payment_status: data.payment_status };
           await assignVehicleMutation.mutateAsync({
             id: deliveryOrderId,
             payload: {
-              assignments: assignPayload as any,
+              assignments: direction === 'duc_trong_to_sg' ? [newReverseAssignment] : assignPayload as any,
               export_payment_status: data.payment_status,
+              ...(direction === 'duc_trong_to_sg' ? { direction, append_only: true, delivery_date: data.export_date, delivery_time: data.export_time, image_url: data.image_url || undefined } : {}),
             },
           });
-        } catch {
-          // Phiếu xuất đã tạo thành công, lỗi gán xe không chặn luồng
+        } catch (error) {
+          if (direction === 'duc_trong_to_sg') throw error;
         }
       }
 
