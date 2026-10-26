@@ -29,6 +29,7 @@ import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { matchesSearch } from '../../lib/str-utils';
 import { getDeliveryAnchorDateString } from '../../lib/deliveryDayAnchor';
 import { isOldOrderForAgeRule, getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
+import { groupDeliveryVehicleAllocations } from '../../lib/deliveryVehicleAllocations';
 import {
   createDeliveryGroupSourceIdsMap,
   getDeliveryViewGroupKey,
@@ -1335,7 +1336,7 @@ const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirectio
                               const canEdit = isEditableByMe || isAdmin;
 
                               const isExportPaid = dvs.length > 0 && dvs.some(dv => dv.export_payment_status === 'paid');
-                              const dvEntries = dvs.map((dv, idx) => ({
+                              const dvEntries = groupDeliveryVehicleAllocations(dvs).map((dv, idx) => ({
                                 key: dv.id || `${dv.vehicle_id || 'vehicle'}-${idx}`,
                                 qty: Number(dv.assigned_quantity || 0),
                                 exportPaid: dv.export_payment_status === 'paid',
@@ -1618,7 +1619,7 @@ const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirectio
                               });
                             })() && (
                                 <div className="pt-2 border-t border-border flex flex-wrap gap-1.5">
-                                  {(o.delivery_vehicles || []).filter((dv) => {
+                                  {groupDeliveryVehicleAllocations(o.delivery_vehicles || []).filter((dv) => {
                                     if ((dv.assigned_quantity || 0) <= 0) return false;
                                     if (filterDeliveryDate && dv.delivery_date !== filterDeliveryDate) return false;
                                     if (statusFilter === 'da_giao' && isDriverOrLoader) {

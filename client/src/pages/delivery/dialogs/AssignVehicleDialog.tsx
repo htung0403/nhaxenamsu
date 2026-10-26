@@ -21,6 +21,7 @@ import { DatePicker } from '../../../components/shared/DatePicker';
 import { TimePicker24h } from '../../../components/shared/TimePicker24h';
 import { format } from 'date-fns';
 import { cloudinaryThumb } from '../../../lib/cloudinaryUrl';
+import { groupDeliveryVehicleAllocations } from '../../../lib/deliveryVehicleAllocations';
 
 const assignmentSchema = z.object({
   vehicle_id: z.string().min(1, 'Vui lòng chọn xe'),
@@ -266,7 +267,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
         }
       }
 
-      const existingDvs: DeliveryVehicleWithPricing[] = order.delivery_vehicles || [];
+      const existingDvs: DeliveryVehicleWithPricing[] = groupDeliveryVehicleAllocations(order.delivery_vehicles || []);
       const initialAssignments: AssignmentFormValue[] = [];
       const baselines: number[] = [];
       const now = new Date();
@@ -514,7 +515,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
       const finalAssignmentsToSubmit = [...normalizedAssignments];
 
       if (mode !== 'add-new' && initialVid) {
-        const hiddenAssignments = ((order.delivery_vehicles || []) as DeliveryVehicleWithPricing[]).filter(
+        const hiddenAssignments = groupDeliveryVehicleAllocations((order.delivery_vehicles || []) as DeliveryVehicleWithPricing[]).filter(
           (dv) => dv.vehicle_id !== initialVid && (dv.assigned_quantity || 0) > 0
         ).map((dv): AssignmentPayload => ({
           vehicle_id: dv.vehicle_id || '',

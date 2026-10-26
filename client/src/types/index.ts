@@ -436,6 +436,7 @@ export type DeliveryVehicleStatus = 'assigned' | 'in_transit' | 'completed';
 
 export interface DeliveryVehicle {
   id: string;
+  allocation_group_id?: string | null;
   delivery_order_id: string;
   vehicle_id?: string;
   driver_id?: string;

@@ -2,6 +2,7 @@ import { supabaseService } from '../../config/supabase';
 import type { GroceryDirection } from '../../utils/groceryDirection';
 import { listDeliveryOrders, listDeliveryInventory } from './delivery-queries';
 import { format } from 'date-fns';
+import { randomUUID } from 'node:crypto';
 import type { UserPayload } from '../../types';
 
 import { zaloService } from '../notifications/zalo.service';
@@ -275,9 +276,8 @@ export class DeliveryService {
     const { data: sourceOrder, error: sourceError } = await supabaseService.from('delivery_orders')
       .select('total_quantity, delivery_vehicles(assigned_quantity)').eq('id', deliveryId).single();
     if (sourceError || !sourceOrder) throw sourceError || new Error('Delivery order not found');
-    const existingQuantity = appendOnly ? (sourceOrder.delivery_vehicles || []).reduce((sum: number, row: any) => sum + Number(row.assigned_quantity || 0), 0) : 0;
     const requestedQuantity = assignments.reduce((sum, row) => sum + Number(row.quantity || 0), 0);
-    if (assignments.some(row => !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0) || requestedQuantity + existingQuantity > Number(sourceOrder.total_quantity)) throw new Error('Assigned quantity exceeds remaining quantity');
+    if (assignments.some(row => !Number.isFinite(Number(row.quantity)) || Number(row.quantity) <= 0) || !Number.isFinite(requestedQuantity)) throw new Error('Invalid assigned quantity');
     const updateData: any = {};
     if (image_url !== undefined) {
       updateData.image_url = image_url;
@@ -363,6 +363,7 @@ export class DeliveryService {
       delivery_date: a.delivery_date || delivery_date || undefined,
       delivery_time: a.delivery_time || delivery_time || undefined,
       export_payment_status: a.export_payment_status || 'unpaid',
+      ...(a.allocation_group_id ? { allocation_group_id: a.allocation_group_id } : {}),
     }));
 
     const { data, error } = await supabaseService
@@ -527,23 +528,23 @@ export class DeliveryService {
     };
 
     for (const row of assignments) {
+      const allocationGroupId = randomUUID();
       let remaining = Number(row.quantity);
       let remainingAmount = Math.max(0, Number(row.expected_amount || 0));
       if (!Number.isFinite(remaining) || remaining <= 0) throw new Error('Invalid assigned quantity');
       for (const source of orderedSources) {
         const existingQuantity = appendOnly ? (source.delivery_vehicles || []).reduce((sum: number, vehicle: any) => sum + Number(vehicle.assigned_quantity || 0), 0) : 0;
         const capacity = Math.max(0, Number(source.total_quantity) - existingQuantity - getUsedOfOrder(source.id));
-        const quantity = Math.min(remaining, capacity);
+        const quantity = source === orderedSources[orderedSources.length - 1] ? remaining : Math.min(remaining, capacity);
         if (!quantity) continue;
         const amount = quantity === remaining ? remainingAmount : Math.round(remainingAmount * quantity / remaining);
         const rows = perOrderAssignments.get(source.id) || [];
-        rows.push({ ...row, quantity, expected_amount: amount });
+        rows.push({ ...row, quantity, expected_amount: amount, allocation_group_id: allocationGroupId });
         perOrderAssignments.set(source.id, rows);
         remaining -= quantity;
         remainingAmount -= amount;
         if (!remaining) break;
       }
-      if (remaining > 0) throw new Error('Assigned quantity exceeds remaining group quantity');
     }
 
     const result: Record<string, any> = {};
