@@ -168,7 +168,8 @@ export class DeliveryController {
             delivered_at,
             delivery_date,
             delivery_time,
-            append_only
+            append_only,
+            res.locals.deliveryAppendReadOnlySourceIds
           )
         : await DeliveryService.assignVehicles(
             req.params.id as string,

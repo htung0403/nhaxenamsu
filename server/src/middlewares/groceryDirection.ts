@@ -82,8 +82,17 @@ export const requireGroceryAccess = (resource: Resource, category?: OrderCategor
       sourceDirections.add(source.order_category === 'vegetable' ? 'vegetable' : groceryDirection(source));
       return source;
     };
+    const groupedAppend = resource === 'delivery'
+      && req.method === 'PUT'
+      && parts.length === 2
+      && operation === 'assign-vehicle'
+      && req.body?.append_only === true
+      && Array.isArray(req.body?.source_order_ids)
+      && req.body.source_order_ids.includes(parts[0]);
+    const appendReadOnlySourceIds = new Set<string>();
+    if (groupedAppend) res.locals.deliveryAppendReadOnlySourceIds = appendReadOnlySourceIds;
     let driverScopePromise: ReturnType<typeof fetchDriverScopeForUser> | undefined;
-    const deliverySource = async (id: string) => {
+    const deliverySource = async (id: string, allowFullyAssigned = false) => {
       const { data, error } = await supabaseService.from('delivery_orders')
         .select('*, import_orders(*), vegetable_orders(*), delivery_vehicles(*, vehicles(license_plate))')
         .eq('id', z.string().uuid().parse(id)).single();
@@ -92,7 +101,13 @@ export const requireGroceryAccess = (resource: Resource, category?: OrderCategor
       const source = Array.isArray(relation) ? relation[0] : relation;
       if (goodsScopeIsDriverRole(user.role)) driverScopePromise ??= fetchDriverScopeForUser(user.id);
       const driverScope = driverScopePromise ? await driverScopePromise : null;
-      if (!source || source.deleted_at || !deliveryOrderRowMatchesGoodsScope(data, user, driverScope)) throw new Error('Order not found');
+      if (!source || source.deleted_at) throw new Error('Order not found');
+      const assignedQuantity = (data.delivery_vehicles || []).reduce((sum: number, vehicle: any) => sum + Number(vehicle.assigned_quantity || 0), 0);
+      const totalQuantity = Number(data.total_quantity);
+      const fullyAssigned = Number.isFinite(totalQuantity) && Number.isFinite(assignedQuantity) && assignedQuantity >= totalQuantity;
+      const matchesGoodsScope = deliveryOrderRowMatchesGoodsScope(data, user, driverScope);
+      if (!matchesGoodsScope && !(allowFullyAssigned && fullyAssigned)) throw new Error('Order not found');
+      if (!matchesGoodsScope && allowFullyAssigned && fullyAssigned) appendReadOnlySourceIds.add(id);
       const resolved = { ...source, order_category: data.vegetable_orders ? 'vegetable' : 'standard' };
       assertSource(resolved);
       sourceDirections.add(resolved.order_category === 'vegetable' ? 'vegetable' : groceryDirection(resolved));
@@ -113,7 +128,7 @@ export const requireGroceryAccess = (resource: Resource, category?: OrderCategor
           if (req.body?.order_category && req.body.order_category !== existing.order_category) throw new Error('Order category cannot be changed');
           resolveGroceryFlag({ ...req.body, order_category: existing.order_category }, existing);
         }
-      } else if (resource === 'delivery') await deliverySource(recordId);
+      } else if (resource === 'delivery') await deliverySource(recordId, groupedAppend);
       else await exportSource(recordId);
     }
     if (!read) {
@@ -126,7 +141,7 @@ export const requireGroceryAccess = (resource: Resource, category?: OrderCategor
         }
       }
       if (Array.isArray(req.body?.source_order_ids)) {
-        for (const id of z.array(z.string().uuid()).parse(req.body.source_order_ids)) await deliverySource(id);
+        for (const id of z.array(z.string().uuid()).parse(req.body.source_order_ids)) await deliverySource(id, groupedAppend);
       }
       if (resource === 'delivery' && req.method === 'POST' && req.path === '/') await importSource(req.body?.import_order_id);
       if (resource === 'export' && req.method === 'POST' && req.path === '/') await deliverySource(req.body?.product_id);

@@ -494,7 +494,8 @@ export class DeliveryService {
     clientDeliveredAtIso?: string | null,
     delivery_date?: string,
     delivery_time?: string,
-    appendOnly?: boolean
+    appendOnly?: boolean,
+    readOnlySourceIds: ReadonlySet<string> = new Set()
   ) {
     const uniqueSourceIds = Array.from(new Set((sourceOrderIds || []).filter(Boolean)));
     if (uniqueSourceIds.length === 0) {
@@ -521,6 +522,12 @@ export class DeliveryService {
 
     const perOrderAssignments = new Map<string, any[]>();
     orderedSources.forEach((order: any) => perOrderAssignments.set(order.id, []));
+    const allocationSources = appendOnly
+      ? orderedSources.filter(source => !readOnlySourceIds.has(source.id))
+      : orderedSources;
+    if (assignments.length > 0 && allocationSources.length === 0) {
+      throw new Error('Không có đơn nguồn được phép giao thêm trong nhóm.');
+    }
 
     const getUsedOfOrder = (orderId: string) => {
       const rows = perOrderAssignments.get(orderId) || [];
@@ -532,10 +539,10 @@ export class DeliveryService {
       let remaining = Number(row.quantity);
       let remainingAmount = Math.max(0, Number(row.expected_amount || 0));
       if (!Number.isFinite(remaining) || remaining <= 0) throw new Error('Invalid assigned quantity');
-      for (const source of orderedSources) {
+      for (const source of allocationSources) {
         const existingQuantity = appendOnly ? (source.delivery_vehicles || []).reduce((sum: number, vehicle: any) => sum + Number(vehicle.assigned_quantity || 0), 0) : 0;
         const capacity = Math.max(0, Number(source.total_quantity) - existingQuantity - getUsedOfOrder(source.id));
-        const quantity = source === orderedSources[orderedSources.length - 1] ? remaining : Math.min(remaining, capacity);
+        const quantity = source === allocationSources[allocationSources.length - 1] ? remaining : Math.min(remaining, capacity);
         if (!quantity) continue;
         const amount = quantity === remaining ? remainingAmount : Math.round(remainingAmount * quantity / remaining);
         const rows = perOrderAssignments.get(source.id) || [];
