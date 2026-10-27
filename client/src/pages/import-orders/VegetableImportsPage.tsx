@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, CheckCircle2, Send, Users } from 'lucide-react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
-import { useImportOrders, useDeleteImportOrder, useConfirmImportOrderByAdmin, useBulkDeleteImportOrders, useBulkUpdateImportOrdersReceivedBy } from '../../hooks/queries/useImportOrders';
+import { useImportOrders, useDeleteImportOrder, useConfirmImportOrderByAdmin, useBulkDeleteImportOrders, useBulkUpdateImportOrdersReceivedBy, useMarkVegetableImportOrderPaid } from '../../hooks/queries/useImportOrders';
 import type { ImportOrder, ImportOrderFilters, OrderStatus, User } from '../../types';
 import StatusBadge from '../../components/shared/StatusBadge';
 import LoadingSkeleton from '../../components/shared/LoadingSkeleton';
@@ -230,6 +230,8 @@ const VegetableImportsPage: React.FC = () => {
   const bulkDeleteMutation = useBulkDeleteImportOrders('vegetable');
   const bulkUpdateReceivedByMutation = useBulkUpdateImportOrdersReceivedBy();
   const confirmMutation = useConfirmImportOrderByAdmin();
+  const markPaidMutation = useMarkVegetableImportOrderPaid();
+  const [paymentOrder, setPaymentOrder] = useState<ImportOrder | null>(null);
   const assignVehicleMutation = useAssignVehicle();
   const [confirmingOrder, setConfirmingOrder] = useState<ImportOrder | null>(null);
   const [selectedConfirmVehicleId, setSelectedConfirmVehicleId] = useState('');
@@ -434,6 +436,30 @@ const VegetableImportsPage: React.FC = () => {
     setSelectedOrderIds(new Set());
     setBulkReceivedBy('');
     setBulkEditOpen(false);
+  };
+
+  const handleMarkPaid = async () => {
+    if (!paymentOrder || markPaidMutation.isPending) return;
+    try {
+      await markPaidMutation.mutateAsync(paymentOrder.id);
+      setPaymentOrder(null);
+    } catch {
+      return;
+    }
+  };
+
+  const renderPaymentButton = (order: ImportOrder) => {
+    if (order.payment_status !== 'unpaid') return null;
+    return (
+      <button
+        type="button"
+        onClick={(event) => { event.stopPropagation(); setPaymentOrder(order); }}
+        disabled={markPaidMutation.isPending}
+        className="px-2 py-1 rounded-lg text-emerald-600 hover:bg-emerald-500/10 text-[11px] font-semibold whitespace-nowrap transition-colors disabled:opacity-40"
+      >
+        Đã thanh toán
+      </button>
+    );
   };
 
   const handleConfirmOrder = async () => {
@@ -837,6 +863,7 @@ const VegetableImportsPage: React.FC = () => {
                                   );
                                   case 'actions': return (
                                     <td key={col.id} className="px-4 py-3 flex items-center justify-center gap-1">
+                                        {renderPaymentButton(order)}
                                         {renderConfirmButton(order, 14)}
                                         <button
                                           onClick={(e) => { e.stopPropagation(); openEditDialog(order); }}
@@ -964,6 +991,7 @@ const VegetableImportsPage: React.FC = () => {
                                   ) : null}
                                 </div>
                                 <div className="flex items-center gap-0.5">
+                                      {renderPaymentButton(order)}
                                       {orderImage && (
                                         <button
                                           onClick={(e) => {
@@ -1048,6 +1076,17 @@ const VegetableImportsPage: React.FC = () => {
         isClosing={isDialogClosing}
         editingOrder={editingOrder}
         onClose={closeDialog}
+      />
+
+      <ConfirmDialog
+        isOpen={!!paymentOrder}
+        title="Xác nhận đã thanh toán"
+        message={`Xác nhận đơn ${paymentOrder?.order_code || ''} đã thanh toán? Tất cả phân xe của đơn hàng sẽ được chuyển sang đã thu tiền.`}
+        confirmLabel="Đã thanh toán"
+        variant="primary"
+        isLoading={markPaidMutation.isPending}
+        onConfirm={handleMarkPaid}
+        onCancel={() => { if (!markPaidMutation.isPending) setPaymentOrder(null); }}
       />
 
       <ConfirmDialog

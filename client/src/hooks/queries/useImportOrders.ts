@@ -64,6 +64,21 @@ export function useUpdateImportOrder() {
   });
 }
 
+export function useMarkVegetableImportOrderPaid() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => importOrdersApi.update(id, { order_category: 'vegetable', payment_status: 'paid' }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: importOrderKeys.all });
+      queryClient.invalidateQueries({ queryKey: ['delivery'] });
+      toast.success('Đã thanh toán đơn hàng và cập nhật các phân xe thành đã thu tiền');
+    },
+    onError: () => {
+      toast.error('Không thể cập nhật thanh toán. Vui lòng thử lại.');
+    },
+  });
+}
+
 export function useDeleteImportOrder(category?: 'standard' | 'vegetable') {
   const queryClient = useQueryClient();
   return useMutation({

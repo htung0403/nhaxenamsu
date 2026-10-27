@@ -259,6 +259,7 @@ export interface ImportOrderItem {
 }
 
 export interface ImportOrderCreatePayload {
+  payment_status?: 'paid' | 'unpaid';
   direction?: GroceryDirection;
   order_date: string;
   order_time: string;
