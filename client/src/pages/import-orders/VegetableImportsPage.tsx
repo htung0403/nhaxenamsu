@@ -157,6 +157,7 @@ const defaultColumns: ColumnOption[] = [
   { id: 'quantity', label: 'Số lượng', isVisible: true },
   { id: 'item_names', label: 'Tên hàng', isVisible: true },
   { id: 'total_amount', label: 'Thành tiền', isVisible: true },
+  { id: 'payment_status', label: 'Trạng thái thanh toán', isVisible: true },
   { id: 'status', label: 'Trạng thái', isVisible: true },
   { id: 'actions', label: 'Thao tác', isVisible: true },
 ];
@@ -763,6 +764,7 @@ const VegetableImportsPage: React.FC = () => {
                         case 'quantity': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-center w-24">Số lượng</th>;
                         case 'item_names': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-left min-w-[150px]">Tên hàng</th>;
                         case 'total_amount': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-right w-36">Thành tiền</th>;
+                        case 'payment_status': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-center whitespace-nowrap">Trạng thái thanh toán</th>;
                         case 'status': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-center w-28">Trạng thái</th>;
                         case 'actions': return <th key={col.id} className="px-4 py-3 text-[11px] font-bold text-muted-foreground/80 uppercase tracking-tight text-center w-24">Thao tác</th>;
                         default: return null;
@@ -861,6 +863,11 @@ const VegetableImportsPage: React.FC = () => {
                                       ) : (
                                         <StatusBadge status={order.status} label={statusLabels[order.status]} />
                                       )}
+                                    </td>
+                                  );
+                                  case 'payment_status': return (
+                                    <td key={col.id} className="px-4 py-3 text-center">
+                                      <StatusBadge status={order.payment_status || 'unpaid'} />
                                     </td>
                                   );
                                   case 'actions': return (
