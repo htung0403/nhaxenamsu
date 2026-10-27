@@ -1,4 +1,19 @@
-import type { DeliveryVehicle } from '../types';
+import type { DeliveryOrder, DeliveryVehicle } from '../types';
+
+export const getDeliveryVehicleUnitPrice = (
+  vehicle: DeliveryVehicle & { unit_price?: number },
+  fallbackPrice = 0,
+  sourceOrders: DeliveryOrder[] = [],
+): number => {
+  if (vehicle.unit_price != null && Number.isFinite(Number(vehicle.unit_price))) return Number(vehicle.unit_price);
+  const quantity = Number(vehicle.assigned_quantity);
+  const amount = Number(vehicle.expected_amount);
+  if (quantity > 0 && amount > 0 && Number.isFinite(quantity) && Number.isFinite(amount)) {
+    return amount / quantity / 1000;
+  }
+  const sourceOrder = sourceOrders.find(source => source.id === vehicle.delivery_order_id);
+  return Number(sourceOrder?.unit_price ?? fallbackPrice) || 0;
+};
 
 export const groupDeliveryVehicleAllocations = <Vehicle extends DeliveryVehicle>(vehicles: Vehicle[]): Vehicle[] => {
   const groups = new Map<string, Vehicle>();

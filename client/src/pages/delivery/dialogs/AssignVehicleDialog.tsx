@@ -21,7 +21,7 @@ import { DatePicker } from '../../../components/shared/DatePicker';
 import { TimePicker24h } from '../../../components/shared/TimePicker24h';
 import { format } from 'date-fns';
 import { cloudinaryThumb } from '../../../lib/cloudinaryUrl';
-import { groupDeliveryVehicleAllocations } from '../../../lib/deliveryVehicleAllocations';
+import { getDeliveryVehicleUnitPrice, groupDeliveryVehicleAllocations } from '../../../lib/deliveryVehicleAllocations';
 
 const assignmentSchema = z.object({
   vehicle_id: z.string().min(1, 'Vui lòng chọn xe'),
@@ -310,12 +310,12 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
               vehicle_id: dv.vehicle_id || '',
               driver_id: dv.driver_id || '',
               loader_name: dv.loader_name || '',
-              unit_price: Number(dv.unit_price || defaultUnitPrice || 0),
+              unit_price: getDeliveryVehicleUnitPrice(dv, defaultUnitPrice, order.source_orders),
               quantity: Number(dv.assigned_quantity) || 0,
               expected_amount: importPaidReset
                 ? 0
                 : Number(dv.expected_amount || 0) ||
-                  (Number(dv.assigned_quantity) || 0) * (Number(dv.unit_price) || defaultUnitPrice),
+                  (Number(dv.assigned_quantity) || 0) * getDeliveryVehicleUnitPrice(dv, defaultUnitPrice, order.source_orders) * 1000,
               image_urls: assignmentImages,
               delivery_date: dv.delivery_date || format(now, 'yyyy-MM-dd'),
               delivery_time: dv.delivery_time || format(now, 'HH:mm'),
@@ -521,7 +521,7 @@ const AssignVehicleDialog: React.FC<Props> = ({ isOpen, isClosing, order, initia
           vehicle_id: dv.vehicle_id || '',
           driver_id: dv.driver_id || '',
           loader_name: dv.loader_name || '',
-          unit_price: Number(dv.unit_price || order.unit_price || 0),
+          unit_price: getDeliveryVehicleUnitPrice(dv, order.unit_price, order.source_orders),
           quantity: Number(dv.assigned_quantity) || 0,
           expected_amount: Number(dv.expected_amount || 0),
           image_urls: Array.isArray(dv.image_urls) ? dv.image_urls : [],
