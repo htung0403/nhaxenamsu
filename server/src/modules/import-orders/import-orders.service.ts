@@ -228,7 +228,21 @@ export class ImportOrderService {
     const tName = isVeg ? 'vegetable_orders' : 'import_orders';
     const iName = isVeg ? 'vegetable_order_items' : 'import_order_items';
     const fkName = isVeg ? 'vegetable_order_id' : 'import_order_id';
-    const { paidAmount, debtAmount } = this.resolvePaymentAmounts(mainData);
+    const markingVegetablePaid = isVeg && mainData.payment_status === 'paid';
+    const { paidAmount, debtAmount } = this.resolvePaymentAmounts(
+      markingVegetablePaid ? { ...mainData, total_amount: mainData.total_amount ?? existing.total_amount } : mainData
+    );
+
+    if (markingVegetablePaid) {
+      const deliveryIds = (existing.delivery_orders || []).map((delivery: { id: string }) => delivery.id);
+      if (deliveryIds.length > 0) {
+        const { error: paymentError } = await supabaseService
+          .from('delivery_vehicles')
+          .update({ export_payment_status: 'paid' })
+          .in('delivery_order_id', deliveryIds);
+        if (paymentError) throw paymentError;
+      }
+    }
 
     // 1. Update main order
     const orderUpdateRaw: Record<string, unknown> = {

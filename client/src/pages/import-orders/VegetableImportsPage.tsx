@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, CheckCircle2, Send, Users } from 'lucide-react';
+import { Plus, X, ChevronLeft, ChevronRight, Edit, Trash2, Filter, Store, Truck, UserCircle, Image as ImageIcon, Eye, Calendar, Printer, CheckCircle2, Send, Users, Banknote } from 'lucide-react';
 import { clsx } from 'clsx';
 import toast from 'react-hot-toast';
 import { useImportOrders, useDeleteImportOrder, useConfirmImportOrderByAdmin, useBulkDeleteImportOrders, useBulkUpdateImportOrdersReceivedBy, useMarkVegetableImportOrderPaid } from '../../hooks/queries/useImportOrders';
@@ -455,9 +455,11 @@ const VegetableImportsPage: React.FC = () => {
         type="button"
         onClick={(event) => { event.stopPropagation(); setPaymentOrder(order); }}
         disabled={markPaidMutation.isPending}
-        className="px-2 py-1 rounded-lg text-emerald-600 hover:bg-emerald-500/10 text-[11px] font-semibold whitespace-nowrap transition-colors disabled:opacity-40"
+        title="Đã thanh toán"
+        aria-label="Đã thanh toán"
+        className="p-1.5 rounded-lg text-emerald-600 hover:bg-emerald-500/10 transition-colors disabled:opacity-40"
       >
-        Đã thanh toán
+        <Banknote size={14} aria-hidden="true" />
       </button>
     );
   };
