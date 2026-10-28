@@ -2,8 +2,9 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Image as ImageIcon, Package, Truck, ZoomIn } from 'lucide-react';
 import { clsx } from 'clsx';
-import type { DeliveryOrder, ImportOrder, ExportOrder } from '../../../types';
+import type { DeliveryOrder, DeliveryVehicle, ImportOrder, ExportOrder } from '../../../types';
 import { cloudinarySmall, cloudinaryFull } from '../../../lib/cloudinaryUrl';
+import { getDeliveryVehicleAllocationKey, groupDeliveryVehicleAllocations } from '../../../lib/deliveryVehicleAllocations';
 
 interface Props {
   isOpen: boolean;
@@ -44,7 +45,7 @@ type DeliveryOrderLike = DeliveryOrder & {
   import_orders?: MaybeArray<LinkedImportOrder>;
   vegetable_orders?: MaybeArray<LinkedImportOrder>;
   payment_collections?: Array<{ vehicle_id?: string | null; image_url?: string | null; image_urls?: string[] | null }>;
-  delivery_vehicles?: Array<{
+  delivery_vehicles?: Array<DeliveryVehicle & {
     vehicle_id?: string | null;
     driver_id?: string | null;
     assigned_quantity?: number | null;
@@ -204,6 +205,9 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
     const dOrder = order;
     const sourceOrders: DeliveryOrderLike[] = ((dOrder.source_orders && dOrder.source_orders.length > 0 ? dOrder.source_orders : [dOrder]) as DeliveryOrderLike[]).filter(Boolean) as DeliveryOrderLike[];
     dOrderForNhapMeta = sourceOrders[0] || dOrder;
+    const allocationQuantities = new Map(groupDeliveryVehicleAllocations(
+      sourceOrders.flatMap(source => source.delivery_vehicles || [])
+    ).map(vehicle => [getDeliveryVehicleAllocationKey(vehicle), Number(vehicle.assigned_quantity) || 0]));
 
     deliveryImages = [];
     deliveryImageMeta = [];
@@ -345,7 +349,6 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
       const vehiclePlateMap = new Map<string, string>();
       const vehicleDriverMap = new Map<string, string>();
       const vehicleQuantityMap = new Map<string, number>();
-      const vehicleBatchTotals = new Map<string, number>();
       (currentOrder?.delivery_vehicles || []).forEach(dv => {
         if (dv.vehicle_id && dv.vehicles?.license_plate) {
           vehiclePlateMap.set(dv.vehicle_id, dv.vehicles.license_plate);
@@ -359,14 +362,11 @@ const OrderImagesDialog: React.FC<Props> = ({ isOpen, isClosing, order, onClose 
           );
         }
 
-        const batchKey = `${dv.vehicle_id || ''}|${dv.driver_id || ''}|${dv.delivery_date || ''}|${(dv.delivery_time || '').slice(0, 5)}`;
-        vehicleBatchTotals.set(batchKey, (vehicleBatchTotals.get(batchKey) || 0) + (Number(dv.assigned_quantity) || 0));
       });
 
       (currentOrder?.delivery_vehicles || []).forEach((dv) => {
         const plate = dv?.vehicles?.license_plate?.trim();
-        const batchKey = `${dv.vehicle_id || ''}|${dv.driver_id || ''}|${dv.delivery_date || ''}|${(dv.delivery_time || '').slice(0, 5)}`;
-        const qty = vehicleBatchTotals.get(batchKey) ?? (Number(dv?.assigned_quantity) || 0);
+        const qty = allocationQuantities.get(getDeliveryVehicleAllocationKey(dv)) ?? (Number(dv?.assigned_quantity) || 0);
         const vehicleLabel = plate ? `Xe: ${plate}` : undefined;
 
         (dv?.image_urls || []).forEach((u) => pushDeliveryMeta(

@@ -5,6 +5,7 @@ import { clsx } from 'clsx';
 import { format } from 'date-fns';
 import { useRevertVehicle } from '../../../hooks/queries/useDelivery';
 import type { DeliveryOrder } from '../../../types';
+import { getDeliveryVehicleAllocationKey, groupDeliveryVehicleAllocations } from '../../../lib/deliveryVehicleAllocations';
 
 interface Props {
   isOpen: boolean;
@@ -26,31 +27,31 @@ const RevertVehicleDialog: React.FC<Props> = ({
   const revertMutation = useRevertVehicle();
   const [selectedTripIds, setSelectedTripIds] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
+  const [revertedTripIds, setRevertedTripIds] = useState<Set<string>>(new Set());
 
   const orderId = order?.id || '';
 
-  const assignedVehicles = (order?.delivery_vehicles || []).filter(
-    (dv) => (dv.assigned_quantity || 0) > 0
-  );
-
-  const candidateTrips = isAdmin
-    ? assignedVehicles
-    : assignedVehicles.filter((dv) => dv.vehicle_id && myVehicleIds.includes(dv.vehicle_id));
-
-  const revertableTrips = useMemo(() => candidateTrips
-    .filter((dv) => !!dv.id)
-    .map((dv) => ({
-      id: dv.id,
-      delivery_order_id: dv.delivery_order_id || orderId,
-      vehicle_id: dv.vehicle_id,
-      delivery_date: dv.delivery_date,
-      delivery_time: dv.delivery_time,
-      assigned_quantity: Number(dv.assigned_quantity) || 0,
-      vehicles: dv.vehicles,
-    })), [candidateTrips, orderId]);
+  const revertableTrips = useMemo(() => {
+    const candidates = (order?.delivery_vehicles || []).filter(dv =>
+      dv.id && (dv.assigned_quantity || 0) > 0 && !revertedTripIds.has(dv.id)
+      && (isAdmin || (dv.vehicle_id && myVehicleIds.includes(dv.vehicle_id)))
+    );
+    const members = new Map<string, Array<{ id: string; delivery_order_id: string }>>();
+    candidates.forEach(dv => {
+      const key = getDeliveryVehicleAllocationKey(dv);
+      const rows = members.get(key) || [];
+      rows.push({ id: dv.id, delivery_order_id: dv.delivery_order_id || orderId });
+      members.set(key, rows);
+    });
+    return groupDeliveryVehicleAllocations(candidates).map(dv => ({
+      ...dv,
+      members: members.get(getDeliveryVehicleAllocationKey(dv)) || [],
+    }));
+  }, [order, orderId, isAdmin, myVehicleIds, revertedTripIds]);
 
   useEffect(() => {
     setSelectedTripIds(new Set());
+    setRevertedTripIds(new Set());
   }, [orderId, isOpen]);
 
   const selectedTrips = useMemo(
@@ -82,20 +83,25 @@ const RevertVehicleDialog: React.FC<Props> = ({
   const handleConfirm = async () => {
     if (selectedTrips.length === 0) return;
 
-    const orderIds = Array.from(new Set(selectedTrips.map((trip) => trip.delivery_order_id || orderId)));
-    if (orderIds.length !== 1) return;
-
     const vehicleIds = Array.from(new Set(selectedTrips.map((trip) => trip.vehicle_id).filter(Boolean)));
     if (vehicleIds.length !== 1) return;
+    const tripsByOrder = new Map<string, Set<string>>();
+    selectedTrips.forEach(trip => trip.members.forEach(member => {
+      const ids = tripsByOrder.get(member.delivery_order_id) || new Set<string>();
+      ids.add(member.id);
+      tripsByOrder.set(member.delivery_order_id, ids);
+    }));
 
     setConfirming(true);
     try {
-      await revertMutation.mutateAsync({
-        id: orderIds[0],
-        vehicleId: vehicleIds[0],
-        tripIds: selectedTrips.map((trip) => trip.id),
-      });
+      for (const [id, ids] of tripsByOrder) {
+        const tripIds = [...ids];
+        await revertMutation.mutateAsync({ id, vehicleId: vehicleIds[0], tripIds });
+        setRevertedTripIds(previous => new Set([...previous, ...tripIds]));
+      }
       onClose();
+    } catch {
+      setSelectedTripIds(new Set());
     } finally {
       setConfirming(false);
     }

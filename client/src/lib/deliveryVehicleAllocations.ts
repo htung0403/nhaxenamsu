@@ -15,6 +15,20 @@ export const getDeliveryVehicleUnitPrice = (
   return Number(sourceOrder?.unit_price ?? fallbackPrice) || 0;
 };
 
+export const getDeliveryVehicleAllocationKey = (vehicle: DeliveryVehicle): string => {
+  if (!vehicle.allocation_group_id) return `trip:${vehicle.id}`;
+  return JSON.stringify([
+    vehicle.allocation_group_id,
+    vehicle.vehicle_id,
+    vehicle.driver_id,
+    vehicle.loader_name,
+    vehicle.delivery_date,
+    vehicle.delivery_time,
+    vehicle.export_payment_status,
+    vehicle.status,
+  ]);
+};
+
 export const groupDeliveryVehicleAllocations = <Vehicle extends DeliveryVehicle>(vehicles: Vehicle[]): Vehicle[] => {
   const groups = new Map<string, Vehicle>();
   const result: Vehicle[] = [];
@@ -25,16 +39,7 @@ export const groupDeliveryVehicleAllocations = <Vehicle extends DeliveryVehicle>
       return;
     }
 
-    const key = JSON.stringify([
-      vehicle.allocation_group_id,
-      vehicle.vehicle_id,
-      vehicle.driver_id,
-      vehicle.loader_name,
-      vehicle.delivery_date,
-      vehicle.delivery_time,
-      vehicle.export_payment_status,
-      vehicle.status,
-    ]);
+    const key = getDeliveryVehicleAllocationKey(vehicle);
     const existing = groups.get(key);
     if (existing) {
       existing.assigned_quantity = Number(existing.assigned_quantity || 0) + Number(vehicle.assigned_quantity || 0);
