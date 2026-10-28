@@ -13,8 +13,8 @@ export function createCategoryOrderService(category: OrderCategory): ImportOrder
     getById: (id: string, actor?: UserPayload) => ImportOrderService.getById(id, actor, category),
     create: (payload: Record<string, unknown>, userId: string) =>
       ImportOrderService.create({ ...payload, order_category: category }, userId),
-    update: (id: string, payload: Record<string, unknown>) =>
-      ImportOrderService.update(id, { ...payload, order_category: category }, category),
+    update: (id: string, payload: Record<string, unknown>, _category?: OrderCategory, actor?: UserPayload) =>
+      ImportOrderService.update(id, { ...payload, order_category: category }, category, actor),
     delete: (id: string) => ImportOrderService.delete(id, category),
     generateOrderCode: (date: string) => ImportOrderService.generateOrderCode(date, category === 'vegetable'),
     confirmByAdmin: (id: string, userId: string) => ImportOrderService.confirmByAdmin(id, userId, category),

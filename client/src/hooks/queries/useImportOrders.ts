@@ -3,6 +3,7 @@ import { importOrdersApi } from '../../api/importOrdersApi';
 import { zaloSummaryApi } from '../../api/zaloSummaryApi';
 import type { ImportOrderFilters, ImportOrderCreatePayload } from '../../types';
 import toast from 'react-hot-toast';
+import { isAxiosError } from 'axios';
 
 export const importOrderKeys = {
   all: ['import-orders'] as const,
@@ -56,10 +57,13 @@ export function useUpdateImportOrder() {
       queryClient.invalidateQueries({ queryKey: importOrderKeys.all });
       queryClient.invalidateQueries({ queryKey: ['delivery'] });
       queryClient.invalidateQueries({ queryKey: ['export-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['customers'] });
+      queryClient.invalidateQueries({ queryKey: ['accounting'] });
+      queryClient.invalidateQueries({ queryKey: ['payment-collections'] });
       toast.success('Cập nhật đơn nhập hàng thành công');
     },
-    onError: () => {
-      toast.error('Lỗi khi cập nhật đơn nhập hàng');
+    onError: (error: unknown) => {
+      toast.error(isAxiosError<{ error?: string }>(error) ? error.response?.data?.error || 'Lỗi khi cập nhật đơn nhập hàng' : 'Lỗi khi cập nhật đơn nhập hàng');
     },
   });
 }

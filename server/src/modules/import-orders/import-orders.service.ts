@@ -12,6 +12,7 @@ import {
 } from '../../utils/goodsScope';
 import { resolveGroceryFlag } from '../../utils/groceryDirection';
 import { listImportOrders } from './import-order-list';
+import { prepareAssignedVegetableEdit, applyAssignedVegetableEdit } from './assigned-vegetable-edit';
 
 export class ImportOrderService {
   private static resolvePaymentAmounts(mainData: any) {
@@ -197,11 +198,12 @@ export class ImportOrderService {
     return order;
   }
 
-  static async update(id: string, orderData: any, category?: OrderCategory) {
-    const existing = await this.getById(id, undefined, category);
+  static async update(id: string, orderData: any, category?: OrderCategory, actor?: UserPayload) {
+    const existing = await this.getById(id, actor, category);
     if (orderData.order_category && existing.order_category !== orderData.order_category) throw new Error('Order category cannot be changed');
     const { items: submittedItems, direction, ...rest } = orderData;
     let items = submittedItems;
+    let assignedEdit: Awaited<ReturnType<typeof prepareAssignedVegetableEdit>> | undefined;
     let itemPaymentUpdates: Array<{ id: string; payment_status: string }> = [];
     if (items !== undefined) {
       const fingerprint = (rows: any[]) => JSON.stringify(rows.map(item => ({
@@ -213,7 +215,10 @@ export class ImportOrderService {
       })));
       const unchanged = fingerprint(items) === fingerprint(existing.import_order_items || []);
       const assigned = (existing.delivery_orders || []).some((delivery: any) => delivery.delivery_vehicles?.length);
-      if (unchanged) {
+      if (assigned && existing.order_category === 'vegetable' && actor?.role === 'admin') {
+        assignedEdit = await prepareAssignedVegetableEdit(existing, items, rest);
+        items = undefined;
+      } else if (unchanged) {
         itemPaymentUpdates = items.flatMap((item: any, index: number) => {
           const previous = existing.import_order_items[index];
           return item.payment_status !== undefined && item.payment_status !== previous.payment_status
@@ -224,6 +229,10 @@ export class ImportOrderService {
     }
     const order_category = existing.order_category;
     const mainData = { ...rest, is_return_to_sg: resolveGroceryFlag({ ...rest, direction, order_category }, existing) };
+    if (assignedEdit) {
+      mainData.total_amount = assignedEdit.rows.reduce((sum, row) => sum + row.item.quantity * Number(row.item.unit_price || 0), 0);
+      mainData.payment_status ??= existing.payment_status;
+    }
     const isVeg = order_category === 'vegetable';
     const tName = isVeg ? 'vegetable_orders' : 'import_orders';
     const iName = isVeg ? 'vegetable_order_items' : 'import_order_items';
@@ -290,6 +299,16 @@ export class ImportOrderService {
     for (const item of itemPaymentUpdates) {
       const { error } = await supabaseService.from(iName).update({ payment_status: item.payment_status }).eq('id', item.id).eq(fkName, id);
       if (error) throw error;
+    }
+
+    if (assignedEdit && actor) {
+      await applyAssignedVegetableEdit(id, assignedEdit, actor.id);
+      const { error: totalsError } = await supabaseService.from(tName).update({
+        total_amount: mainData.total_amount, paid_amount: paidAmount, debt_amount: debtAmount,
+        payment_status: mainData.payment_status,
+      }).eq('id', id).select().single();
+      if (totalsError) throw totalsError;
+      return this.getById(id, actor, category);
     }
 
     if (!isVeg && mainData.is_return_to_sg === true) {

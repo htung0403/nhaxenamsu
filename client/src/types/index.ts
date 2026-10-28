@@ -272,7 +272,7 @@ export interface ImportOrderCreatePayload {
   status?: OrderStatus;
   customer_id?: string;
   notes?: string;
-  items: Omit<ImportOrderItem, 'id' | 'import_order_id' | 'created_at' | 'total_amount'>[];
+  items: (Omit<ImportOrderItem, 'id' | 'import_order_id' | 'created_at' | 'total_amount'> & { item_id?: string | null })[];
 }
 
 // --- Export Orders ---

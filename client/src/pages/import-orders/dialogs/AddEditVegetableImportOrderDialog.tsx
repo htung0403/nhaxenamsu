@@ -82,6 +82,7 @@ const waitFor = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)
 const CUSTOMER_DIALOG_LIMIT = 2000;
 
 const importOrderItemSchema = z.object({
+  item_id: z.string().optional().nullable(),
   product_id: z.string().min(1, 'Chọn hàng hóa'),
   package_type: z.string().optional().nullable().catch(null),
   weight_kg: z.coerce.number().optional().nullable().catch(null),
@@ -451,6 +452,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
         receiver_name: editingOrder.receiver_name || '',
         selected_alias: editingOrder.selected_alias || '',
         items: editingOrder.import_order_items?.map((item: ImportOrderItem) => ({
+          item_id: item.id,
           product_id: item.product_id,
           package_type: item.package_type,
           weight_kg: item.weight_kg,
@@ -608,6 +610,7 @@ const AddEditVegetableImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing,
           calculatedTotalAmount += Math.round((Number(item.quantity) || 0) * unitPrice);
           return {
             ...item,
+            item_id: item.item_id || null,
             item_note: trimmedNote,
             unit_price: unitPrice,
             payment_status: payload.payment_status === 'paid' ? 'paid' : 'unpaid',

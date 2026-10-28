@@ -9,6 +9,7 @@ function serviceFor(res: Response): ImportOrderOperations {
 }
 
 const importOrderItemSchema = z.object({
+  item_id: z.string().uuid().optional().nullable(),
   product_id: z.string().uuid().optional().nullable(),
   package_type: z.string().optional().nullable(),
   item_note: z.string().optional().nullable(),
@@ -85,7 +86,7 @@ export class ImportOrderController {
   static async update(req: Request, res: Response) {
     try {
       const validated = importOrderSchema.partial().parse(req.body);
-      const data = await serviceFor(res).update(req.params.id as string, validated);
+      const data = await serviceFor(res).update(req.params.id as string, validated, undefined, req.user ?? undefined);
       return res.status(200).json(successResponse(data, 'Đã cập nhật đơn nhập hàng'));
     } catch (err: any) {
       return res.status(400).json(errorResponse(err.message));
