@@ -215,7 +215,7 @@ export class ImportOrderService {
       })));
       const unchanged = fingerprint(items) === fingerprint(existing.import_order_items || []);
       const assigned = (existing.delivery_orders || []).some((delivery: any) => delivery.delivery_vehicles?.length);
-      if (assigned && existing.order_category === 'vegetable' && actor?.role === 'admin') {
+      if (assigned && existing.order_category === 'vegetable' && actor && (actor.role === 'admin' || goodsScopeIsDriverRole(actor.role))) {
         assignedEdit = await prepareAssignedVegetableEdit(existing, items, rest);
         items = undefined;
       } else if (unchanged) {
