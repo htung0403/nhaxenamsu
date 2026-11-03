@@ -10,7 +10,7 @@ import EmptyState from '../../components/shared/EmptyState';
 import ErrorState from '../../components/shared/ErrorState';
 import { isSoftDeletedSourceOrder } from '../../utils/softDeletedOrder';
 /** Cột xe trên phiếu in (cố định, không in biển số) */
-const PRINT_VEHICLE_SLOTS = ['1', '2', '3', '4', '5', '6', '7', '8', 'ba'] as const;
+const PRINT_VEHICLE_SLOTS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'ba'] as const;
 
 const VEHICLE_PLATE_TO_SLOT: Record<string, string> = {
   '06850': '1',
@@ -21,6 +21,8 @@ const VEHICLE_PLATE_TO_SLOT: Record<string, string> = {
   '12918': '6',
   '10680': '7',
   '23763': '8',
+  '5838': '9',
+  '18197': '10',
   'ba1234': 'ba',
 };
 
@@ -193,7 +195,6 @@ const PrintDeliveryPage: React.FC = () => {
   return (
     <div className="flex flex-col w-full">
       <style>{`
-        /* check 4%, Tên khách 24%, SL 5%, Hàng 13%, cột 1–8 mỗi cột 6% (48%), ba 6% */
         .print-area .print-table {
           table-layout: fixed;
           width: 100%;
@@ -204,16 +205,16 @@ const PrintDeliveryPage: React.FC = () => {
         .print-area .print-table col.print-col-name { width: 24%; }
         .print-area .print-table col.print-col-qty { width: 5%; }
         .print-area .print-table col.print-col-product { width: 13%; }
-        .print-area .print-table col.print-col-slot-num { width: 6%; }
-        .print-area .print-table col.print-col-slot-ba { width: 6%; }
+        .print-area .print-table col.print-col-slot-num { width: 4.5%; }
+        .print-area .print-table col.print-col-slot-ba { width: 9%; }
         .print-area .print-table .col-check { width: 4%; }
         .print-area .print-table .col-name { width: 24%; }
         .print-area .print-table .col-qty { width: 5%; }
         .print-area .print-table .col-product { width: 13%; }
         .print-area .print-table .col-slot-num,
-        .print-area .print-table .col-slot-num-head { width: 6%; }
+        .print-area .print-table .col-slot-num-head { width: 4.5%; }
         .print-area .print-table .col-slot-ba,
-        .print-area .print-table .col-slot-ba-head { width: 6%; }
+        .print-area .print-table .col-slot-ba-head { width: 9%; }
         .print-header-bar {
           display: flex;
           justify-content: space-between;
@@ -351,6 +352,11 @@ const PrintDeliveryPage: React.FC = () => {
           }
         }
         
+        .print-area .print-table .col-slot-ba-head {
+          font-size: 13px !important;
+          line-height: 1.1;
+          white-space: normal;
+        }
         .print-table { width: 100%; border-collapse: collapse; font-family: "Times New Roman", Times, serif; font-size: 18px; }
         .print-table th, .print-table td { border: 1px solid #000 !important; padding: 2px 4px !important; }
         .print-table th { font-weight: bold; text-align: center; }
@@ -457,7 +463,7 @@ const PrintDeliveryPage: React.FC = () => {
                           const headCls = col === 'ba' ? 'col-slot-ba-head' : 'col-slot-num-head';
                           return (
                             <th key={col} className={`${headCls} text-center border border-black`}>
-                              {col}
+                              {col === 'ba' ? 'Xe tới chành lấy' : col}
                             </th>
                           );
                         })}
