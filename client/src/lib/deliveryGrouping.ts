@@ -40,7 +40,7 @@ export const getDeliveryGroupKey = (order: DeliveryOrder) => {
 };
 
 export const getDeliveryViewGroupKey = (order: DeliveryOrder) =>
-  order.status === 'hang_o_sg' && !isReturnToSgDeliveryOrder(order) ? `single:${order.id}` : getDeliveryGroupKey(order);
+  order.status === 'hang_o_sg' ? `single:${order.id}` : getDeliveryGroupKey(order);
 
 export const groupDeliveryOrderBuckets = (orders: DeliveryOrder[]) => {
   const grouped = new Map<string, DeliveryOrder[]>();
@@ -65,7 +65,7 @@ export const mergeDeliveryOrderGroup = (
   const mergedDeliveryVehicles = ordered.flatMap((order) => order.delivery_vehicles || []);
   const mergedPaymentCollections = ordered.flatMap((order) => order.payment_collections || []);
   const sourceIds = ordered.map((order) => order.id);
-  const allHangOsg = ordered.every((order) => order.status === 'hang_o_sg' && !isReturnToSgDeliveryOrder(order));
+  const allHangOsg = ordered.every((order) => order.status === 'hang_o_sg');
   const hasDaGiao = ordered.some((order) => order.status === 'da_giao');
 
   const mergedOrder: DeliveryOrder = {

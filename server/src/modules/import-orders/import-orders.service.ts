@@ -187,7 +187,7 @@ export class ImportOrderService {
           total_quantity: item.quantity || 1,
           order_category: order_category || 'standard',
           delivery_date: orderDate,
-          status: mainData.is_return_to_sg ? 'can_giao' : 'hang_o_sg'
+          status: 'hang_o_sg'
         }));
         const { error: doError } = await supabaseService.from('delivery_orders').insert(doInsert);
         if (doError) console.error("Failed to auto-create delivery orders:", doError);
@@ -311,15 +311,6 @@ export class ImportOrderService {
       return this.getById(id, actor, category);
     }
 
-    if (!isVeg && mainData.is_return_to_sg === true) {
-      const { error: deliveryStatusError } = await supabaseService
-        .from('delivery_orders')
-        .update({ status: 'can_giao' })
-        .eq('import_order_id', id)
-        .eq('status', 'hang_o_sg');
-      if (deliveryStatusError) throw deliveryStatusError;
-    }
-
     // Chỉ đồng bộ dòng hàng + delivery khi client gửi `items` (tránh xóa hết dòng khi chỉ PATCH tên khách/đại lý).
     if (items !== undefined) {
       const { error: deleteError } = await supabaseService
@@ -372,7 +363,7 @@ export class ImportOrderService {
             total_quantity: item.quantity || 1,
             order_category: order_category || 'standard',
             delivery_date: mainData.order_date || format(new Date(), 'yyyy-MM-dd'),
-            status: mainData.is_return_to_sg ? 'can_giao' : 'hang_o_sg'
+            status: 'hang_o_sg'
           }));
           const { error: doError } = await supabaseService.from('delivery_orders').insert(newDoInsert);
           if (doError) console.error("Failed to sync delivery orders on update:", doError);

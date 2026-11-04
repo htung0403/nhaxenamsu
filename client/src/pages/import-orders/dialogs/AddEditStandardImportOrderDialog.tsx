@@ -691,11 +691,23 @@ const AddEditStandardImportOrderDialog: React.FC<Props> = ({ isOpen, isClosing, 
                               Người nhận <span className="text-red-500">*</span>
                             </label>
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-2 md:gap-3">
-                              <input
-                                type="text"
-                                {...register('receiver_name')}
-                                className="w-full px-3 py-2.5 bg-card border border-border rounded-xl text-[13px] font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all"
-                                placeholder="Nhập tên người nhận"
+                              <Controller
+                                name="receiver_name"
+                                control={control}
+                                render={({ field }) => (
+                                  <SearchableSelect
+                                    options={senderOptions}
+                                    value={filteredSenders.find((customer) => customer.name === field.value)?.id || field.value || ''}
+                                    onValueChange={(value) => {
+                                      const receiver = filteredSenders.find((customer) => customer.id === value);
+                                      field.onChange(receiver?.name || value);
+                                      setValue('receiver_phone', receiver?.phone || '', { shouldValidate: true });
+                                    }}
+                                    placeholder="Chọn người nhận từ danh sách người gửi tạp hóa"
+                                    searchPlaceholder="Tìm theo tên hoặc số điện thoại..."
+                                    allowCustom
+                                  />
+                                )}
                               />
                               <input
                                 type="tel"

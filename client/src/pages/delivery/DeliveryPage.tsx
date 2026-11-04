@@ -28,7 +28,7 @@ import { SearchInput } from '../../components/ui/SearchInput';
 import { SearchableSelect } from '../../components/ui/SearchableSelect';
 import { matchesSearch } from '../../lib/str-utils';
 import { getDeliveryAnchorDateString } from '../../lib/deliveryDayAnchor';
-import { isOldOrderForAgeRule, getEffectiveDeliveryStatus } from '../../lib/deliveryAgeRule';
+import { isOldOrderForAgeRule, getEffectiveDeliveryStatus as getPageDeliveryStatus } from '../../lib/deliveryAgeRule';
 import { groupDeliveryVehicleAllocations } from '../../lib/deliveryVehicleAllocations';
 import {
   createDeliveryGroupSourceIdsMap,
@@ -36,7 +36,6 @@ import {
   getReceiverDisplayName,
   groupDeliveryOrderBuckets,
   groupDeliveryOrdersForView,
-  isReturnToSgDeliveryOrder,
   mergeDeliveryOrderGroup,
 } from '../../lib/deliveryGrouping';
 import type { DeliveryOrder, Vehicle } from '../../types';
@@ -61,12 +60,6 @@ const STATUS_COLORS: Record<string, { bg: string; text: string; dot: string }> =
   hang_o_sg: { bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-500', dot: 'bg-blue-500' },
   can_giao: { bg: 'bg-orange-500/10', text: 'text-orange-600 dark:text-orange-500', dot: 'bg-orange-500' },
   da_giao: { bg: 'bg-green-500/10', text: 'text-green-600 dark:text-green-500', dot: 'bg-green-500' },
-};
-
-const getPageDeliveryStatus = (order: DeliveryOrder, remainingQuantity?: number) => {
-  const status = getEffectiveDeliveryStatus(order, remainingQuantity);
-  if (isReturnToSgDeliveryOrder(order) && status === 'hang_o_sg') return 'can_giao';
-  return status;
 };
 
 const ASSIGNMENT_STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -1152,8 +1145,7 @@ const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirectio
                         );
                         const remainingQty = o.total_quantity - totalAssigned;
                         const effectiveStatus = getPageDeliveryStatus(o, remainingQty);
-                        const isReturnToSg = isReturnToSgDeliveryOrder(o);
-                        const statusColor = isReturnToSg ? STATUS_COLORS.hang_o_sg : (STATUS_COLORS[effectiveStatus] || STATUS_COLORS.can_giao);
+                        const statusColor = STATUS_COLORS[effectiveStatus] || STATUS_COLORS.can_giao;
                         const assignmentStatus = getAssignmentStatusSummary(o);
                         const paymentStatus = getOrderPaymentStatus(o);
                         const paymentConfig = PAYMENT_STATUS_CONFIG[paymentStatus];
@@ -1288,7 +1280,7 @@ const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirectio
                             <td className="px-2 py-3 border-r border-border">
                               <div className={clsx("flex items-center justify-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold mx-auto w-fit", statusColor.bg, statusColor.text)}>
                                 <div className={clsx("w-1.5 h-1.5 rounded-full", statusColor.dot)} />
-                                {isReturnToSg ? 'Hàng gửi SG' : (STATUS_LABELS[effectiveStatus] || effectiveStatus)}
+                                {STATUS_LABELS[effectiveStatus] || effectiveStatus}
                               </div>
                               {assignmentStatus && (
                                 <div className={clsx("mt-1 mx-auto w-fit rounded-md px-1.5 py-0.5 text-[9px] font-black", assignmentStatus.className)}>
