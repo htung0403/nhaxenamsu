@@ -463,7 +463,7 @@ const PrintDeliveryPage: React.FC = () => {
                           const headCls = col === 'ba' ? 'col-slot-ba-head' : 'col-slot-num-head';
                           return (
                             <th key={col} className={`${headCls} text-center border border-black`}>
-                              {col === 'ba' ? 'Xe tới chành lấy' : col}
+                              {col === 'ba' ? 'Tới Chành Lấy' : col}
                             </th>
                           );
                         })}

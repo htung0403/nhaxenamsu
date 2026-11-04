@@ -317,6 +317,10 @@ const isAgeFilterValue = (value: string): value is 'all' | 'new' | 'old' =>
   value === 'all' || value === 'new' || value === 'old';
 
 const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirection }> = ({ direction = 'sg_to_duc_trong' }) => {
+  const statusLabels: Record<string, string> = {
+    ...STATUS_LABELS,
+    hang_o_sg: direction === 'duc_trong_to_sg' ? 'Hàng ở Đức Trọng' : STATUS_LABELS.hang_o_sg,
+  };
   const navigate = useNavigate();
   const today = getTodayString();
   const oneWeekAgo = getOneWeekAgoString();
@@ -993,7 +997,7 @@ const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirectio
                       : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
                   )}
                 >
-                  {STATUS_LABELS[status]}
+                  {statusLabels[status]}
                   {count > 0 && (
                     <span className={clsx(
                       "text-[9px] md:text-[10px] font-black px-1 md:px-1.5 py-0.5 rounded-full min-w-4 md:min-w-5 text-center",
@@ -1040,8 +1044,8 @@ const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirectio
           <ErrorState onRetry={() => refetch()} />
         ) : !displayedOrders?.length ? (
           <EmptyState
-            title={statusFilter === 'all' ? "Không có dữ liệu" : statusFilter === 'can_giao' ? "Không có đơn cần giao" : statusFilter === 'hang_o_sg' ? "Không có hàng ở SG" : "Không có đơn đã giao"}
-            description={`Không có đơn hàng nào với trạng thái "${STATUS_LABELS[statusFilter]}" phù hợp với bộ lọc.`}
+            title={statusFilter === 'all' ? "Không có dữ liệu" : statusFilter === 'can_giao' ? "Không có đơn cần giao" : statusFilter === 'hang_o_sg' ? `Không có ${statusLabels.hang_o_sg.toLowerCase()}` : "Không có đơn đã giao"}
+            description={`Không có đơn hàng nào với trạng thái "${statusLabels[statusFilter]}" phù hợp với bộ lọc.`}
           />
         ) : (
           <div className="flex-1 overflow-auto custom-scrollbar bg-muted/30 md:bg-transparent relative">
@@ -1280,7 +1284,7 @@ const DeliveryPage: React.FC<{ direction?: import('../../types').GroceryDirectio
                             <td className="px-2 py-3 border-r border-border">
                               <div className={clsx("flex items-center justify-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-bold mx-auto w-fit", statusColor.bg, statusColor.text)}>
                                 <div className={clsx("w-1.5 h-1.5 rounded-full", statusColor.dot)} />
-                                {STATUS_LABELS[effectiveStatus] || effectiveStatus}
+                                {statusLabels[effectiveStatus] || effectiveStatus}
                               </div>
                               {assignmentStatus && (
                                 <div className={clsx("mt-1 mx-auto w-fit rounded-md px-1.5 py-0.5 text-[9px] font-black", assignmentStatus.className)}>
