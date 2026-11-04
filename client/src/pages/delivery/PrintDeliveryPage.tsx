@@ -23,7 +23,6 @@ const VEHICLE_PLATE_TO_SLOT: Record<string, string> = {
   '23763': '8',
   '5838': '9',
   '18197': '10',
-  'ba1234': 'ba',
 };
 
 const PRINT_TABLE_COL_COUNT = 4 + PRINT_VEHICLE_SLOTS.length; // check + name + qty + product + slots
@@ -34,7 +33,9 @@ const printColClassForSlot = (slot: (typeof PRINT_VEHICLE_SLOTS)[number]) => {
 };
 
 const getVehicleSlot = (licensePlate: string): string | null => {
-  const normalized = (licensePlate || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const normalized = (licensePlate || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
+  if (normalized === 'toichanhlay') return 'ba';
 
   for (const [key, slot] of Object.entries(VEHICLE_PLATE_TO_SLOT)) {
     if (normalized.endsWith(key) || normalized.includes(key)) {
@@ -42,7 +43,6 @@ const getVehicleSlot = (licensePlate: string): string | null => {
     }
   }
 
-  if (normalized.includes('ba')) return 'ba';
   return null;
 };
 
